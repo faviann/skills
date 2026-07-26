@@ -39,7 +39,15 @@ The edges live in the ticket regardless of medium; the medium only decides wheth
 
 The whole skill turns on one distinction. A **horizontal** slice ships one layer of the change — all the schema, or all the API — and nothing works until every layer lands. A **vertical** slice, the tracer bullet, ships one narrow path through *every* layer at once, so it can be demoed the moment it's done.
 
+Two constraints bound how big a slice gets, and both have to hold: it has to fit in a single fresh context window, and it has to close as one reviewable pull request. The first is a capacity limit on the agent building it; the second is a limit on the human reviewing it. A ticket can pass the first and fail the second — it fits in context comfortably, then lands as a pull request nobody can review in one sitting — which is why the review budget is named separately.
+
 Before slicing, `to-tickets` looks for prefactoring — "make the change easy, then make the easy change" — and orders that work first. It then quizzes you on the breakdown (granularity, blocking edges, what to merge or split) before publishing anything, and publishes blockers first so each ticket's "Blocked by" can reference a real ticket.
+
+## Fences go in Out of scope, not acceptance criteria
+
+A spec usually carries prohibitions as well as requirements — "capture adds no message broker", "no mutable `latest` tag". When a ticket inherits one, it goes in the ticket's **Out of scope** section, never in its acceptance criteria.
+
+The reason is that a fence asserts some code *doesn't* exist, so there is no input that could make it fail. As a criterion it can only ever be ticked on faith, and it invites someone to build machinery proving a negative. Both templates carry an Out of scope section for exactly this, with the standing note that these are fences for the reviewer — nothing should be built to prove them.
 
 ## The wide-refactor exception
 

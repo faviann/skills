@@ -30,7 +30,7 @@ Break the work into **tracer bullet** tickets.
 
 - Each slice cuts a narrow but COMPLETE path through every layer (schema, API, UI, tests) — vertical, NOT a horizontal slice of one layer
 - A completed slice is demoable or verifiable on its own
-- Each slice is sized to fit in a single fresh context window
+- Each slice is sized by two constraints that both must hold: it fits in a single fresh context window, AND it closes as one reviewable pull request
 - Any prefactoring should be done first
 
 </vertical-slice-rules>
@@ -79,6 +79,8 @@ Do NOT close or modify any parent issue.
 - [ ] Acceptance criterion 1
 - [ ] Acceptance criterion 2
 
+**Out of scope:** scope fences for the reviewer, not acceptance criteria — a prohibition this ticket carries down from the parent. They assert that code does not exist, which has no honest test seam; do not build machinery to prove them. Omit if the ticket carries none.
+
 </local-ticket-template>
 
 <issue-template>
@@ -96,10 +98,18 @@ The end-to-end behaviour this ticket makes work, from the user's perspective —
 - [ ] Criterion 1
 - [ ] Criterion 2
 
+## Out of scope
+
+These are scope fences for the reviewer, not acceptance criteria. They assert that code does not exist, which has no honest test seam; do not build machinery to prove them.
+
+- A prohibition this ticket carries down from the parent, or omit this section.
+
 ## Blocked by
 
 - A reference to each blocking ticket, or "None — can start immediately".
 
 </issue-template>
+
+In either form, a prohibition the ticket carries down from the parent belongs in **Out of scope**, never in acceptance criteria. A fence asserts some code does not exist, so no input could make it fail; as a criterion it can only ever be ticked on faith.
 
 In either form, avoid specific file paths or code snippets — they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
