@@ -1,0 +1,5 @@
+interface:
+  display_name: "Select Issue"
+  short_description: "Choose one ready GitHub issue"
+policy:
+  allow_implicit_invocation: false
