@@ -36,9 +36,10 @@ Risks:
 
 ## 3. Primary checkpoint
 
-Inspect the actual worktree and run the baseline checks yourself. Commit with a
-normal, well-messaged commit; each later round adds a new commit (no amend, no
-squash).
+Inspect the worktree and run affected focused checks. Before the first commit,
+delegate one fresh raw-artifact readiness sweep; adjudicate it once and batch
+all blockers to a fresh implementation delegate. Re-check affected evidence,
+then commit normally; each later round adds a commit (no amend or squash).
 
 After committing, status only the criteria this round claims. `tested` requires
 evidence of the actual artifact and mode that would fail if the behavior — or
@@ -48,18 +49,18 @@ checkpoint directive.
 On later rounds, re-check only affected criteria; do not run the full closeout
 sweep.
 
-## 4. Independent review
+## 4. Combined candidate gate
 
-Invoke `code-review` from the base SHA. Supply raw artifacts only — exact diff
-command, trusted issue snapshot, binding doc paths, repo rules, raw command
-output — never the implementer's conclusions.
+Against the same `<base>...HEAD`, start `code-review` and the closure sweep in
+`references/github-closeout.md` together, using raw artifacts only. The closure
+table remains provisional until final validation.
 
 ## 5. Adjudicate and remediate
 
-Adjudicate checkpoint directives with review findings. A directive with a
-mechanical seam is blocking and must be resolved in the next committed round
-before closeout. If proof would require a gate-only artifact, use the closure
-gate's human/escalation path instead of inventing one.
+Adjudicate checkpoint directives, both review axes, and closure findings
+together. A directive with a mechanical seam is blocking and must be resolved
+in the next committed round. If proof would require a gate-only artifact, use
+the closure gate's human/escalation path instead of inventing one.
 
 Never forward raw findings. For each blocking finding, first trace the
 mechanism it concerns to an acceptance criterion; mechanism no criterion
@@ -78,12 +79,16 @@ Log one rationale line per decision in an untracked ledger at
 dismiss re-raised findings by prior rationale unless the reviewer brings new
 evidence. Reviewers never see the ledger.
 
-After each round: commit, regenerate evidence, rerun both review axes. Loop
-until no blocking findings remain.
+Batch all blockers from one combined gate to one fresh implementation delegate.
+Run affected focused checks, commit, and rerun the gate until clean; do not run
+the full regression suite in this loop.
 
 ## 6. Closeout
 
-Run the closure gate and closeout in `references/github-closeout.md`.
+After the combined gate is clean, run the full regression command once and
+`git diff --check`. Any code change invalidates the gate and validation;
+otherwise finalize the existing closure table and complete
+`references/github-closeout.md`.
 
 Report: outcome, commits, tests/checks run, review results, gate table, and
 leftovers/follow-ups.

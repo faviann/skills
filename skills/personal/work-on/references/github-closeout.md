@@ -32,6 +32,10 @@ rows: removal — removals re-enter the review loop — unless the ledger
 records why removal is worse than keeping it. Put the table and rulings in
 the PR body.
 
+Reuse a combined-candidate-gate sweep only while its base, HEAD, trusted
+snapshot, and artifacts are unchanged; final regression may complete its
+evidence. Otherwise rerun it.
+
 Outcome:
 - Every criterion `tested` and no unresolved hard-rule breach → eligible for
   `Closes`.
@@ -123,8 +127,10 @@ Add this section to every pull request created or updated by `work-on`:
 | Final workflow outcome | Closes or Progresses |
 ```
 
-Use observed values only; never estimate missing values. Count completed events.
-The outcome must match the input issue's `Closes` or `Progresses` mapping.
+Use observed values only; never estimate. Count each agent-launched top-level
+validation command once (not its child processes), including delegate and
+reviewer runs; reconcile handoffs or report `unknown`. For sharded suites,
+report every shard and the sum. The outcome must match the issue mapping.
 
 Create or update the pull request, then read back its final body — the closing
 keywords and telemetry outcome must match the gate outcome — and report its URL.
