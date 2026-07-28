@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^[^\\r\\n]*$"
+    },
+    "selected_issue_url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^https://github\\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/issues/[0-9]+$"
+    }
+  },
+  "required": [
+    "summary",
+    "selected_issue_url"
+  ],
+  "additionalProperties": false
+}
