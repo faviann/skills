@@ -361,18 +361,24 @@ test_blocking_parent_aborts_without_partial_changes() {
   fi
 }
 
-test_deprecated_skills_are_not_installed() {
-  local repo home deprecated
+test_in_progress_and_deprecated_skills_are_not_installed() {
+  local repo home in_progress deprecated
   make_test_context
   repo="$TEST_REPO"
   home="$TEST_HOME"
   add_skill "$repo" engineering alpha
+  add_skill "$repo" in-progress draft
   add_skill "$repo" deprecated retired
+  in_progress="$home/.agents/skills/draft"
   deprecated="$home/.agents/skills/retired"
 
   HOME="$home" "$repo/scripts/reconcile-skills.sh"
 
   assert_link_target "$home/.agents/skills/alpha" "$repo/skills/engineering/alpha"
+  if [ -e "$in_progress" ] || [ -L "$in_progress" ]; then
+    echo "in-progress skill was installed: $in_progress" >&2
+    return 1
+  fi
   if [ -e "$deprecated" ] || [ -L "$deprecated" ]; then
     echo "deprecated skill was installed: $deprecated" >&2
     return 1
@@ -403,5 +409,5 @@ test_destination_symlink_aborts_without_writing_through_it
 echo "ok - destination symlink aborts without write-through"
 test_blocking_parent_aborts_without_partial_changes
 echo "ok - blocking parent aborts without partial changes"
-test_deprecated_skills_are_not_installed
-echo "ok - deprecated skills are not installed"
+test_in_progress_and_deprecated_skills_are_not_installed
+echo "ok - in-progress and deprecated skills are not installed"

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Install this fork's non-deprecated skills as per-skill links. Existing entries
-# are never rewritten or removed: any conflict aborts the entire preflight.
+# Install this fork's skills, except in-progress and deprecated ones, as
+# per-skill links. Existing entries are never rewritten or removed: any
+# conflict aborts the entire preflight.
 
 REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 if [ -z "${HOME:-}" ]; then
@@ -47,6 +48,7 @@ done < <(
     -type f \
     -name SKILL.md \
     -not -path '*/node_modules/*' \
+    -not -path '*/in-progress/*' \
     -not -path '*/deprecated/*' \
     -print0
 )

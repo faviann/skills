@@ -5,8 +5,8 @@ set -euo pipefail
 # It is not a supported installer. Modifications to it — or requests for
 # modifications — will not be approved.
 #
-# Links all skills in the repository into the local skill directories used by
-# each agent harness:
+# Links all skills except in-progress and deprecated ones into the local skill
+# directories used by each agent harness:
 #   - ~/.claude/skills  — Claude Code
 #   - ~/.agents/skills  — Codex and other Agent Skills-compatible harnesses
 # Each entry is a symlink into this repo, so a `git pull` is all that's needed
@@ -22,7 +22,14 @@ while IFS= read -r -d '' skill_md; do
   src="$(dirname "$skill_md")"
   names+=("$(basename "$src")")
   srcs+=("$src")
-done < <(find "$REPO/skills" -name SKILL.md -not -path '*/node_modules/*' -not -path '*/deprecated/*' -print0)
+done < <(
+  find "$REPO/skills" \
+    -name SKILL.md \
+    -not -path '*/node_modules/*' \
+    -not -path '*/in-progress/*' \
+    -not -path '*/deprecated/*' \
+    -print0
+)
 
 for DEST in "${DESTS[@]}"; do
   # If $DEST is a symlink that resolves into this repo, we'd end up writing the
