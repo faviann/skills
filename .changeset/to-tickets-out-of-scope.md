@@ -1,5 +1,5 @@
 ---
-"mattpocock-skills": patch
+"faviann-skills": patch
 ---
 
 Give `/to-tickets` an **Out of scope** slot for the prohibitions a ticket inherits.

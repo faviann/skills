@@ -10,7 +10,7 @@
 
 # Skills For Real Engineers
 
-[![skills.sh](https://skills.sh/b/mattpocock/skills)](https://skills.sh/mattpocock/skills)
+[![skills.sh](https://skills.sh/b/faviann/skills)](https://skills.sh/faviann/skills)
 
 My agent skills that I use every day to do real engineering - not vibe coding.
 
@@ -27,7 +27,7 @@ If you want to keep up with changes to these skills, and any new ones I create, 
 1. Run the skills.sh installer:
 
 ```bash
-npx skills@latest add mattpocock/skills
+npx skills@latest add faviann/skills
 ```
 
 2. Pick the skills you want, and which coding agents you want to install them on. **Make sure you select `/setup-matt-pocock-skills`**.
@@ -46,25 +46,25 @@ Prefer a plug-and-play install you don't maintain by hand? These skills also shi
 Inside Claude Code:
 
 ```
-/plugin marketplace add mattpocock/skills
-/plugin install mattpocock-skills@mattpocock
+/plugin marketplace add faviann/skills
+/plugin install faviann-skills@faviann
 ```
 
 Or from your shell:
 
 ```bash
-claude plugin marketplace add mattpocock/skills
-claude plugin install mattpocock-skills@mattpocock
+claude plugin marketplace add faviann/skills
+claude plugin install faviann-skills@faviann
 ```
 
 Then run `/setup-matt-pocock-skills` once per repo, exactly as in the quickstart above.
 
 Two ways to install, two philosophies:
 
-- **[skills.sh](https://skills.sh/mattpocock/skills)** copies the skills into your project so you can hack on them and make them your own.
+- **[skills.sh](https://skills.sh/faviann/skills)** copies the skills into your project so you can hack on them and make them your own.
 - **The plugin** keeps them as a read-only, always-current bundle you don't edit — best when you just want my set to work and follow along as it evolves.
 
-> Using Codex or another agent? The [skills.sh installer](https://skills.sh/mattpocock/skills) already installs these skills into Codex and other Agent-Skills-standard harnesses today. A native Codex plugin is on the roadmap — see [`.agents/adr/0002-ship-as-a-claude-code-plugin.md`](./.agents/adr/0002-ship-as-a-claude-code-plugin.md).
+> Using Codex or another agent? The [skills.sh installer](https://skills.sh/faviann/skills) already installs these skills into Codex and other Agent-Skills-standard harnesses today. A native Codex plugin is on the roadmap — see [`.agents/adr/0002-ship-as-a-claude-code-plugin.md`](./.agents/adr/0002-ship-as-a-claude-code-plugin.md).
 
 ## Why These Skills Exist
 

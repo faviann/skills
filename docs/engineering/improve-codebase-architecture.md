@@ -1,14 +1,14 @@
 Quickstart:
 
 ```bash
-npx skills add mattpocock/skills --skill=improve-codebase-architecture
+npx skills add faviann/skills --skill=improve-codebase-architecture
 ```
 
 ```bash
 npx skills update improve-codebase-architecture
 ```
 
-[Source](https://github.com/mattpocock/skills/tree/main/skills/engineering/improve-codebase-architecture)
+[Source](https://github.com/faviann/skills/tree/main/skills/engineering/improve-codebase-architecture)
 
 ## What it does
 

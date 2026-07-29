@@ -1,5 +1,5 @@
 ---
-"mattpocock-skills": patch
+"faviann-skills": patch
 ---
 
 Size a `/to-tickets` slice by its review budget as well as its context budget.

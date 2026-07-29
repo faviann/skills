@@ -1,5 +1,5 @@
 ---
-"mattpocock-skills": patch
+"faviann-skills": patch
 ---
 
 Name the `/wayfinder` unit a **decision ticket**.

@@ -1,5 +1,5 @@
 ---
-"mattpocock-skills": patch
+"faviann-skills": patch
 ---
 
 Make `/setup-matt-pocock-skills` friendlier and align the local-markdown tracker with the current spec.

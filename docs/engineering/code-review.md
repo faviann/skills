@@ -1,14 +1,14 @@
 Quickstart:
 
 ```bash
-npx skills add mattpocock/skills --skill=code-review
+npx skills add faviann/skills --skill=code-review
 ```
 
 ```bash
 npx skills update code-review
 ```
 
-[Source](https://github.com/mattpocock/skills/tree/main/skills/engineering/code-review)
+[Source](https://github.com/faviann/skills/tree/main/skills/engineering/code-review)
 
 ## What it does
 
