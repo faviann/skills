@@ -82,7 +82,75 @@ backlog file.
 
 ## Create or update the pull request
 
-Preserve the repository's pull-request template. Add:
+Preserve the repository's pull-request template. Free-form summary,
+implementation explanation, validation, finding adjudications, and follow-ups
+remain ordinary Markdown. Put that content in an untracked narrative file,
+excluding the mechanically owned `## Issues`, `## Closure gate`, and
+`## Workflow telemetry` sections.
+
+For every non-empty narrative, the renderer adds a mechanically owned
+`## Narrative` boundary before copying the narrative Markdown verbatim, apart
+from normalizing terminal blank lines. The narrative may begin with any
+Markdown block; do not add or require a heading merely to satisfy the
+validator.
+
+Put the closeout facts in an untracked JSON file with this shape:
+
+```json
+{
+  "issue_number": 123,
+  "outcome": "Closes",
+  "acceptance_criteria": [
+    "The acceptance criterion"
+  ],
+  "acceptance": [
+    {
+      "criterion": "The acceptance criterion",
+      "production_path": "`path/to/artifact`",
+      "seam": "The exact public artifact, mode, or seam",
+      "evidence": "The observed evidence",
+      "status": "tested"
+    }
+  ],
+  "telemetry": {
+    "model_configuration": "observed value or unknown",
+    "wall_clock_elapsed": "measured seconds or unknown",
+    "implementation_rounds": 1,
+    "independent_review_rounds": 1,
+    "remediation_rounds": 0,
+    "validation_executions": 3,
+    "blocking_findings_resolved": 0,
+    "findings_rejected_at_adjudication": 0,
+    "final_workflow_outcome": "Closes"
+  }
+}
+```
+
+The primary supplies `acceptance_criteria` from the authoritative issue
+snapshot. It must be a non-empty array of unique, non-empty strings, and the
+`acceptance` rows must match that set exactly once: no missing, extra, or
+duplicate criteria. This mechanically checks completeness against the
+primary-supplied contract data; it does not establish that the supplied
+criteria are truthful.
+
+Render the complete human-readable pull-request body:
+
+```sh
+~/.agents/skills/work-on/scripts/render-closeout.sh \
+  <untracked-facts.json> <untracked-narrative.md> > <untracked-pr-body.md>
+```
+
+The renderer accepts `-` instead of the facts path to read facts from stdin. It
+fails before writing any body when the facts are malformed, the authoritative
+criteria and closure rows do not match exactly once, a required acceptance row
+or telemetry value is absent, a status is outside
+`tested`/`failing`/`inferred`/`unverified`, a `Closes` row is not `tested`, the
+two outcome fields contradict each other, or the shipped read-back validator
+rejects the rendered candidate. Inspect the rendered Markdown as the actual PR
+body; manual `work-on` does not depend on the AFK watcher or on a human reading
+JSON.
+
+The renderer generates this issue mapping:
 
 ```md
 ## Issues
@@ -106,10 +174,12 @@ Rules:
 - Issue category and labels do not change these semantics.
 - Omit `Follow-ups` when empty.
 
-Also add `## Finding adjudications` with the ledger's rationale lines and the
-sweep's trace table; omit when no blocking findings were adjudicated.
+Include `## Finding adjudications` in the narrative with the ledger's rationale
+lines and the sweep's trace table; omit it when no blocking findings were
+adjudicated.
 
-Add this section to every pull request created or updated by `work-on`:
+The renderer adds this section to every pull request created or updated by
+`work-on`:
 
 ```md
 ## Workflow telemetry
@@ -132,8 +202,20 @@ validation command once (not its child processes), including delegate and
 reviewer runs; reconcile handoffs or report `unknown`. For sharded suites,
 report every shard and the sum. The outcome must match the issue mapping.
 
-Create or update the pull request, then read back its final body — the closing
-keywords and telemetry outcome must match the gate outcome — and report its URL.
+Create or update the pull request, then read back its final body and validate
+the exact content returned by GitHub:
+
+```sh
+gh pr view <pr-number> --json body --jq .body \
+  | ~/.agents/skills/work-on/scripts/validate-closeout-body.sh <issue-number> -
+```
+
+The canonical issue mapping, acceptance rows and statuses, and telemetry
+outcome must survive read-back. Generic validation accepts canonical `Closes`
+and `Progresses` bodies for manual closeout. Unattended AFK closeout invokes
+the same validator with `--require-closes` and refuses `Progresses` before the
+guarded merge or required checks. Report the pull-request URL. Keep the facts,
+narrative, rendered body, and any other closeout scratch untracked.
 
 <!-- Maintainer watch signals, not workflow instructions. Across recent
 work-on PRs: (a) adjudication sections dominated by "keeping it"
