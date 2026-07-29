@@ -24,10 +24,13 @@ fail() {
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 body="$fixture/body.md"
+# GitHub stores bodies edited through its web UI with CRLF line endings and
+# returns them verbatim, so normalize the scratch copy the checks read. Only
+# this copy is affected; the validator never re-emits the body.
 if [[ "$body_source" == - ]]; then
-  cp /dev/stdin "$body"
+  sed 's/\r$//' /dev/stdin >"$body"
 elif [[ -f "$body_source" ]]; then
-  cp "$body_source" "$body"
+  sed 's/\r$//' "$body_source" >"$body"
 else
   fail "body file does not exist: $body_source"
 fi

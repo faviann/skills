@@ -38,6 +38,13 @@ EOF
 "$command_under_test" 164 "$fixture/canonical.md"
 "$command_under_test" 164 - <"$fixture/canonical.md"
 
+# A body edited through GitHub's web UI reads back with CRLF line endings, in
+# both documented input modes.
+sed 's/$/\r/' "$fixture/canonical.md" >"$fixture/crlf.md"
+"$command_under_test" 164 "$fixture/crlf.md"
+"$command_under_test" 164 - <"$fixture/crlf.md"
+"$command_under_test" --require-closes 164 "$fixture/crlf.md"
+
 sed \
   -e 's/^Closes #164$/Progresses #164/' \
   -e 's/| Final workflow outcome | Closes |/| Final workflow outcome | Progresses |/' \
