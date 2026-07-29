@@ -94,6 +94,9 @@ Put the closeout facts in an untracked JSON file with this shape:
 {
   "issue_number": 123,
   "outcome": "Closes",
+  "acceptance_criteria": [
+    "The acceptance criterion"
+  ],
   "acceptance": [
     {
       "criterion": "The acceptance criterion",
@@ -117,6 +120,13 @@ Put the closeout facts in an untracked JSON file with this shape:
 }
 ```
 
+The primary supplies `acceptance_criteria` from the authoritative issue
+snapshot. It must be a non-empty array of unique, non-empty strings, and the
+`acceptance` rows must match that set exactly once: no missing, extra, or
+duplicate criteria. This mechanically checks completeness against the
+primary-supplied contract data; it does not establish that the supplied
+criteria are truthful.
+
 Render the complete human-readable pull-request body:
 
 ```sh
@@ -125,12 +135,14 @@ Render the complete human-readable pull-request body:
 ```
 
 The renderer accepts `-` instead of the facts path to read facts from stdin. It
-fails before writing any body when the facts are malformed, a required
-acceptance row or telemetry value is absent, a status is outside
-`tested`/`failing`/`inferred`/`unverified`, a `Closes` row is not `tested`, or
-the two outcome fields contradict each other. Inspect the rendered Markdown as
-the actual PR body; manual `work-on` does not depend on the AFK watcher or on a
-human reading JSON.
+fails before writing any body when the facts are malformed, the authoritative
+criteria and closure rows do not match exactly once, a required acceptance row
+or telemetry value is absent, a status is outside
+`tested`/`failing`/`inferred`/`unverified`, a `Closes` row is not `tested`, the
+two outcome fields contradict each other, or the shipped read-back validator
+rejects the rendered candidate. Inspect the rendered Markdown as the actual PR
+body; manual `work-on` does not depend on the AFK watcher or on a human reading
+JSON.
 
 The renderer generates this issue mapping:
 
@@ -193,7 +205,10 @@ gh pr view <pr-number> --json body --jq .body \
 ```
 
 The canonical issue mapping, acceptance rows and statuses, and telemetry
-outcome must survive read-back. Report the pull-request URL. Keep the facts,
+outcome must survive read-back. Generic validation accepts canonical `Closes`
+and `Progresses` bodies for manual closeout. Unattended AFK closeout invokes
+the same validator with `--require-closes` and refuses `Progresses` before the
+guarded merge or required checks. Report the pull-request URL. Keep the facts,
 narrative, rendered body, and any other closeout scratch untracked.
 
 <!-- Maintainer watch signals, not workflow instructions. Across recent

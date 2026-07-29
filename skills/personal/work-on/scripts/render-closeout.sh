@@ -7,6 +7,7 @@ set -euo pipefail
 
 facts_source="${1:--}"
 narrative_source="${2:-}"
+script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 fail() {
   printf 'closeout invalid: %s\n' "$1" >&2
@@ -38,6 +39,31 @@ outcome="$(jq -r '.outcome // empty' "$facts")"
 [[ "$outcome" == Closes || "$outcome" == Progresses ]] \
   || fail "outcome must be Closes or Progresses"
 
+jq -e '.acceptance_criteria | type == "array" and length > 0' \
+  "$facts" >/dev/null \
+  || fail "acceptance_criteria must be a non-empty array"
+invalid_criterion_index="$(
+  jq -r '
+    .acceptance_criteria
+    | [to_entries[]
+      | select((.value | type) != "string" or (.value | length) == 0)
+      | .key][0] // empty
+  ' "$facts"
+)"
+if [[ -n "$invalid_criterion_index" ]]; then
+  fail "acceptance_criteria row $((invalid_criterion_index + 1)) must be a non-empty string"
+fi
+duplicate_criterion="$(
+  jq -r '
+    .acceptance_criteria
+    | [group_by(.)[]
+      | select(length > 1)
+      | .[0]][0] // empty
+  ' "$facts"
+)"
+[[ -z "$duplicate_criterion" ]] \
+  || fail "acceptance_criteria contains duplicate criterion: $duplicate_criterion"
+
 acceptance_count="$(jq -r 'if (.acceptance | type) == "array" then (.acceptance | length) else 0 end' "$facts")"
 [[ "$acceptance_count" -gt 0 ]] \
   || fail "acceptance must contain at least one row"
@@ -59,6 +85,37 @@ for ((index = 0; index < acceptance_count; index++)); do
     fail "Closes requires every acceptance row to be tested; row $row_number is $status"
   fi
 done
+
+duplicate_acceptance_criterion="$(
+  jq -r '
+    [.acceptance[].criterion]
+    | [group_by(.)[]
+      | select(length > 1)
+      | .[0]][0] // empty
+  ' "$facts"
+)"
+[[ -z "$duplicate_acceptance_criterion" ]] \
+  || fail "acceptance contains duplicate criterion: $duplicate_acceptance_criterion"
+
+extra_acceptance_criterion="$(
+  jq -r '
+    .acceptance_criteria as $criteria
+    | [.acceptance[].criterion
+      | select(. as $criterion | ($criteria | index($criterion)) == null)][0] // empty
+  ' "$facts"
+)"
+[[ -z "$extra_acceptance_criterion" ]] \
+  || fail "acceptance contains criterion not in acceptance_criteria: $extra_acceptance_criterion"
+
+missing_acceptance_criterion="$(
+  jq -r '
+    [.acceptance[].criterion] as $rows
+    | [.acceptance_criteria[]
+      | select(. as $criterion | ($rows | index($criterion)) == null)][0] // empty
+  ' "$facts"
+)"
+[[ -z "$missing_acceptance_criterion" ]] \
+  || fail "acceptance is missing criterion: $missing_acceptance_criterion"
 
 jq -e '.telemetry | type == "object"' "$facts" >/dev/null \
   || fail "telemetry must be an object"
@@ -126,31 +183,37 @@ telemetry_value() {
   jq -r --arg field "$1" '.telemetry[$field] | tostring | gsub("\\|"; "&#124;") | gsub("\\r?\\n"; "<br>")' "$facts"
 }
 
-printf '## Issues\n\n%s #%s\n' "$outcome" "$issue_number"
-if [[ -n "$narrative_source" && -s "$narrative_source" ]]; then
-  printf '\n'
-  awk '
-    { lines[NR] = $0 }
-    END {
-      last = NR
-      while (last > 0 && lines[last] == "") last--
-      for (line = 1; line <= last; line++) print lines[line]
-    }
-  ' "$narrative_source"
-fi
-printf '\n## Closure gate\n\n'
-printf '| Acceptance criterion | Production path | Exact artifact/mode/seam | Evidence | Status |\n'
-printf '|---|---|---|---|---|\n'
-printf '%s\n' "$table_rows"
-printf '\n## Workflow telemetry\n\n'
-printf '| Field | Observed value |\n'
-printf '|---|---|\n'
-printf '| Model configuration | %s |\n' "$(telemetry_value model_configuration)"
-printf '| Wall-clock elapsed | %s |\n' "$(telemetry_value wall_clock_elapsed)"
-printf '| Implementation rounds | %s |\n' "$(telemetry_value implementation_rounds)"
-printf '| Independent-review rounds | %s |\n' "$(telemetry_value independent_review_rounds)"
-printf '| Remediation rounds | %s |\n' "$(telemetry_value remediation_rounds)"
-printf '| Validation executions | %s |\n' "$(telemetry_value validation_executions)"
-printf '| Blocking findings resolved | %s |\n' "$(telemetry_value blocking_findings_resolved)"
-printf '| Findings rejected at adjudication | %s |\n' "$(telemetry_value findings_rejected_at_adjudication)"
-printf '| Final workflow outcome | %s |\n' "$telemetry_outcome"
+candidate="$fixture/candidate.md"
+{
+  printf '## Issues\n\n%s #%s\n' "$outcome" "$issue_number"
+  if [[ -n "$narrative_source" && -s "$narrative_source" ]]; then
+    printf '\n'
+    awk '
+      { lines[NR] = $0 }
+      END {
+        last = NR
+        while (last > 0 && lines[last] == "") last--
+        for (line = 1; line <= last; line++) print lines[line]
+      }
+    ' "$narrative_source"
+  fi
+  printf '\n## Closure gate\n\n'
+  printf '| Acceptance criterion | Production path | Exact artifact/mode/seam | Evidence | Status |\n'
+  printf '|---|---|---|---|---|\n'
+  printf '%s\n' "$table_rows"
+  printf '\n## Workflow telemetry\n\n'
+  printf '| Field | Observed value |\n'
+  printf '|---|---|\n'
+  printf '| Model configuration | %s |\n' "$(telemetry_value model_configuration)"
+  printf '| Wall-clock elapsed | %s |\n' "$(telemetry_value wall_clock_elapsed)"
+  printf '| Implementation rounds | %s |\n' "$(telemetry_value implementation_rounds)"
+  printf '| Independent-review rounds | %s |\n' "$(telemetry_value independent_review_rounds)"
+  printf '| Remediation rounds | %s |\n' "$(telemetry_value remediation_rounds)"
+  printf '| Validation executions | %s |\n' "$(telemetry_value validation_executions)"
+  printf '| Blocking findings resolved | %s |\n' "$(telemetry_value blocking_findings_resolved)"
+  printf '| Findings rejected at adjudication | %s |\n' "$(telemetry_value findings_rejected_at_adjudication)"
+  printf '| Final workflow outcome | %s |\n' "$telemetry_outcome"
+} >"$candidate"
+
+"$script_root/validate-closeout-body.sh" "$issue_number" "$candidate"
+cat "$candidate"

@@ -5,7 +5,12 @@ set -euo pipefail
 # This checks shape and consistency only; afk-merge.sh remains responsible for
 # independently deciding whether the evidence merits an unattended merge.
 
-issue_number="${1:?usage: validate-closeout-body.sh <issue-number> [body-file|-]}"
+require_closes=false
+if [[ "${1:-}" == --require-closes ]]; then
+  require_closes=true
+  shift
+fi
+issue_number="${1:?usage: validate-closeout-body.sh [--require-closes] <issue-number> [body-file|-]}"
 body_source="${2:--}"
 
 fail() {
@@ -53,6 +58,9 @@ if [[ "${issue_lines[0]}" =~ ^(Closes|Progresses)[[:space:]]#${issue_number}$ ]]
   issue_outcome="${BASH_REMATCH[1]}"
 else
   fail "Issues section must map exactly Closes #$issue_number or Progresses #$issue_number"
+fi
+if [[ "$require_closes" == true && "$issue_outcome" != Closes ]]; then
+  fail "unattended closeout requires Closes #$issue_number; found $issue_outcome #$issue_number"
 fi
 
 mapfile -t gate_lines < <(section "## Closure gate" | sed '/^[[:space:]]*$/d')

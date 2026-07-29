@@ -9,6 +9,9 @@ cat >"$fixture/facts.json" <<'EOF'
 {
   "issue_number": 164,
   "outcome": "Closes",
+  "acceptance_criteria": [
+    "Canonical closeout is readable"
+  ],
   "acceptance": [
     {
       "criterion": "Canonical closeout is readable",
@@ -100,9 +103,31 @@ diff -u "$fixture/expected.md" "$fixture/actual.md"
 "$command_under_test" - "$fixture/narrative.md" <"$fixture/facts.json" >"$fixture/stdin.md"
 diff -u "$fixture/expected.md" "$fixture/stdin.md"
 
+# The renderer must not publish a candidate that its shipped validator rejects.
+mkdir "$fixture/drifted-install"
+cp "$command_under_test" "$fixture/drifted-install/render-closeout.sh"
+cat >"$fixture/drifted-install/validate-closeout-body.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'closeout body invalid: scripted renderer-validator contract drift\n' >&2
+exit 1
+EOF
+chmod +x "$fixture/drifted-install/"*.sh
+if "$fixture/drifted-install/render-closeout.sh" "$fixture/facts.json" \
+    >"$fixture/drifted.out" 2>"$fixture/drifted.err"; then
+  printf 'FAIL[validator-drift]: renderer emitted a rejected candidate\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/drifted.out" ]]
+grep -Fqx \
+  'closeout body invalid: scripted renderer-validator contract drift' \
+  "$fixture/drifted.err"
+
 # Table delimiters in free-form facts survive as readable content without
 # changing the canonical five-column shape.
-jq '.acceptance[0].criterion = "Input | output"' \
+jq '
+  .acceptance_criteria[0] = "Input | output"
+  | .acceptance[0].criterion = "Input | output"
+' \
   "$fixture/facts.json" >"$fixture/pipe.json"
 "$command_under_test" "$fixture/pipe.json" >"$fixture/pipe.md"
 grep -Fqx '| Input &#124; output | `render-closeout.sh` | Public CLI via a facts file | Literal-output scenario | tested |' \
@@ -128,6 +153,37 @@ expect_failure() {
 
 printf '{not json\n' >"$fixture/malformed.json"
 expect_failure malformed "facts are not valid JSON"
+
+jq 'del(.acceptance_criteria)' "$fixture/facts.json" >"$fixture/missing-criteria.json"
+expect_failure missing-criteria "acceptance_criteria must be a non-empty array"
+
+jq '.acceptance_criteria[0] = ""' "$fixture/facts.json" >"$fixture/empty-criterion.json"
+expect_failure empty-criterion "acceptance_criteria row 1 must be a non-empty string"
+
+jq '.acceptance_criteria += [.acceptance_criteria[0]]' \
+  "$fixture/facts.json" >"$fixture/duplicate-criterion.json"
+expect_failure duplicate-criterion \
+  "acceptance_criteria contains duplicate criterion: Canonical closeout is readable"
+
+jq '.acceptance_criteria += ["Criterion without closure evidence"]' \
+  "$fixture/facts.json" >"$fixture/missing-criterion-row.json"
+expect_failure missing-criterion-row \
+  "acceptance is missing criterion: Criterion without closure evidence"
+
+jq '.acceptance += [{
+  "criterion": "Unexpected criterion",
+  "production_path": "renderer",
+  "seam": "CLI",
+  "evidence": "output",
+  "status": "tested"
+}]' "$fixture/facts.json" >"$fixture/extra-criterion-row.json"
+expect_failure extra-criterion-row \
+  "acceptance contains criterion not in acceptance_criteria: Unexpected criterion"
+
+jq '.acceptance += [.acceptance[0]]' \
+  "$fixture/facts.json" >"$fixture/duplicate-criterion-row.json"
+expect_failure duplicate-criterion-row \
+  "acceptance contains duplicate criterion: Canonical closeout is readable"
 
 jq 'del(.acceptance)' "$fixture/facts.json" >"$fixture/missing-acceptance.json"
 expect_failure missing-acceptance "acceptance must contain at least one row"

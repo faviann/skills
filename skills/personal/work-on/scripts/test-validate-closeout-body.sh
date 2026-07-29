@@ -38,6 +38,23 @@ EOF
 "$command_under_test" 164 "$fixture/canonical.md"
 "$command_under_test" 164 - <"$fixture/canonical.md"
 
+sed \
+  -e 's/^Closes #164$/Progresses #164/' \
+  -e 's/| Final workflow outcome | Closes |/| Final workflow outcome | Progresses |/' \
+  "$fixture/canonical.md" >"$fixture/progresses.md"
+"$command_under_test" 164 "$fixture/progresses.md"
+
+if "$command_under_test" --require-closes 164 "$fixture/progresses.md" \
+    >"$fixture/require-closes.out" 2>"$fixture/require-closes.err"; then
+  printf 'FAIL[require-closes]: Progresses was accepted for unattended closeout\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/require-closes.out" ]]
+grep -Fqx \
+  'closeout body invalid: unattended closeout requires Closes #164; found Progresses #164' \
+  "$fixture/require-closes.err"
+"$command_under_test" --require-closes 164 "$fixture/canonical.md"
+
 expect_failure() {
   local name="$1" diagnostic="$2"
   if "$command_under_test" 164 "$fixture/$name.md" >"$fixture/$name.out" 2>"$fixture/$name.err"; then
