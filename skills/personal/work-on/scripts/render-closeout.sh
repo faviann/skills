@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Validate structured closeout facts and render the evidence-oriented sections
 # of a pull-request body. Narrative Markdown remains ordinary Markdown and is
-# copied between the issue mapping and the mechanical evidence sections.
+# copied under a renderer-owned narrative boundary between the issue mapping
+# and the mechanical evidence sections.
 
 facts_source="${1:--}"
 narrative_source="${2:-}"
@@ -187,7 +188,7 @@ candidate="$fixture/candidate.md"
 {
   printf '## Issues\n\n%s #%s\n' "$outcome" "$issue_number"
   if [[ -n "$narrative_source" && -s "$narrative_source" ]]; then
-    printf '\n'
+    printf '\n## Narrative\n\n'
     awk '
       { lines[NR] = $0 }
       END {

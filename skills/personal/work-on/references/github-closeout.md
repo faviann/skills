@@ -88,6 +88,12 @@ remain ordinary Markdown. Put that content in an untracked narrative file,
 excluding the mechanically owned `## Issues`, `## Closure gate`, and
 `## Workflow telemetry` sections.
 
+For every non-empty narrative, the renderer adds a mechanically owned
+`## Narrative` boundary before copying the narrative Markdown verbatim, apart
+from normalizing terminal blank lines. The narrative may begin with any
+Markdown block; do not add or require a heading merely to satisfy the
+validator.
+
 Put the closeout facts in an untracked JSON file with this shape:
 
 ```json

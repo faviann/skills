@@ -58,6 +58,8 @@ cat >"$fixture/expected.md" <<'EOF'
 
 Closes #164
 
+## Narrative
+
 ## Summary
 
 Rendered a readable closeout.
@@ -102,6 +104,72 @@ diff -u "$fixture/expected.md" "$fixture/actual.md"
 # stdin is the other documented input mode.
 "$command_under_test" - "$fixture/narrative.md" <"$fixture/facts.json" >"$fixture/stdin.md"
 diff -u "$fixture/expected.md" "$fixture/stdin.md"
+
+# A paragraph-first narrative must be placed behind a renderer-owned H2
+# boundary so it remains outside the mechanically owned Issues section.
+cat >"$fixture/paragraph-narrative.md" <<'EOF'
+Implemented the closeout renderer.
+
+### Validation details
+
+The public CLI scenario passed.
+EOF
+cat >"$fixture/paragraph-narrative-expected.md" <<'EOF'
+## Narrative
+
+Implemented the closeout renderer.
+
+### Validation details
+
+The public CLI scenario passed.
+
+EOF
+"$command_under_test" "$fixture/facts.json" "$fixture/paragraph-narrative.md" \
+  >"$fixture/paragraph-narrative-body.md"
+awk '
+  $0 == "## Narrative" { found = 1 }
+  found && $0 == "## Closure gate" { exit }
+  found { print }
+' "$fixture/paragraph-narrative-body.md" >"$fixture/paragraph-narrative-actual.md"
+diff -u \
+  "$fixture/paragraph-narrative-expected.md" \
+  "$fixture/paragraph-narrative-actual.md"
+"$(dirname "$command_under_test")/validate-closeout-body.sh" \
+  164 "$fixture/paragraph-narrative-body.md"
+
+# List- and code-shaped Markdown is also ordinary narrative content and must
+# survive rendering verbatim behind the same boundary.
+cat >"$fixture/list-code-narrative.md" <<'EOF'
+- Renderer scenario passed.
+- Validator scenario passed.
+
+```text
+validation output stays literal
+```
+EOF
+cat >"$fixture/list-code-narrative-expected.md" <<'EOF'
+## Narrative
+
+- Renderer scenario passed.
+- Validator scenario passed.
+
+```text
+validation output stays literal
+```
+
+EOF
+"$command_under_test" "$fixture/facts.json" "$fixture/list-code-narrative.md" \
+  >"$fixture/list-code-narrative-body.md"
+awk '
+  $0 == "## Narrative" { found = 1 }
+  found && $0 == "## Closure gate" { exit }
+  found { print }
+' "$fixture/list-code-narrative-body.md" >"$fixture/list-code-narrative-actual.md"
+diff -u \
+  "$fixture/list-code-narrative-expected.md" \
+  "$fixture/list-code-narrative-actual.md"
+"$(dirname "$command_under_test")/validate-closeout-body.sh" \
+  164 "$fixture/list-code-narrative-body.md"
 
 # The renderer must not publish a candidate that its shipped validator rejects.
 mkdir "$fixture/drifted-install"
