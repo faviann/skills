@@ -46,9 +46,12 @@ Procedure:
    skill's `references/default-workflow.md`. Read the selected source and treat
    it as binding. Done when read and, for a repo workflow, announced.
 6. Follow it without broadening the issue. When code changes are ready for a
-   pull request, read and follow `references/github-closeout.md`. Done when the
-   workflow's completion criteria are met and, on the PR path, the final PR
-   body has been read back as closeout requires.
+   pull request, read and follow `references/github-closeout.md`. Build the
+   closeout through `scripts/render-closeout.sh`; never hand-compose its Issues,
+   Closure gate, or Workflow telemetry sections. Done when the workflow's
+   completion criteria are met and, on the PR path, the final PR body has been
+   read back and checked with `scripts/validate-closeout-body.sh` as closeout
+   requires.
 
 Abort on any conflict among the issue, snapshot, referenced docs, workflow,
 required skills, authority invariants, or repository state.
