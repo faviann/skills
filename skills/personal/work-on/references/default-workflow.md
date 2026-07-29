@@ -1,7 +1,7 @@
 # Default work-on workflow
 
-Required skills: `implement` and `tdd` (inside the delegated agent),
-`code-review` (invoked by the primary).
+Required skills: `/tdd` (inside the delegated agent) and `/code-review` (invoked
+by the primary).
 
 Abort if:
 - a required skill is unavailable
@@ -22,10 +22,28 @@ missing seam is flagged for the closure gate.
 
 ## 2. Delegate implementation
 
-Spawn a fresh subagent with the trusted issue snapshot, raw source paths, base
-SHA, and required commands. Tell it not to refetch issue comments. It uses
-`implement`/`tdd` mechanics, stops after workspace edits and validation, and
-returns only:
+Spawn a fresh subagent and give it this contract directly, populated only from
+the primary's adjudicated contract and trusted snapshot:
+
+```text
+Scoped implementation contract:
+- Objective: <the bounded behavior this slice must add or change>
+- Acceptance criteria: <criteria this implementation round must satisfy>
+- Scope: <allowed production and test surfaces>
+- Non-scope: <explicit exclusions>
+- Trusted snapshot: <issue body, trusted comments, and referenced contract docs>
+- Raw source paths: <paths the delegate should inspect>
+- Base SHA: <the primary's recorded base>
+- Validation seams: <pre-agreed public boundaries and expected observations>
+- Required commands: <targeted and baseline checks>
+- Authority: GitHub reads and workspace edits only. Do not refetch issue
+  comments, commit, mutate GitHub, or change the contract.
+- Completion: use `/tdd` at the named seams where possible, implement only this
+  contract, run the required checks, then stop.
+```
+
+The scoped contract is the delegate's complete implementation workflow. The
+delegate returns only:
 
 ```text
 Changed:

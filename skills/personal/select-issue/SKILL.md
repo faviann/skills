@@ -1,7 +1,6 @@
 ---
 name: select-issue
 description: Select the next GitHub issue from the ready-for-agent queue, optionally narrowed to AFK-authorized Sandcastle work. Use for a read-only one-issue recommendation; never start implementation.
-disable-model-invocation: true
 ---
 
 Goal: select and report exactly one suitable issue. Never start work.

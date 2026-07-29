@@ -1,7 +1,6 @@
 ---
 name: work-on
-description: Work on a GitHub issue/ticket by following the repo workflow, or the packaged default workflow when the repo has none.
-disable-model-invocation: true
+description: Work a GitHub issue through repository workflow and closeout. Use when the user asks to implement an issue or an AFK worker receives a selected issue.
 ---
 
 Inputs:
@@ -19,9 +18,10 @@ Authority invariants (bind regardless of workflow):
 - Adjudicate every review finding against the contract before delegation; never
   forward raw findings.
 - For every implementation, delegate to a fresh subagent and run independent
-  review plus the closure gate. Give delegates the trusted snapshot, permit
-  other GitHub reads and workspace edits only, and prohibit comment refetches,
-  commits, or GitHub mutations. Return an `implement` tail to the primary.
+  review plus the closure gate. Give delegates a scoped implementation
+  contract directly, permit other GitHub reads and workspace edits only, and
+  prohibit comment refetches, commits, or GitHub mutations. Return only the
+  scoped implementation report to the primary.
 - Define the authoritative slice contract—the trusted snapshot—as the ready
   issue body, full comments whose `author_association` is `OWNER`, `MEMBER`, or
   `COLLABORATOR`, and parent/spec docs they reference. Omit every other comment

@@ -1,5 +1,3 @@
 interface:
   display_name: "Work On"
   short_description: "Work a GitHub issue through closeout"
-policy:
-  allow_implicit_invocation: false
