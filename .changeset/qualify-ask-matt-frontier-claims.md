@@ -4,5 +4,5 @@
 
 Correct two routing claims in `/ask-matt` about the tickets `/to-tickets` publishes.
 
-- **Blocking edges decide when a ticket is startable, not who acts.** The router no longer says a ticket can be grabbed as soon as its blockers are done. Its triage role decides who may start it, and `/implement` now picks up startable tickets carrying the `ready-for-agent` role rather than every startable ticket.
-- **The triage on-ramp no longer over-claims.** Instead of asserting every `/to-tickets` output is agent-ready, it says those tickets already carry the triage role assigned at publication — normally `ready-for-agent` — and still tells you not to triage them.
+- **Published `/to-tickets` output stays agent-ready.** Every ticket it publishes is `ready-for-agent`; blocking edges decide when `/implement` can start each one. Unresolved design questions return to grilling, prototyping, or Wayfinder instead of becoming an alternative output role.
+- **The triage on-ramp stays direct.** Tickets from `/to-tickets` are already agent-ready and classified, so the router still tells you not to triage them.

@@ -24,14 +24,14 @@ Reach for it once you have an agreed plan or a written spec and you want it spli
 
 ## Prerequisites
 
-`to-tickets` publishes into your issue tracker, so [setup-matt-pocock-skills](https://aihero.dev/skills-setup-matt-pocock-skills) must have configured the tracker and its triage label vocabulary for this repo first. On a real tracker it normally applies the `ready-for-agent` triage role as it publishes, unless you instruct it otherwise.
+`to-tickets` publishes into your issue tracker, so [setup-matt-pocock-skills](https://aihero.dev/skills-setup-matt-pocock-skills) must have configured the tracker and its triage label vocabulary for this repo first. Every ticket it publishes is `ready-for-agent`.
 
 ## One artifact, two readings
 
 The blocking edges are the whole point. They make one set of tickets read two ways, depending on the tracker:
 
 - **Local files** → one file per ticket under `.scratch/<feature>/issues/`, numbered blockers-first, the edges written as text. You work them top-to-bottom, by hand, staying in the loop.
-- **A real tracker (GitHub, Linear)** → one issue per ticket, the edges as native blocking links (or sub-issues). Any ticket whose blockers are all done is on the **frontier** and is startable. The ticket's triage role separately determines whether an agent may take it.
+- **A real tracker (GitHub, Linear)** → one issue per ticket, the edges as native blocking links (or sub-issues). Every published ticket is ready for an agent; its blocking edges determine when it is startable.
 
 The edges live in the ticket regardless of medium; the medium only decides whether anything acts on them in parallel. `to-tickets` produces the artifact — how you run it (sequential by hand, or a parallel fleet) is up to you.
 
@@ -43,7 +43,7 @@ Two constraints bound how big a slice gets, and both have to hold: it has to fit
 
 Both budgets are about capacity, and a slice can clear both and still be a bad thing to land at once. So **risk** decides whether a slice splits: one that introduces more than one independent state, lifecycle, or authorization model gets split, however comfortably it fits. Independent means it can be got wrong on its own — alternatives within a single determination are one model however many outcomes it has, so their plurality alone doesn't trigger the rule, while two genuinely separate models do.
 
-Risk decides *whether* a slice splits; a **safe and useful seam** decides *where* it can be cut. Neither overrides the other, which matters most when they disagree: a slice that has to split but offers nowhere good to cut is a design problem to solve, not a reason to ship it whole. Work nobody has found a safe way to decompose isn't ready to publish, and `to-tickets` won't publish it as though it were.
+Risk decides *whether* a slice splits; a **safe and useful seam** decides *where* it can be cut. Neither overrides the other, which matters most when they disagree: a settled design may need a prefactor ticket to create the seam, while an unresolved design question sends the work back to [grill-with-docs](https://aihero.dev/skills-grill-with-docs), [prototype](https://aihero.dev/skills-prototype), or [wayfinder](https://aihero.dev/skills-wayfinder). `to-tickets` publishes nothing until the design can be safely decomposed.
 
 And each semantic case or production mechanism gets exactly one owning ticket, because two tickets quietly claiming the same mechanism only discover each other as integration work after both have landed. Where two genuinely must touch the same one, the overlap gets scheduled rather than discovered.
 
