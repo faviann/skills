@@ -14,7 +14,7 @@ A contract is **independently failure-prone** when it can fail in production wit
 - **Backward-compatibility protocols** — two forms coexist and something must read, write, or negotiate both.
 - **Fail-closed resource-governance authority** — a deadline, budget, quota, or size bound whose breach makes the system refuse, truncate, or degrade rather than continue.
 
-More than one of these in a single slice is what the risk rule fires on. State, lifecycle, and authorization models are the same test in the skill's shorter words.
+More than one of these in a single slice is what the risk rule fires on. The skill states that rule in shorter words; these shapes are what it fires on in full.
 
 ## Discriminators
 
@@ -37,7 +37,7 @@ Four capture tickets from Overmind's Phase 2 wave. Each fitted both budgets and 
 
 [overmind#154 / PR #175](https://github.com/faviann/overmind/pull/175) modelled mutually exclusive terminality states. It touched several contracts, and it correctly stayed one ticket: the states formed a single cohesive state machine, so no seam produced two independently safe and useful halves. Any split either shipped a machine that could reach a state nothing handled, or shipped states no path could reach. Neither half was safe, and neither was useful alone.
 
-This is what keeps the risk rule from firing on every multi-contract slice. Risk decides whether a split is required; a safe and useful seam decides whether one is available. When the seam does not exist, the slice stays whole and the review is where the risk is managed.
+This is what keeps the risk rule from firing on every multi-contract slice. Risk decides whether a split is required; the seam rule decides where that split can land. In #154 no seam left two independently safe and useful halves, so the slice correctly stayed one ticket.
 
 ## Ownership collisions
 
@@ -47,11 +47,9 @@ Catch this at decomposition time. For every semantic case and production mechani
 
 ## What numbers are for
 
-Counts — models touched, boundaries crossed — and estimated diff size are prompts to re-examine a proposed slice. They are not verdicts. They do not establish that a slice is reviewable, and they must not become repository-independent pass/fail limits.
+The risk-shape test above is qualitative — it asks what the slice introduces, and it decides. Tallying is not that test. Counts — models touched, boundaries crossed — and estimated diff size are prompts to re-examine a proposed slice. They are not verdicts. They do not establish that a slice is reviewable, and they must not become repository-independent pass/fail limits.
 
 Keep two measurements apart:
 
 - **Decomposition-time estimates are uncertain.** You are guessing at the size of code that does not exist yet, from a description of behaviour. Treat a large estimate as a reason to re-read the risk shapes above, never as a rejection on its own.
 - **Closeout size is retrospective.** Measured after the fact across a body of completed tickets, it separates the clear extremes, but it does not explain borderline effort or its cause — the qualitative risk shapes do.
-
-If a repository derives its own tripwire from its own workflow provenance, that number belongs to that repository. It is never carried across to another one, and it never enters this skill.
