@@ -2,7 +2,7 @@
 
 How to judge a slice that fits both budgets and still might be too dangerous to land at once. Assumes the vocabulary in [SKILL.md](SKILL.md) — **tracer bullet**, **vertical slice**, **blast radius**, **seam**.
 
-Use it to answer three questions in order: which independent models this slice introduces, which risk shapes they instantiate, and where a seam can land without producing a half that is unsafe or useless — where no seam does that yet, the prefactor that creates one is its own ticket sequenced ahead of the split slices, and where none can be created even then, the breakdown is not ready to publish and the unresolved decomposition goes to the user in the quiz.
+Use it to answer three questions in order: which independent models this slice introduces, which risk shapes they instantiate, and where a seam can land without producing a half that is unsafe or useless. Where a settled design needs a code seam, the prefactor that creates it is its own ticket sequenced ahead of the split slices. Where an unresolved design question prevents a safe seam, the input returns to the appropriate fog-clearing flow without publishing.
 
 ## Risk shapes
 
@@ -47,7 +47,7 @@ Four capture tickets from Overmind's Phase 2 wave. Each fitted both budgets and 
 
 Two misreadings are worth heading off. The ticket did not centralise the authorities: the reader's terminality evidence, the adapter's mapping of that evidence to canonical form, and server fidelity policy stayed deliberately separate, because coupling them across module boundaries would have joined authorities that really are independent. One determination is not one place; what the ticket combined was the predicate, so the required mechanism has one decision point. And its branches are not kept whole because they fail together — they began as separate predicates and were combined later, and they can still fail separately. They are one model because they answer one question.
 
-So what stops the risk rule firing on every multi-contract slice is that test in **Risk shapes** above, not the availability of a seam. Risk decides whether a split is required; the seam rule decides where that split can land. They are one model, which is why no safe and useful split existed — the cohesion explains the missing seam, never the other way round. Where the rule does fire and no safe and useful seam is apparent, that is a design problem, never a reason to leave the slice whole: create the seam in its own prefactor ticket, sequenced ahead of the split slices by a real blocking edge. Where none can be created even then, the breakdown is not ready to publish: raise the unresolved decomposition in the quiz.
+So what stops the risk rule firing on every multi-contract slice is that test in **Risk shapes** above, not the availability of a seam. Risk decides whether a split is required; the seam rule decides where that split can land. They are one model, which is why no safe and useful split existed — the cohesion explains the missing seam, never the other way round. Where the rule does fire and no safe and useful seam is apparent, never leave the slice whole: if the design is settled, create the seam in its own prefactor ticket, sequenced ahead of the split slices by a real blocking edge; if a design question remains unresolved, stop without publishing and hand it back to the fog-clearing flow named in `SKILL.md`.
 
 ## Ownership collisions
 
