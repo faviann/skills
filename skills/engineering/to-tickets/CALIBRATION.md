@@ -2,7 +2,7 @@
 
 How to judge a slice that fits both budgets and still might be too dangerous to land at once. Assumes the vocabulary in [SKILL.md](SKILL.md) — **tracer bullet**, **vertical slice**, **blast radius**, **seam**.
 
-Use it to answer three questions in order: which contracts in this slice are independently failure-prone, whether that count forces a split, and where a seam can land without producing a half that is unsafe or useless.
+Use it to answer three questions in order: which contracts in this slice are independently failure-prone, whether more than one risk shape is present, and where a seam can land without producing a half that is unsafe or useless.
 
 ## Risk shapes
 
@@ -14,7 +14,7 @@ A contract is **independently failure-prone** when it can fail in production wit
 - **Backward-compatibility protocols** — two forms coexist and something must read, write, or negotiate both.
 - **Fail-closed resource-governance authority** — a deadline, budget, quota, or size bound whose breach makes the system refuse, truncate, or degrade rather than continue.
 
-More than one of these in a single slice is what the risk rule fires on. The skill states that rule in shorter words; these shapes are what it fires on in full.
+More than one of these in a single slice is what the risk rule fires on. The skill states that rule in shorter words; these shapes are what it covers.
 
 ## Discriminators
 
@@ -37,7 +37,7 @@ Four capture tickets from Overmind's Phase 2 wave. Each fitted both budgets and 
 
 [overmind#154 / PR #175](https://github.com/faviann/overmind/pull/175) modelled mutually exclusive terminality states. It touched several contracts, and it correctly stayed one ticket: the states formed a single cohesive state machine, so no seam produced two independently safe and useful halves. Any split either shipped a machine that could reach a state nothing handled, or shipped states no path could reach. Neither half was safe, and neither was useful alone.
 
-This is what keeps the risk rule from firing on every multi-contract slice. Risk decides whether a split is required; the seam rule decides where that split can land. In #154 no seam left two independently safe and useful halves, so the slice correctly stayed one ticket.
+This is what keeps the risk rule from firing on every multi-contract slice. Risk decides whether a split is required; the seam rule decides where that split can land.
 
 ## Ownership collisions
 
