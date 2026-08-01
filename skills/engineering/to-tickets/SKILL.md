@@ -26,8 +26,6 @@ Look for opportunities to prefactor the code to make the implementation easier. 
 
 Break the work into **tracer bullet** tickets.
 
-Before drafting, verify that the source has settled every design decision required by the intended change. Do not turn a decision or investigation into an implementation ticket: if any required behaviour still depends on an unresolved design question, show the user that question, end the run without publishing, and hand it back to the fog-clearing flow described below. Resume only after the answer is recorded in the source conversation or spec.
-
 <vertical-slice-rules>
 
 - Each slice cuts a narrow but COMPLETE path through every layer (schema, API, UI, tests) — vertical, NOT a horizontal slice of one layer
