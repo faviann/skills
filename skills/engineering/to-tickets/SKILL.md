@@ -31,13 +31,20 @@ Break the work into **tracer bullet** tickets.
 - Each slice cuts a narrow but COMPLETE path through every layer (schema, API, UI, tests) — vertical, NOT a horizontal slice of one layer
 - A completed slice is demoable or verifiable on its own
 - Each slice is sized by two constraints that both must hold: it fits in a single fresh context window, AND it closes as one reviewable pull request
+- **Risk decides whether to split**: split a slice that introduces more than one independent state, lifecycle, or authorization model — even one that fits both budgets
+- **Safe and useful seams decide where to split**: once risk calls for a split, place the seam so every resulting slice is independently safe and useful
+- **One owner per mechanism**: each semantic case and production mechanism belongs to exactly one ticket. Where two tickets genuinely must touch the same one, give them an explicit sequence — a real blocking edge, not a remark — and state in the later ticket how it integrates with what the earlier one landed
 - Any prefactoring should be done first
 
 </vertical-slice-rules>
 
+Risk decides **whether** a split is required; the seam rule decides **where** that split can land. Apply them together — neither overrides the other. A slice that carries several risky contracts but offers no seam leaving both halves safe and useful stays one ticket.
+
+Read [CALIBRATION.md](CALIBRATION.md) before you settle a slice that crosses several production models, protocols, trust boundaries, compatibility paths, or resource-governance boundaries, or when the codebase offers no close implementation analogue for what the slice introduces. Otherwise skip it.
+
 Give each ticket its **blocking edges** — the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
-**Wide refactors are the exception to vertical slicing.** A **wide refactor** is one mechanical change — rename a column, retype a shared symbol — whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Don't force it into a tracer bullet; sequence it as **expand–contract**. First expand: add the new form beside the old so nothing breaks. Then migrate the call sites over in batches sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand, keeping CI green batch to batch because the old form still exists. Finally contract: delete the old form once no caller remains, in a ticket blocked by every migrate batch. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket — green is promised only there.
+**Prefer final-form behavioural contracts** — a slice lands the behaviour it is meant to keep. **Wide refactors are the one exception**, and their transitional form is an intentional contract, not an improvised seam. A **wide refactor** is one mechanical change — rename a column, retype a shared symbol — whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Sequence it as **expand–contract**: the expand ticket introduces a **compatibility form** beside the old one; **name the migration batches that consume it**, sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand; **retain the compatibility form until every named batch has landed**, which is what keeps CI green batch to batch; then the contract ticket, blocked by every batch, removes the old form. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket — green is promised only there. This is the exception to final-form slicing, not a licence to invent temporary behavioural seams elsewhere.
 
 ### 4. Quiz the user
 

@@ -1,0 +1,7 @@
+---
+"faviann-skills": patch
+---
+
+Size a `/to-tickets` slice by the risk it carries, not only by the two capacity budgets.
+
+`<vertical-slice-rules>` bounded a slice by one fresh context window and one reviewable pull request — both capacity limits, one on the agent and one on the reviewer. Slices that cleared both still landed several independently failure-prone production contracts at once, and two tickets could quietly claim the same mechanism, so the overlap only surfaced as integration work after both had been published. The skill now adds three positive rules: risk decides **whether** a slice splits (more than one independent state, lifecycle, or authorization model), a safe and useful seam decides **where** it can land, and each semantic case and production mechanism gets exactly one owning ticket — or an explicit blocking edge and integration strategy. A new conditionally-loaded `CALIBRATION.md` carries the risk taxonomy, the persistence and resource-governance discriminators, worked oversized and cohesive examples, and the rule that counts and diff estimates only prompt a re-examination and never become pass/fail limits. The wide-refactor paragraph is rewritten in place as a positive transitional-compatibility contract: prefer final-form behavioural contracts, and where a wide refactor forces a compatibility form, name the batches that consume it and retire it in the contract ticket.
