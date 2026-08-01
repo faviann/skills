@@ -2,11 +2,11 @@
 
 How to judge a slice that fits both budgets and still might be too dangerous to land at once. Assumes the vocabulary in [SKILL.md](SKILL.md) — **tracer bullet**, **vertical slice**, **blast radius**, **seam**.
 
-Use it to answer three questions in order: which contracts in this slice are independently failure-prone, whether more than one risk shape is present, and where a seam can land without producing a half that is unsafe or useless.
+Use it to answer three questions in order: which independent models this slice introduces, which risk shapes they instantiate, and where a seam can land without producing a half that is unsafe or useless — where no seam does that yet, the prefactor that creates one is its own ticket sequenced ahead of the split slices, and where none can be created even then, the unresolved decomposition goes to the user in the quiz rather than being published as agent-ready on your own judgement.
 
 ## Risk shapes
 
-A contract is **independently failure-prone** when it can fail in production without any of the others failing. Count these, not files:
+A model is **independent** when it can be got wrong on its own — its correctness does not follow from another's. These shapes are where independent models usually live. Inspect them, then count the models you find:
 
 - **Concurrency protocols** — a new ordering, locking, deduplication, or coordination rule that separate actors must agree on.
 - **New persistence lifecycles** — state that something now has to create, mutate, converge, expire, or reconcile on its own schedule.
@@ -14,7 +14,15 @@ A contract is **independently failure-prone** when it can fail in production wit
 - **Backward-compatibility protocols** — two forms coexist and something must read, write, or negotiate both.
 - **Fail-closed resource-governance authority** — a deadline, budget, quota, or size bound whose breach makes the system refuse, truncate, or degrade rather than continue.
 
-More than one of these in a single slice is what the risk rule fires on. The skill states that rule in shorter words; these shapes are what it covers.
+More than one **independent model** in a single slice is what the risk rule fires on — not more than one shape. The taxonomy works in both directions: the shapes say what to inspect, and the rule counts the independent models instantiating them. Two independent concurrency protocols are one shape and two models; a slice reaching across two shapes carries one model when neither half can be got wrong without the other.
+
+What decides is the qualitative identification of more than one independent state, lifecycle, or authorization model. Counts of files, boundaries, taxonomy categories, estimated diff size, or models merely *touched* are advisory. Three readings follow from that:
+
+- One model may have several outcomes, authorities, code paths, and failure modes. That plurality is not plural models.
+- Two independent instances of the same shape count twice.
+- Alternatives within one shared determination — whose state space has to stay complete and coherent — count once. Mutual exclusivity is supporting evidence for that reading, not the test.
+
+The skill states the rule in shorter words; these shapes are what it covers.
 
 ## Discriminators
 
@@ -26,7 +34,7 @@ Both of these separate ordinary work from a risk shape. Ordinary work does not c
 
 ## Oversized shapes
 
-Four capture tickets from Overmind's Phase 2 wave. Each fitted both budgets and each should still have been split, because each carried several independently failure-prone contracts at once. Read them as failure shapes, not as sizing precedents — none of them establishes a diff-size limit.
+Four capture tickets from Overmind's Phase 2 wave. Each fitted both budgets and each should still have been split, because each introduced several independent models at once. Read them as failure shapes, not as sizing precedents — none of them establishes a diff-size limit.
 
 - **[overmind#160](https://github.com/faviann/overmind/pull/160) — *Discover stable Codex child rollout streams*.** Child discovery, a migration model, and upgrade convergence in one slice: discovery could be correct while migration stranded existing records, and both could be correct while an upgraded instance failed to converge.
 - **[overmind#168](https://github.com/faviann/overmind/pull/168) — *Advance oversized captures with explicit omissions*.** A transport boundary and a content-policy resource boundary in one slice: two separate authorities deciding independently to refuse or omit content.
@@ -35,9 +43,11 @@ Four capture tickets from Overmind's Phase 2 wave. Each fitted both budgets and 
 
 ## The counterexample
 
-[overmind#154 / PR #175](https://github.com/faviann/overmind/pull/175) modelled mutually exclusive terminality states. It touched several contracts, and it correctly stayed one ticket — not because no seam was available, but because those states were never independently failure-prone. They were mutually exclusive states of one cohesive machine, and they fail together: a wrong state is a wrong machine. So they are one model, not several, and the risk rule never fired. Any split either shipped a machine that could reach a state nothing handled, or shipped states no path could reach.
+[overmind#154 / PR #175](https://github.com/faviann/overmind/pull/175) settled how a Codex record's terminality is determined: a record is exactly one of active, terminal-readable, or terminal-uninspectable. It touched several contracts and correctly stayed one ticket, because those outcomes are alternatives within one determination rather than independent models. The state space has to stay complete and coherent — any split either shipped a determination that could reach an outcome nothing handled, or outcomes no path could reach — so the slice carried one model and the risk rule never fired.
 
-What keeps the risk rule from firing on every multi-contract slice is the independence test in **Risk shapes** above — a contract counts only when it can fail in production without any of the others failing — not the availability of a seam. Risk decides whether a split is required; the seam rule decides where that split can land. Where the rule does fire and no safe and useful seam is apparent, that is a design problem to prefactor toward or to raise with the user, never a reason to leave the slice whole.
+Two misreadings are worth heading off. The ticket did not centralise the authorities: the reader's terminality evidence, the adapter's mapping of that evidence to canonical form, and server fidelity policy stayed deliberately separate, because coupling them across module boundaries would have joined authorities that really are independent. One determination is not one place; what the ticket combined was the predicate, so the required mechanism has one decision point. And its branches are not kept whole because they fail together — they began as separate predicates and were combined later, and they can still fail separately. They are one model because they answer one question.
+
+So what stops the risk rule firing on every multi-contract slice is that test in **Risk shapes** above, not the availability of a seam. Risk decides whether a split is required; the seam rule decides where that split can land. They are one model, which is why no safe and useful split existed — the cohesion explains the missing seam, never the other way round. Where the rule does fire and no safe and useful seam is apparent, that is a design problem, never a reason to leave the slice whole: create the seam in its own prefactor ticket, sequenced ahead of the split slices by a real blocking edge. Where none can be created even then, raise the unresolved decomposition in the quiz and let the user decide. If the user then explicitly directs publication with the risk unresolved, the ticket ships as `ready-for-human` with that risk stated in its body — never `ready-for-agent`.
 
 ## Ownership collisions
 
@@ -47,7 +57,7 @@ Catch this at decomposition time. For every semantic case and production mechani
 
 ## What numbers are for
 
-The risk-shape test above is qualitative — it asks what the slice introduces, and it decides. Tallying is not that test. Counts — models touched, boundaries crossed — and estimated diff size are prompts to re-examine a proposed slice. They are not verdicts. They do not establish that a slice is reviewable, and they must not become repository-independent pass/fail limits.
+The risk-shape test above is qualitative — it asks what the slice introduces, and it decides. Tallying is not that test. The one number that decides is how many *genuinely independent* models the slice introduces, and it is reached by judging each candidate against the test above, not by adding up what the slice touches. Every other count — models merely touched, boundaries crossed, shapes present, files changed — and estimated diff size are prompts to re-examine a proposed slice. They are not verdicts. They do not establish that a slice is reviewable, and they must not become repository-independent pass/fail limits.
 
 Keep two measurements apart:
 
