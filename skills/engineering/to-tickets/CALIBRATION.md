@@ -35,9 +35,9 @@ Four capture tickets from Overmind's Phase 2 wave. Each fitted both budgets and 
 
 ## The counterexample
 
-[overmind#154 / PR #175](https://github.com/faviann/overmind/pull/175) modelled mutually exclusive terminality states. It touched several contracts, and it correctly stayed one ticket: the states formed a single cohesive state machine, so no seam produced two independently safe and useful halves. Any split either shipped a machine that could reach a state nothing handled, or shipped states no path could reach. Neither half was safe, and neither was useful alone.
+[overmind#154 / PR #175](https://github.com/faviann/overmind/pull/175) modelled mutually exclusive terminality states. It touched several contracts, and it correctly stayed one ticket — not because no seam was available, but because those states were never independently failure-prone. They were mutually exclusive states of one cohesive machine, and they fail together: a wrong state is a wrong machine. So they are one model, not several, and the risk rule never fired. Any split either shipped a machine that could reach a state nothing handled, or shipped states no path could reach.
 
-This is what keeps the risk rule from firing on every multi-contract slice. Risk decides whether a split is required; the seam rule decides where that split can land.
+What keeps the risk rule from firing on every multi-contract slice is the independence test in **Risk shapes** above — a contract counts only when it can fail in production without any of the others failing — not the availability of a seam. Risk decides whether a split is required; the seam rule decides where that split can land. Where the rule does fire and no safe and useful seam is apparent, that is a design problem to prefactor toward or to raise with the user, never a reason to leave the slice whole.
 
 ## Ownership collisions
 

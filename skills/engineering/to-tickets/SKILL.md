@@ -32,13 +32,13 @@ Break the work into **tracer bullet** tickets.
 - A completed slice is demoable or verifiable on its own
 - Each slice is sized by two constraints that both must hold: it fits in a single fresh context window, AND it closes as one reviewable pull request
 - **Risk decides whether to split**: split a slice that introduces more than one independent state, lifecycle, or authorization model — even one that fits both budgets
-- **Safe and useful seams decide where to split**: once risk calls for a split, place the seam so every resulting slice is independently safe and useful — where no such seam exists, the slice stays one ticket
+- **Safe and useful seams decide where to split**: once risk calls for a split, place the seam so every resulting slice is independently safe and useful — where no seam does that yet, prefactor to create one; where none can be made even then, raise it in the quiz rather than shipping the slice whole
 - **One owner per mechanism**: each semantic case and production mechanism belongs to exactly one ticket. Where two tickets genuinely must touch the same one, give them an explicit sequence — a real blocking edge, not a remark — and state in the later ticket how it integrates with what the earlier one landed
 - Any prefactoring should be done first
 
 </vertical-slice-rules>
 
-Risk decides **whether** a split is required; the seam rule decides **where** that split can land. Apply them together — neither overrides the other. A slice that carries several risky contracts but offers no seam leaving both halves safe and useful stays one ticket.
+Risk decides **whether** a split is required; the seam rule decides **where** that split can land. Apply them together — neither overrides the other. Contracts that cannot fail independently of one another are one model, not several: there the risk rule never fired, and the slice is one ticket on those grounds. Where it did fire, its verdict stands — the seam rule places the split, it does not cancel it.
 
 Read [CALIBRATION.md](CALIBRATION.md) before you settle a slice that crosses several production models, protocols, trust boundaries, compatibility paths, or resource-governance boundaries, or when the codebase offers no close implementation analogue for what the slice introduces. Otherwise skip it.
 
