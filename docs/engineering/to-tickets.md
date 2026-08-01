@@ -41,6 +41,14 @@ The whole skill turns on one distinction. A **horizontal** slice ships one layer
 
 Two constraints bound how big a slice gets, and both have to hold: it has to fit in a single fresh context window, and it has to close as one reviewable pull request. The first is a capacity limit on the agent building it; the second is a limit on the human reviewing it. A ticket can pass the first and fail the second — it fits in context comfortably, then lands as a pull request nobody can review in one sitting — which is why the review budget is named separately.
 
+Both budgets are about capacity, and a slice can clear both and still be a bad thing to land at once. So **risk** decides whether a slice splits: one that introduces more than one independent state, lifecycle, or authorization model gets split, however comfortably it fits. Independent means it can be got wrong on its own — alternatives within a single determination are one model however many outcomes it has, so their plurality alone doesn't trigger the rule, while two genuinely separate models do.
+
+Risk decides *whether* a slice splits; a **safe and useful seam** decides *where* it can be cut. Neither overrides the other, which matters most when they disagree: a slice that has to split but offers nowhere good to cut is a design problem to solve, not a reason to ship it whole. Work nobody has found a safe way to decompose isn't agent-ready, and `to-tickets` won't publish it as though it were.
+
+And each semantic case or production mechanism gets exactly one owning ticket, because two tickets quietly claiming the same mechanism only discover each other as integration work after both have landed. Where two genuinely must touch the same one, the overlap gets scheduled rather than discovered.
+
+There are no size numbers in any of this, deliberately. Counts and diff estimates are a prompt to look again at a slice, not a pass mark — a decomposition-time estimate is a guess about code that doesn't exist yet. For the slices where that judgement is hardest, the skill reaches for its own calibration reference — the risk taxonomy and a set of worked examples — and ordinary decompositions never pay for it.
+
 Before slicing, `to-tickets` looks for prefactoring — "make the change easy, then make the easy change" — and orders that work first. It then quizzes you on the breakdown (granularity, blocking edges, what to merge or split) before publishing anything, and publishes blockers first so each ticket's "Blocked by" can reference a real ticket.
 
 ## Fences go in Out of scope, not acceptance criteria
@@ -51,7 +59,9 @@ The reason is that a fence asserts some code *doesn't* exist, so there is no inp
 
 ## The wide-refactor exception
 
-One shape breaks the tracer-bullet rule: a **wide refactor** — a single mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so one edit breaks thousands of call sites at once and no vertical slice can land green. `to-tickets` slices it as **expand–contract** instead: expand (add the new form beside the old so nothing breaks), migrate (move call sites over in batches sized by blast radius, one ticket per batch, CI green throughout because the old form still exists), then contract (delete the old form once no caller remains). When even the batches can't stay green alone, they share an integration branch that all block a final integrate-and-verify ticket, and green is promised only there.
+A slice normally lands the behaviour it is meant to keep — its final form. One shape breaks that rule: a **wide refactor** — a single mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so one edit breaks thousands of call sites at once and no vertical slice can land green. `to-tickets` slices it as **expand–contract** instead: expand (introduce a compatibility form beside the old one), migrate (named batches sized by blast radius, one ticket per batch, consuming that form while both exist so CI stays green), then contract (remove the old form once every named batch has landed). When even the batches can't stay green alone, they share an integration branch that all block a final integrate-and-verify ticket, and green is promised only there.
+
+What makes this legitimate is that the transitional arrangement is a contract, not an improvisation: the compatibility form is introduced deliberately, consumed by batches named up front, and the old form it stands beside is retired by a contract ticket that already exists in the breakdown. That is the exception — it isn't a general licence to leave a half-finished behavioural seam behind and call it transitional.
 
 ## Where it fits
 
