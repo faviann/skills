@@ -13,7 +13,7 @@ A single tracked unit of work inside an **Issue tracker** — a bug, task, spec,
 _Avoid_: ticket (use only when quoting external systems that call them tickets, or for a **Decision ticket** — see below)
 
 **Map**:
-A `wayfinder` artifact — a single **Issue** labelled `wayfinder:map` charting one effort toward its **Destination**. It is an *index, not a store*: it gists the decisions made and links to the **Decision tickets** holding their detail, and is loaded once per session at low resolution. Where its child tickets, blocking edges, and **Frontier** queries physically live is tracker-specific — see `docs/agents/issue-tracker.md`.
+A `wayfinder` artifact — a single **Issue** labelled `wayfinder:map` charting one effort toward its **Destination**. It is an *index, not a store*: it gists the decisions made and links to the **Decision tickets** holding their detail, and is loaded once per session at low resolution.
 
 **Destination**:
 What reaching the end of a **Map** looks like — the spec, decision, or change the effort is finding its way to. Named first when charting, because it fixes the effort's scope: work beyond it is *out of scope* rather than **Not yet specified**.
@@ -26,7 +26,7 @@ The work takeable right now. `wayfinder` additionally requires it to be *unclaim
 _Avoid_: pilot Frontier
 
 **Not yet specified** (the *fog of war*):
-The section of a **Map** holding what is in scope but not yet sharp enough to ticket — the decisions and investigations you can tell are coming but cannot yet pin down. The test is whether the *question* can be stated precisely now, not whether it can be answered. Deliberately coarser than a ticket: one patch may **Graduate** into several **Decision tickets**, or none. Excludes what is already decided, already a live ticket, or out of scope.
+The section of a **Map** holding what is in scope but not yet sharp enough to ticket — the decisions and investigations you can tell are coming but cannot yet pin down. The test is whether the *question* can be stated precisely now, not whether it can be answered.
 
 **Graduate**:
 What happens when resolving a **Decision ticket** clears the fog ahead of it: material in **Not yet specified** becomes sharp enough to state as a question and is promoted into fresh **Decision tickets** — one at a time. Work ruled out of scope never graduates.
