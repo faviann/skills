@@ -1,5 +1,5 @@
 interface:
   display_name: "To Tickets"
-  short_description: "Split a plan or resume a calibrated Frontier"
+  short_description: "Split a plan or resume staged calibration"
 policy:
   allow_implicit_invocation: false

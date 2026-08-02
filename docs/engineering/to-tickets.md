@@ -30,7 +30,9 @@ You can also invoke `/to-tickets <calibration-record>` whenever you are resuming
 
 `to-tickets` publishes into your issue tracker, so [setup-matt-pocock-skills](https://aihero.dev/skills-setup-matt-pocock-skills) must have configured the tracker and its triage label vocabulary for this repo first. On a real tracker it applies the ready-for-agent label as it publishes.
 
-## One artifact, two readings
+## Tickets, edges, and vertical slices
+
+### One artifact, two readings
 
 The blocking edges are the whole point. They make one set of tickets read two ways, depending on the tracker:
 
@@ -39,7 +41,7 @@ The blocking edges are the whole point. They make one set of tickets read two wa
 
 The edges live in the ticket regardless of medium; the medium only decides whether anything acts on them in parallel. `to-tickets` produces the artifact — how you run it (sequential by hand, or a parallel fleet) is up to you.
 
-## Vertical slices, not horizontal ones
+### Vertical slices, not horizontal ones
 
 The whole skill turns on one distinction. A **horizontal** slice ships one layer of the change — all the schema, or all the API — and nothing works until every layer lands. A **vertical** slice, the tracer bullet, ships one narrow path through *every* layer at once, so it can be demoed the moment it's done.
 
@@ -63,13 +65,15 @@ The durable **Calibration record** keeps the settled remainder, its source contr
 
 Calibration evidence comes from the maintained production path—such as landed diffs, review and remediation findings, production validation, or relevant operational measurements—not from a throwaway prototype that omits the integration and review burden being measured. As evidence changes earlier assumptions, the record preserves visible history instead of rewriting the old reasoning away, so later resumption can reconcile what actually happened with the still-deferred work.
 
-## Fences go in Out of scope, not acceptance criteria
+## Scope fences and the wide-refactor exception
+
+### Fences go in Out of scope, not acceptance criteria
 
 A spec usually carries prohibitions as well as requirements — "capture adds no message broker", "no mutable `latest` tag". When a ticket inherits one, it goes in the ticket's **Out of scope** section, never in its acceptance criteria.
 
 The reason is that a fence asserts some code *doesn't* exist, so there is no input that could make it fail. As a criterion it can only ever be ticked on faith, and it invites someone to build machinery proving a negative. Both templates carry an Out of scope section for exactly this, with the standing note that these are fences for the reviewer — nothing should be built to prove them.
 
-## The wide-refactor exception
+### The wide-refactor exception
 
 A slice normally lands the behaviour it is meant to keep — its final form. One shape breaks that rule: a **wide refactor** — a single mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so one edit breaks thousands of call sites at once and no vertical slice can land green. `to-tickets` slices it as **expand–contract** instead: expand (introduce a compatibility form beside the old one), migrate (named batches sized by blast radius, one ticket per batch, consuming that form while both exist so CI stays green), then contract (remove the old form once every named batch has landed). When even the batches can't stay green alone, they share an integration branch that all block a final integrate-and-verify ticket, and green is promised only there.
 

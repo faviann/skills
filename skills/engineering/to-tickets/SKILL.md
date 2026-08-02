@@ -16,9 +16,9 @@ The issue tracker and triage label vocabulary should have been provided to you â
 
 Work from whatever is already in the conversation context. If the user passes a reference (a spec path, an issue number or URL) as an argument, fetch it and read its full body and comments.
 
-If the argument is a **Calibration record**, this is a resumption. Follow **Resume staged calibration** below instead of starting a new decomposition. A record reference may be a labelled coordination Issue, a GitLab Issue, or a local `.scratch/<feature>/calibration.md` path as defined by the configured tracker.
+If the argument is a **Calibration record**, this is a resumption. Surface and load the record, then enter **Resume staged calibration** below instead of starting a new decomposition. A record reference may be a labelled coordination Issue, a GitLab Issue, or a local `.scratch/<feature>/calibration.md` path as defined by the configured tracker.
 
-If the argument is a durable **Parent/source reference**, run the configured tracker's Parent-to-record discovery operation before beginning a new decomposition. If it returns one record, surface and load that record, then follow **Resume staged calibration** for a non-terminal status or report the terminal status without creating another record. If it returns more than one record, stop and show the ambiguity; never choose silently. If discovery or a returned record cannot be read, stop and surface the failure rather than inferring that no record exists. Begin a new decomposition only when the authoritative query succeeds and returns no record.
+If the argument is a durable **Parent/source reference**, run the configured tracker's Parent-to-record discovery operation before beginning a new decomposition. If it returns one record, surface and load that record, then enter **Resume staged calibration** below. If it returns more than one record, stop and show the ambiguity; never choose silently. If discovery or a returned record cannot be read, stop and surface the failure rather than inferring that no record exists. Begin a new decomposition only when the authoritative query succeeds and returns no record.
 
 ### 2. Explore the codebase (optional)
 
@@ -222,14 +222,14 @@ Treat publication as incomplete until the record and all Ticket links agree. If 
 
 ### Resume staged calibration
 
-On every `/to-tickets <calibration-record>` resumption, reload the Parent, the complete record, and every linked Ticket. For each staged Ticket, run the configured tracker's native linked-PR/MR discovery operation and also follow explicit durable artifact references in the Ticket or record; read every discovered diff, pull/merge request, and named checkpoint artifact. If the tracker has no native linkage, require explicit durable references. Before proposing work, reconcile the record against the real tracker artifacts:
+On every resumption, whether entered from a direct Calibration-record argument or a record discovered from its Parent/source reference, reload the Parent, the complete record, and every linked Ticket. For each staged Ticket, run the configured tracker's native linked-PR/MR discovery operation and also follow explicit durable artifact references in the Ticket or record; read every discovered diff, pull/merge request, and named checkpoint artifact. If the tracker has no native linkage, require explicit durable references. Before assessing evidence or proposing work, reconcile the record against the real tracker artifacts:
 
 - the tracker is authoritative for current Ticket and pull-request implementation state;
 - the record is authoritative for the undecomposed remainder, sizing assumptions, evidence checkpoint, and decision history;
 - repair snapshot discrepancies and append a dated reconciliation entry before continuing; and
 - never silently infer an absent identifier or a missing or unreachable Ticket, pull/merge request, Parent, link, or checkpoint artifact. Stop and surface what cannot be read or repaired.
 
-Then transition explicitly:
+After reconciliation, inspect the record status. If it is `complete` or `abandoned`, report the terminal state and decision history, then stop before evidence assessment, any status transition, a Frontier proposal, or publication. For every nonterminal status, transition explicitly:
 
 - **Evidence missing:** optionally append a dated assessment, change nothing else, and remain `awaiting-evidence`.
 - **Evidence ready:** set `ready-to-resume`, append the assessment, test it against the recorded sizing assumptions, revise the snapshot, propose the next Frontier, and run the full quiz again.
