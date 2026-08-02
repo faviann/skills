@@ -40,12 +40,22 @@ The metric ranks candidates; it does not validate them. One proposed patch for t
 `:95` incident below scored 1 destroyed word and was subtly ungrammatical — it paired
 the verb *close* with the object *source contract*. Read the result.
 
+A rename is a claim about the mechanism, not voice. Say what the new name asserts, then
+check it: *compatibility form* asserts this form exists for compatibility, when the form
+kept for compatibility is the old one. Renaming one half of a pair is the risk case —
+`new`/`old` sit on an axis and cannot be swapped without obvious nonsense, `compatibility`/
+`old` sit on none. And *deliberate* is a classification, not a verdict: a delta kept because
+it was intended has been labelled, not checked.
+
 ## Incidents
 
 **`af55d4f` — a tidy-up moved three rules.** A rewrite of the seam-rule prose also
 dropped `unless instructed otherwise` from the `ready-for-agent` label instruction and
 replaced the "stay in step 4" behaviour. One target, three rules moved. The commit that
-fixed it had to restore a boundary nobody had intended to change.
+fixed it had to restore a boundary nobody had intended to change. Two of the three, that
+is: `#25` later examined the `unless instructed otherwise` drop on its merits and ratified
+it, holding that a user's authority to override an agent is general and needs no
+advertised alternative output contract. That one stays removed, now on purpose.
 
 **`9f3515c` — voice consistency cost 48 words.** The commit added three genuine rules to
 `to-tickets`, and rewrote upstream's wide-refactor paragraph "in place" so it would match
@@ -53,6 +63,21 @@ the positive voice of the new ones. The mechanism it described never changed. It
 destroyed 48 of upstream's 159 words to land three additions; a later restore did the
 same job destroying 4. The commit message and the changeset also disagreed about which
 form the contract ticket retires, and the resulting prose hedged by asserting both.
+
+The restore measured the paragraph and kept one of the rewrite's renames as a deliberate
+term change: upstream's *new form* had become the *compatibility form*. The name sat on
+the wrong side of the pair — the form kept alive for compatibility is the **old** one,
+which unmigrated call sites still need; the new form is the destination that survives.
+That inversion wrote two sentences backwards. `425a492` caught one, where the docs page
+and changeset had the contract ticket retiring the wrong form. The other survived every
+later pass: *"the compatibility form is never withdrawn while a named batch is still
+outstanding"* protects the form nobody would delete, and only reads as correct if you take
+the term to mean its opposite. Both were reverted to upstream's wording on 2026-08-02,
+taking the paragraph from 4 destroyed words to 2.
+
+The lesson is the one the metric section already states, with a cost attached: the word
+diff tells you whether you rewrote something, never whether the rewrite is right. A rename
+that destroys two words can seed a defect that outlives three review passes.
 
 **`#11` — a narrowing became a rewrite.** Staged calibration needed upstream's
 `Do NOT close or modify any parent issue.` narrowed, because on a local tracker the

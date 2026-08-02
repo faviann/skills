@@ -1,6 +1,6 @@
 # Staged calibration
 
-How to publish an immediate Frontier when the design is settled but the remainder cannot yet be safely divided, and how to record what remains so a later run can resume it. Assumes the vocabulary in [SKILL.md](SKILL.md) — **tracer bullet**, **vertical slice**, **frontier**, **Parent**. What counts as the production evidence this mode waits on lives in [CALIBRATION.md](CALIBRATION.md). The unresolved-design hand-back named below is the one in step 3 of [SKILL.md](SKILL.md).
+How to publish an immediate frontier when the design is settled but the remainder cannot yet be safely divided, and how to record what remains so a later run can resume it. Assumes the vocabulary in [SKILL.md](SKILL.md) — **tracer bullet**, **vertical slice**, **frontier**, **Parent**. What counts as the production evidence this mode waits on lives in [CALIBRATION.md](CALIBRATION.md). The unresolved-design hand-back named below is the one in step 3 of [SKILL.md](SKILL.md).
 
 This mode is the one exception to *Do NOT close or modify any parent issue* — append the checkpoint to its comment surface, leaving all source-contract content unchanged.
 
@@ -9,13 +9,13 @@ This mode is the one exception to *Do NOT close or modify any parent issue* — 
 Use staged calibration only when all four conditions hold:
 
 1. Product behavior, architecture, authority boundaries, and cross-slice contracts are settled.
-2. The immediate Frontier satisfies the ordinary ticket rules.
+2. The immediate frontier satisfies the ordinary ticket rules.
 3. The settled remainder cannot yet be divided into safely reviewable tickets.
-4. Named production evidence from implementing the immediate Frontier will materially inform later ticket boundaries.
+4. Named production evidence from implementing the immediate frontier will materially inform later ticket boundaries.
 
 If condition 1 fails, use the unresolved-design hand-back above and publish nothing.
 
-On resumption from an active checkpoint, recheck condition 1 before assessing evidence. If it fails, use that hand-back, publish nothing, and leave the checkpoint active. If the user explicitly decides to drop the remainder or remove it from the source contract instead, append a closed `cancelled` checkpoint with `Published Frontier: None`. If design remains settled, assess the named evidence against the sizing assumption. When the evidence is missing or unreadable, ask the user for exact references and stop. Every subsequent staged Frontier must satisfy all four conditions before publication.
+On resumption from an active checkpoint, recheck condition 1 before assessing evidence. If it fails, use that hand-back, publish nothing, and leave the checkpoint active. If the user explicitly decides to drop the remainder or remove it from the source contract instead, append a closed `cancelled` checkpoint with `Published Frontier: None`. If design remains settled, assess the named evidence against the sizing assumption. When the evidence is missing or unreadable, ask the user for exact references and stop. Every subsequent staged frontier must satisfy all four conditions before publication.
 
 ## Resuming from a Parent
 
@@ -23,7 +23,7 @@ When resuming from a Parent with staged-calibration checkpoints, read every chec
 
 ## In the quiz
 
-For staged publication, include the reason for staging, the immediate Frontier and its blocking edges, the coarse undecomposed remainder, the sizing assumption, and the named evidence location in this same quiz and approval.
+For staged publication, include the reason for staging, the immediate frontier and its blocking edges, the coarse undecomposed remainder, the sizing assumption, and the named evidence location in this same quiz and approval.
 
 ## Checkpoints
 
@@ -51,6 +51,6 @@ Published Frontier: <non-empty ticket references when published; None when cance
 
 Every active checkpoint and closed `published` checkpoint has a non-empty `Published Frontier`; only closed `cancelled` uses `None`.
 
-Publish the approved Frontier first, then append the checkpoint with the real ticket references. When more calibration remains, append an active checkpoint naming the newly published tickets. When the final Frontier is published, append a closed `published` checkpoint naming those tickets. If assessment finds that existing tickets already satisfy the remainder, present that finding in the ordinary quiz; after approval, append closed `published` naming them. If the user explicitly decides to drop the remainder or remove it from the source contract, append closed `cancelled` with `None`.
+Publish the approved frontier first, then append the checkpoint with the real ticket references. When more calibration remains, append an active checkpoint naming the newly published tickets. When the final frontier is published, append a closed `published` checkpoint naming those tickets. If assessment finds that existing tickets already satisfy the remainder, present that finding in the ordinary quiz; after approval, append closed `published` naming them. If the user explicitly decides to drop the remainder or remove it from the source contract, append closed `cancelled` with `None`.
 
 If publication is partial or checkpoint persistence fails, retry the checkpoint with the exact tickets that exist and the remaining work. If checkpoint persistence still fails, stop and report the failure. Do not report success or clear context until the checkpoint is durable.

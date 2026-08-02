@@ -51,3 +51,5 @@ The five canonical roles, each label string equal to its role name. See [docs/ag
 ### Domain docs
 
 Single-context — root `CONTEXT.md` plus ADRs in `.agents/adr/`. See [docs/agents/domain.md](./docs/agents/domain.md).
+
+`CONTEXT.md` gets the same trigger as the docs pages and `ask-matt`: whenever a skill introduces a term the glossary defines, renames one, or gives an existing one a second name, re-read `CONTEXT.md` and update it — adding the rejected name to that entry's `_Avoid_` line. A glossary nobody is sent to is a glossary that records the drift it was meant to stop. Where a term is upstream's, skill prose follows upstream's casing; `CONTEXT.md` capitalises its headwords the way a dictionary does, which is a listing convention and not an instruction to prose.
