@@ -34,7 +34,7 @@ What happens when resolving a **Decision ticket** clears the fog ahead of it: ma
 The source **Issue** that a set of `to-tickets` slices was decomposed from — a spec or feature request the tickets link back to. `to-tickets` never changes its source-contract content, scope, or lifecycle, but may append a **Staged calibration** checkpoint to its comment surface after explicit approval.
 
 **Staged calibration**:
-Partial publication of settled work when production evidence must inform later Ticket boundaries; its durable checkpoint is appended to the **Parent** comment surface.
+Partial publication of settled work when production evidence must inform the boundaries of later implementation **Issues**; its durable checkpoint is appended to the **Parent** comment surface.
 
 **Calibration evidence**:
 Evidence from the maintained production path that answers a staged-calibration sizing assumption.
