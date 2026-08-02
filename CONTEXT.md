@@ -22,8 +22,8 @@ What reaching the end of a **Map** looks like — the spec, decision, or change 
 A `wayfinder` unit — a child **Issue** of a `wayfinder:map` holding a *question* whose resolution is a decision, not a slice of a build to execute. The **decision** qualifier is what keeps it distinct from an implementation ticket; `wayfinder` introduces the term, then uses "ticket".
 
 **Frontier**:
-The work takeable right now. Two scoped uses, not one contested definition — `wayfinder` adds an *unclaimed* condition because it claims before working; `to-tickets` omits it because it publishes rather than dispatches. See **Flagged ambiguities**. Written lowercase in skill prose, as upstream writes it; the capital here is a headword, not a style to copy.
-_Avoid_: pilot Frontier, Frontier mid-sentence
+The work takeable right now. `wayfinder` additionally requires it to be *unclaimed* because it claims before working; `to-tickets` does not, because it publishes rather than dispatches — see **Flagged ambiguities**.
+_Avoid_: pilot Frontier
 
 **Not yet specified** (the *fog of war*):
 The section of a **Map** holding what is in scope but not yet sharp enough to ticket — the decisions and investigations you can tell are coming but cannot yet pin down. The test is whether the *question* can be stated precisely now, not whether it can be answered. Deliberately coarser than a ticket: one patch may **Graduate** into several **Decision tickets**, or none. Excludes what is already decided, already a live ticket, or out of scope.
