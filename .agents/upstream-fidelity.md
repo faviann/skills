@@ -40,6 +40,13 @@ The metric ranks candidates; it does not validate them. One proposed patch for t
 `:95` incident below scored 1 destroyed word and was subtly ungrammatical — it paired
 the verb *close* with the object *source contract*. Read the result.
 
+A rename is a claim about the mechanism, not voice. Say what the new name asserts, then
+check it: *compatibility form* asserts this form exists for compatibility, when the form
+kept for compatibility is the old one. Renaming one half of a pair is the risk case —
+`new`/`old` sit on an axis and cannot be swapped without obvious nonsense, `compatibility`/
+`old` sit on none. And *deliberate* is a classification, not a verdict: a delta kept because
+it was intended has been labelled, not checked.
+
 ## Incidents
 
 **`af55d4f` — a tidy-up moved three rules.** A rewrite of the seam-rule prose also
