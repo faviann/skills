@@ -16,6 +16,8 @@ The issue tracker and triage label vocabulary should have been provided to you �
 
 Work from whatever is already in the conversation context. If the user passes a reference (a spec path, an issue number or URL) as an argument, fetch it and read its full body and comments.
 
+When resuming from a Parent with staged-calibration checkpoints, read every checkpoint in tracker order. The last one controls. Take the union of their non-`None` `Published Frontier` references, read those Tickets, and never republish work they already represent. If the controlling checkpoint is closed, treat none of its remainder as pending: propose only source-contract work not represented by those Tickets, and report completion instead of creating Tickets when nothing remains.
+
 ### 2. Explore the codebase (optional)
 
 If you have not already explored the codebase, do so to understand the current state of the code. Ticket titles and descriptions should use the project's domain glossary vocabulary, and respect ADRs in the area you're touching.
@@ -40,9 +42,24 @@ Break the work into **tracer bullet** tickets.
 
 Risk decides **whether** a split is required; the seam rule decides **where** that split can land. Apply them together — neither overrides the other. The unit the risk rule counts is the **independent model**: a state, lifecycle, or authorization model that can be got wrong on its own. Alternatives within one shared determination — whose state space has to stay complete and coherent — are one model however many outcomes, authorities, or code paths they span; two genuinely independent instances of the same shape are two. Where the rule never fired, the slice is one ticket on those grounds. Where it did fire, its verdict stands — the seam rule places the split, it does not cancel it.
 
-Where the required split has no seam, first consider whether a prefactor ticket can create one for the settled design. If the missing seam instead exposes an unresolved design question, the input is not ready for `to-tickets`: show the user the independent models that fired the rule, the seams and prefactors considered, and the question blocking a safe decomposition; then end the run without publishing. Tell the user to return to `/grilling` and `/domain-modeling` for a sharp decision, `/prototype` when the answer must be runnable or visible, or `/wayfinder` when the remaining fog is too large for one session. Do not resolve that design work inside the publication quiz. Once the decision is recorded in the source conversation or spec, rerun `to-tickets`. A complete set advances to step 5 only when it satisfies these rules and the user has approved it.
+Where the required split has no seam, first consider whether a prefactor ticket can create one for the settled design. If the missing seam instead exposes an unresolved design question, the input is not ready for `to-tickets`: show the user the independent models that fired the rule, the seams and prefactors considered, and the question blocking a safe decomposition; then end the run without publishing. Tell the user to return to `/grilling` and `/domain-modeling` for a sharp decision, `/prototype` when the answer must be runnable or visible, or `/wayfinder` when the remaining fog is too large for one session. Do not resolve that design work inside the publication quiz. Once the decision is recorded in the source conversation or spec, rerun `to-tickets`. An ordinary decomposition advances to step 5 only when the complete set satisfies these rules and the user has approved it; staged publication instead follows the gate below.
 
-Read [CALIBRATION.md](CALIBRATION.md) before you settle a slice that crosses several production models, protocols, trust boundaries, compatibility paths, or resource-governance boundaries, or when the codebase offers no close implementation analogue for what the slice introduces. Otherwise skip it.
+Read [CALIBRATION.md](CALIBRATION.md) before you settle a slice that crosses several production models, protocols, trust boundaries, compatibility paths, or resource-governance boundaries, when the codebase offers no close implementation analogue for what the slice introduces, or before entering staged calibration. Otherwise skip it.
+
+<staged-calibration>
+
+Use staged calibration only when all four conditions hold:
+
+1. Product behavior, architecture, authority boundaries, and cross-slice contracts are settled.
+2. The immediate Frontier satisfies the ordinary Ticket rules.
+3. The settled remainder cannot yet be divided into safely reviewable Tickets.
+4. Named production evidence from implementing the immediate Frontier will materially inform later Ticket boundaries.
+
+If condition 1 fails, use the unresolved-design hand-back above and publish nothing.
+
+On resumption from an active checkpoint, recheck condition 1 before assessing evidence. If it fails, use that hand-back, publish nothing, and leave the checkpoint active. If the user explicitly decides to drop the remainder or remove it from the source contract instead, append a closed `cancelled` checkpoint with `Published Frontier: None`. If design remains settled, assess the named evidence against the sizing assumption. When the evidence is missing or unreadable, ask the user for exact references and stop. Every subsequent staged Frontier must satisfy all four conditions before publication.
+
+</staged-calibration>
 
 Give each ticket its **blocking edges** — the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
@@ -64,6 +81,8 @@ Ask the user:
 
 Iterate until the user approves the breakdown.
 
+For staged publication, include the reason for staging, the immediate Frontier and its blocking edges, the coarse undecomposed remainder, the sizing assumption, and the named evidence location in this same quiz and approval.
+
 ### 5. Publish the tickets to the configured tracker
 
 Publish the approved tickets. **How** depends on the tracker `/setup-matt-pocock-skills` configured — the tickets are the same either way, only the shape of the blocking edges changes:
@@ -73,7 +92,33 @@ Publish the approved tickets. **How** depends on the tracker `/setup-matt-pocock
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
-Do NOT close or modify any parent issue.
+Never change a Parent's source-contract content, scope, or lifecycle. After approved staged publication, append a checkpoint to its comment surface: a comment or note on a real tracker, or beneath `## Comments` in the local Parent file. Create that local heading when absent without changing the source-contract content above it.
+
+Checkpoints are append-only. The last checkpoint in tracker order controls, so at most one is active at a time; its written date is human metadata. Use exactly these shapes:
+
+```md
+## Staged calibration checkpoint — <date>
+
+Checkpoint: active
+Published Frontier: <non-empty Ticket references>
+Undecomposed remainder: <coarse settled remainder>
+Sizing assumption: <what production evidence must clarify>
+Resume when: <named evidence and where to find it>
+```
+
+```md
+## Staged calibration checkpoint — <date>
+
+Checkpoint: closed
+Disposition: published | cancelled
+Published Frontier: <non-empty Ticket references when published; None when cancelled>
+```
+
+Every active checkpoint and closed `published` checkpoint has a non-empty `Published Frontier`; only closed `cancelled` uses `None`.
+
+Publish the approved Frontier first, then append the checkpoint with the real Ticket references. When more calibration remains, append an active checkpoint naming the newly published Tickets. When the final Frontier is published, append a closed `published` checkpoint naming those Tickets. If assessment finds that existing Tickets already satisfy the remainder, present that finding in the ordinary quiz; after approval, append closed `published` naming them. If the user explicitly decides to drop the remainder or remove it from the source contract, append closed `cancelled` with `None`.
+
+If publication is partial or checkpoint persistence fails, retry the checkpoint with the exact Tickets that exist and the remaining work. If checkpoint persistence still fails, stop and report the failure. Do not report success or clear context until the checkpoint is durable.
 
 <local-ticket-template>
 

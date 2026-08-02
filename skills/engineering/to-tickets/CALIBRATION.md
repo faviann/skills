@@ -4,6 +4,14 @@ How to judge a slice that fits both budgets and still might be too dangerous to 
 
 Use it to answer three questions in order: which independent models this slice introduces, which risk shapes they instantiate, and where a seam can land without producing a half that is unsafe or useless. Where a settled design needs a code seam, the prefactor that creates it is its own ticket sequenced ahead of the split slices. Where an unresolved design question prevents a safe seam, the input returns to the appropriate fog-clearing flow without publishing.
 
+## Production evidence for staged calibration
+
+**Calibration evidence** comes from the maintained production path and can genuinely inform later Ticket boundaries: landed implementation, exercised integration seams, validation or fault injection, independent review and remediation, or operational evidence when operations drive the uncertainty. A throwaway prototype may settle a design question, but it cannot substitute for this evidence because it deliberately omits the maintained integration, validation, error handling, review, and remediation burden being calibrated.
+
+Overmind Phase 2 is the positive case. [#78](https://github.com/faviann/overmind/issues/78) first published [#130](https://github.com/faviann/overmind/issues/130)–[#133](https://github.com/faviann/overmind/issues/133); their production implementation exposed enough variation in integration, fault injection, validation, review, and remediation to shape the later [#144](https://github.com/faviann/overmind/issues/144)–[#156](https://github.com/faviann/overmind/issues/156) boundaries.
+
+Two nearby cases do not qualify. [#86](https://github.com/faviann/overmind/issues/86) still had unresolved-design fog, so it needed a design hand-back rather than partial publication. [#73](https://github.com/faviann/overmind/issues/73) excluded a possible future adapter; evidence about excluded future design would begin a new design effort, not calibrate a settled remainder.
+
 ## Risk shapes
 
 A model is **independent** when it can be got wrong on its own — its correctness does not follow from another's. These shapes are where independent models usually live. Inspect them, then count the models you find:

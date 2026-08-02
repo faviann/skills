@@ -49,6 +49,12 @@ And each semantic case or production mechanism gets exactly one owning ticket, b
 
 There are no size numbers in any of this, deliberately. Counts and diff estimates are a prompt to look again at a slice, not a pass mark — a decomposition-time estimate is a guess about code that doesn't exist yet. For the slices where that judgement is hardest, the skill reaches for its own calibration reference — the risk taxonomy and a set of worked examples — and ordinary decompositions never pay for it.
 
+## Staged calibration
+
+Sometimes the design and contracts are settled while the right boundaries for later tickets depend on what an initial production slice reveals. `to-tickets` can publish only that pilot Frontier and leave a durable checkpoint on the Parent, preserving the coarse remainder, sizing assumption, and evidence needed to reopen decomposition. After the pilot lands, invoke `/to-tickets <parent>` in a fresh session to continue from that checkpoint.
+
+This is for sizing uncertainty, not design uncertainty. The evidence must come from the maintained production path — its integration, validation, review, remediation, or relevant operational behaviour. A throwaway prototype can answer a design question, but it cannot reveal the production burden being calibrated; unresolved design still returns upstream without publishing Tickets.
+
 Before slicing, `to-tickets` looks for prefactoring — "make the change easy, then make the easy change" — and orders that work first. It then quizzes you on the breakdown (granularity, blocking edges, what to merge or split) before publishing anything, and publishes blockers first so each ticket's "Blocked by" can reference a real ticket.
 
 ## Fences go in Out of scope, not acceptance criteria

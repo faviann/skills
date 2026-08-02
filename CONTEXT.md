@@ -31,7 +31,13 @@ The section of a **Map** holding what is in scope but not yet sharp enough to ti
 What happens when resolving a **Decision ticket** clears the fog ahead of it: material in **Not yet specified** becomes sharp enough to state as a question and is promoted into fresh **Decision tickets** — one at a time. Work ruled out of scope never graduates.
 
 **Parent**:
-The source **Issue** that a set of `to-tickets` slices was decomposed from — a spec or feature request the tickets link back to. Unlike a **Map**, a parent is *read-only* to the skill that produced its children: `to-tickets` never closes or modifies it.
+The source **Issue** that a set of `to-tickets` slices was decomposed from — a spec or feature request the tickets link back to. `to-tickets` never changes its source-contract content, scope, or lifecycle, but may append a **Staged calibration** checkpoint to its comment surface after explicit approval.
+
+**Staged calibration**:
+Partial publication of settled work when production evidence must inform later Ticket boundaries; its durable checkpoint is appended to the **Parent** comment surface.
+
+**Calibration evidence**:
+Evidence from the maintained production path that answers a staged-calibration sizing assumption.
 
 **Triage role**:
 A canonical state-machine label applied to an **Issue** during triage (e.g. `needs-triage`, `ready-for-agent`). Each role maps to a real label string in the **Issue tracker** via `docs/agents/triage-labels.md`.
@@ -45,7 +51,7 @@ A canonical state-machine label applied to an **Issue** during triage (e.g. `nee
 - A **Map** holds many **Decision tickets** and one **Not yet specified** section
 - A **Decision ticket** joins a **Map** either at charting, or by **Graduating** from **Not yet specified**
 - A **Parent** is an **Issue**, and the **Issues** `to-tickets` produced from it link back to it
-- A **Map** is written to as its effort progresses; a **Parent** is not written to at all
+- A **Map** is written to as its effort progresses; a **Parent** keeps its source-contract content unchanged, though `to-tickets` may append an approved **Staged calibration** checkpoint to its comment surface
 
 ## Flagged ambiguities
 
@@ -53,4 +59,3 @@ A canonical state-machine label applied to an **Issue** during triage (e.g. `nee
 - "backlog backend" / "backlog manager" — resolved: collapsed into **Issue tracker**.
 - "epic" is an imported term (Jira/agile) with **two** targets here, so it is never used on its own. A **Map** and a **Parent** are both "a big thing with smaller things under it", but they route to different skills. The test is whether the decisions are settled: open decisions and no visible route → a **Map**, charted by `wayfinder`; decisions settled and the work is being sliced into a build → a **Parent**, produced by `to-spec` and decomposed by `to-tickets`. Say which one is meant.
 - **Frontier** is defined twice and the two do not agree. `wayfinder`: "the open, unblocked, *unclaimed* children — the edge of the known". `to-tickets`: "any ticket whose blockers are all done", with no unclaimed condition. The difference is whether a ticket someone has already taken still counts, which decides whether several agents working one tracker collide. **Unresolved** — do not silently adopt either reading.
-- Whether the **Map** / **Not yet specified** / **Graduate** mechanism belongs to `wayfinder` alone or is a shared concept other skills may use is **open**, and owned by [#11](https://github.com/faviann/skills/issues/11). The entries above describe only what `wayfinder` ships today; they deliberately do not settle that question.
