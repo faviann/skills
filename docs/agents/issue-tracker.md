@@ -38,6 +38,21 @@ Create a GitHub issue on `faviann/skills`.
 
 Run `gh issue view <number> -R faviann/skills --comments`.
 
+## Calibration-record operations
+
+Used by staged `/to-tickets`. A Calibration record is a coordination Issue labelled `calibration:record`; it never receives an implementation-ready triage label and is excluded from Frontier queries. Before any mutation, follow **Which repository** above and pass `-R faviann/skills`.
+
+- **Create and mark**: ensure the dedicated marker exists with `gh label create calibration:record -R faviann/skills --description "Staged-calibration coordination record" --force`, then create the record first with `gh issue create -R faviann/skills --label calibration:record`; its body contains the current snapshot and `Parent: #<n>`.
+- **Read/update snapshot**: use `gh issue view <record> -R faviann/skills --comments` and `gh issue edit <record> -R faviann/skills --body-file <file>`.
+- **Append history**: post dated entries with `gh issue comment <record> -R faviann/skills --body "..."`; never replace earlier comments.
+- **Find from Parent**: search `gh issue list -R faviann/skills --label calibration:record --search '"Parent: #<n>"'`; the Parent is not modified.
+- **Bidirectional Ticket discovery**: every implementation Issue body references `Parent: #<n>` and `Calibration: #<record>`. Follow the Ticket reference to the record; find Tickets from the record's ordered Published Frontiers and verify with an Issue search for `"Calibration: #<record>"`.
+- **Reconcile**: on every resumption, read each discovered Issue and linked PR with `gh issue view` / `gh pr view`, always with `-R faviann/skills`; compare real open/closed and PR state with the snapshot, repair the snapshot and missing links, and append a dated reconciliation comment. Never infer an unreachable artifact.
+- **Abandon**: append the dated reason and remaining-work dispositions, set status `abandoned`, then `gh issue close <record> -R faviann/skills`. Do not close the Parent or implementation Issues.
+- **Complete successfully**: append final approval/history, set status `complete`, then `gh issue close <record> -R faviann/skills`. Do not close the Parent.
+
+There is no background monitoring, expiry, or automatic abandonment.
+
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.

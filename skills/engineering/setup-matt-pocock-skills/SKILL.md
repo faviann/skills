@@ -109,7 +109,7 @@ Then write the docs files using the seed templates in this skill folder as a sta
 - [triage-labels.md](./triage-labels.md) — label mapping (only if `triage` is installed)
 - [domain.md](./domain.md) — domain doc consumer rules + layout
 
-For "other" issue trackers, write `docs/agents/issue-tracker.md` from scratch using the user's description.
+For "other" issue trackers, write `docs/agents/issue-tracker.md` from scratch using the user's description. It must document equivalents for every Calibration-record operation: create and mark a stable non-implementation artifact; read/update its snapshot; append dated history; store its Parent/source reference and discover the record when starting from that reference; discover linked Tickets in both directions; reconcile the record against real Ticket and pull-request state; abandon it; and complete it successfully. If the tracker cannot provide all of them, record that staged publication is unsupported and that `/to-tickets` must stop before publishing a staged Frontier.
 
 ### 5. Done
 

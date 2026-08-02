@@ -34,6 +34,21 @@ Create a GitLab issue.
 
 Run `glab issue view <number> --comments`.
 
+## Calibration-record operations
+
+Used by staged `/to-tickets`. A Calibration record is a coordination Issue labelled `calibration:record`; it never receives an implementation-ready triage label and is excluded from Frontier queries.
+
+- **Create and mark**: ensure the dedicated `calibration:record` label exists, then create the record first with `glab issue create --label calibration:record`; its description contains the current snapshot and `Parent: #<n>`.
+- **Read/update snapshot**: use `glab issue view <record> --comments` and `glab issue update <record> --description "..."`.
+- **Append history**: add dated notes with `glab issue note <record> --message "..."`; never replace earlier notes.
+- **Find from Parent**: list/search Issues carrying `calibration:record` and match `Parent: #<n>`; never modify the Parent for discovery.
+- **Bidirectional Ticket discovery**: every implementation Issue description references both `Parent: #<n>` and `Calibration: #<record>`. The Ticket points to the record; the record's ordered Published Frontiers plus a search for `Calibration: #<record>` find every Ticket.
+- **Reconcile**: on resumption, read every discovered Issue and linked merge request with `glab issue view` / `glab mr view`; compare real open/closed and MR state with the snapshot, repair the snapshot and missing references, and append a dated reconciliation note. Never infer an unreachable artifact.
+- **Abandon**: append the dated reason and remaining-work dispositions, set snapshot status `abandoned`, then close the record Issue. Do not close the Parent or implementation Issues.
+- **Complete successfully**: append final approval/history, set snapshot status `complete`, then close the record Issue. Do not close the Parent.
+
+There is no background monitoring, expiry, or automatic abandonment.
+
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.

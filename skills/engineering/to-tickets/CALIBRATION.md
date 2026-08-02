@@ -63,3 +63,26 @@ Keep two measurements apart:
 
 - **Decomposition-time estimates are uncertain.** You are guessing at the size of code that does not exist yet, from a description of behaviour. Treat a large estimate as a reason to re-read the risk shapes above, never as a rejection on its own.
 - **Closeout size is retrospective.** Measured after the fact across a body of completed tickets, it separates the clear extremes, but it does not explain borderline effort or its cause — the qualitative risk shapes do.
+
+## Staged calibration boundary
+
+Staged calibration is rare. Use it only when the destination, behaviour, architecture, and cross-slice contracts are settled; one immediate Frontier already passes every ordinary Ticket rule; the settled remainder cannot yet be divided into safely reviewable Tickets; and named evidence from implementing that Frontier will materially inform its boundaries. All four conditions must hold. Size, uncertainty, or novelty alone is not enough.
+
+The evidence must come from the production path and answer the recorded sizing assumption. Acceptable sources include the landed production diff and the modules or seams it actually touched; implementation, independent-review, and remediation findings; production-path validation or fault injection; and operational or dogfooding measurements when operational behaviour is the uncertainty. Completing a Frontier is necessary but is not sufficient until every named checkpoint item exists. There is no universal threshold for diff size, PR count, findings, review rounds, or days in production.
+
+If what is missing is a product choice, legal transition, authority boundary, architecture, or other behavioural contract, stop and hand the work upstream without publishing. That is design uncertainty, not staged calibration.
+
+## Worked production case
+
+[Overmind #78](https://github.com/faviann/overmind/issues/78) already settled the crash-safe catch-up contract inherited from [#73](https://github.com/faviann/overmind/issues/73): verified prefixes, atomic durable responsibility, ordered retry and convergence, discovery, incomplete-tail deferral, and fail-closed changed-prefix behaviour. The unknown was the reviewable boundary on the real queue/runtime/API/PostgreSQL/operator path.
+
+The first approved Frontier was [#130](https://github.com/faviann/overmind/issues/130)–[#133](https://github.com/faviann/overmind/issues/133). Their production PRs exercised materially different integration, fault-injection, validation, review, and remediation burdens despite sharing one settled contract. That evidence exposed the proven seams. Only then were the remaining umbrellas decomposed into the pilot-calibrated [#144](https://github.com/faviann/overmind/issues/144)–[#156](https://github.com/faviann/overmind/issues/156). The checkpoint answered “what is a reviewable implementation slice on this production path?”, not “what should the system do?”
+
+Two nearby cases are outside the boundary:
+
+- [Overmind #86](https://github.com/faviann/overmind/issues/86) had no settled legal stopped-stream recovery transition. It must return to wayfinding, grilling, prototyping, or specification repair; `to-tickets` publishes nothing.
+- [Overmind #73](https://github.com/faviann/overmind/issues/73) deliberately excluded a possible future direct-stream adapter. Evidence that triggers an excluded future design effort is not a settled remainder awaiting calibration.
+
+## Why a prototype does not count
+
+A throwaway prototype can settle a design question or show that a state-machine or API shape is possible. It intentionally omits the production-quality integration, durable failure behaviour, real persistence transactions, packaged-process interruption, authentication and operator seams, regression validation, independent review, and remediation whose burden staged calibration measures. If an experiment carries those obligations, it is the implementation Frontier regardless of what it is called.

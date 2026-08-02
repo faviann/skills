@@ -26,7 +26,7 @@ Reach for it **once per repo, before the first use of any other engineering skil
 
 It leads each with a recommended answer you can accept in a word, and skips whatever it can already infer — so most runs are a couple of quick confirmations:
 
-- **Issue tracker** — where work is tracked, so `triage`/`to-spec`/`to-tickets` know whether to call `gh`, `glab`, write markdown under `.scratch/`, or follow a workflow you describe. GitHub, GitLab, local markdown, or other. (It proposes the one that matches your `git remote`.)
+- **Issue tracker** — where work is tracked, so `triage`/`to-spec`/`to-tickets` know whether to call `gh`, `glab`, write markdown under `.scratch/`, or follow a workflow you describe. GitHub, GitLab, local markdown, or other. (It proposes the one that matches your `git remote`.) The config also defines durable Calibration-record operations: creation and marking, snapshot updates, append-only history, discovering the record from its Parent/source reference, bidirectional Ticket discovery, reconciliation, abandonment, and successful completion. A custom tracker must provide equivalents before staged publication is safe.
 - **Triage labels** — asked only if the `triage` skill is installed, and then just: keep the default labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`)? Say no only if your tracker already uses other names, so `triage` applies real ones instead of creating duplicates.
 - **Domain docs** — assumed single-context (one `CONTEXT.md` + `docs/adr/` at the root), which fits almost every repo; it only raises a multi-context map when it spots monorepo signals.
 
@@ -37,6 +37,7 @@ The output is a set of files under `docs/agents/` — `issue-tracker.md`, `domai
 - `issue-tracker.md` and `domain.md` land under `docs/agents/` (plus `triage-labels.md` when `triage` is installed), and an `## Agent skills` section appears in your `CLAUDE.md` or `AGENTS.md`.
 - The tracker it proposes matches your real `git remote`, and the labels match strings that already exist in your repo.
 - Afterwards, `triage` and `to-tickets` act on the right place with the right labels instead of asking or guessing.
+- A staged `/to-tickets` run can create a non-implementation Calibration record, recover it from its Parent or Tickets, reconcile it with real implementation state, and distinguish completion from abandonment.
 
 ## Where it fits
 

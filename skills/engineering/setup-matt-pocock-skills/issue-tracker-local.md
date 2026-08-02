@@ -18,6 +18,21 @@ Create a new file under `.scratch/<feature-slug>/` (creating the directory if ne
 
 Read the file at the referenced path. The user will normally pass the path or the issue number directly.
 
+## Calibration-record operations
+
+Used by staged `/to-tickets`.
+
+- **Create and mark**: create `.scratch/<feature>/calibration.md` first. Its Calibration-record template and non-ticket path mark it as coordination state; never give it an implementation-ready status or include it in Frontier scans.
+- **Read/update snapshot**: read and edit the latest snapshot in that file.
+- **Append history**: append dated entries under `## Decision history`; never replace earlier entries.
+- **Find record from Parent/source**: the record's `Source contract` stores the Parent/spec path or reference. Starting from that reference, search `.scratch/*/calibration.md` for the exact value to recover the record without modifying the Parent/source.
+- **Bidirectional Ticket discovery**: every `.scratch/<feature>/issues/<NN>-<slug>.md` includes `Calibration record: ../calibration.md` and its Parent reference; the record's ordered Published Frontiers links every Ticket. Scan those files to verify both directions.
+- **Reconcile**: on resumption, inspect all linked Ticket files and any PR references they contain; compare their real status with the snapshot, repair the snapshot and missing links, and append a dated reconciliation entry. Never infer a missing or unreadable artifact.
+- **Abandon**: append the dated reason and remaining-work dispositions, then set `Status: abandoned`. Do not alter the Parent or implementation Tickets.
+- **Complete successfully**: append final approval/history, then set `Status: complete`. Do not alter the Parent.
+
+The terminal status and history distinguish successful completion from abandonment. There is no background monitoring, expiry, or automatic abandonment.
+
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.

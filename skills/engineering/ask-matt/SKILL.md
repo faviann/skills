@@ -20,14 +20,16 @@ The route most work travels. You have an idea and want it built.
    - **`/prototype`** to answer the question with throwaway code,
    - **`/handoff`** back what you learned, and reference it from the original idea thread.
 3. **Branch — is this a multi-session build?**
-   - **Yes** → **`/to-spec`** (turn the thread into a spec), then **`/to-tickets`** to split it into tracer-bullet tickets, each declaring its **blocking edges**. On a local tracker that's one file per ticket under `.scratch/<feature>/issues/`, worked blockers-first by hand; on a real tracker the edges become native blocking links, so any ticket whose blockers are done can be grabbed — kick off **`/implement`** per ticket, **clearing context between each one**. If `/to-tickets` exposes an unresolved design question, return to `/grill-with-docs`, `/prototype`, or `/wayfinder` and rerun it only after the decision is settled.
+   - **Yes** → **`/to-spec`** (turn the thread into a spec), then **`/to-tickets`** to split it into tracer-bullet tickets, each declaring its **blocking edges**. On a local tracker that's one file per ticket under `.scratch/<feature>/issues/`, worked blockers-first by hand; on a real tracker the edges become native blocking links, so any ticket whose blockers are done can be grabbed — kick off **`/implement`** per ticket, **clearing context between each one**. If `/to-tickets` exposes an unresolved design question, return to `/grill-with-docs`, `/prototype`, or `/wayfinder` and rerun it only after the decision is settled. In the rare settled-but-unsized case, `/to-tickets` first makes the undecomposed remainder durable in a **Calibration record**, then publishes one approved Frontier.
    - **No** → **`/implement`** right here, in the same context window.
 
    Either way, **`/implement`** builds each issue by driving **`/tdd`** internally — one red-green slice at a time — then closes out by running **`/code-review`**, a two-axis review (Standards + Spec) of the diff, before committing. Reach for **`/tdd`** on its own when you just want to build a concrete behaviour test-first without a full spec, and **`/code-review`** on its own whenever you want to review a branch or PR against a fixed point.
 
 ### Context hygiene
 
-Keep steps 1–3 in **one unbroken context window** — don't compact or clear until after `/to-tickets` — so the grilling, spec, and tickets all build on the same thinking. Each `/implement` then starts fresh, working from the ticket.
+Keep steps 1–3 in **one unbroken context window** — don't compact or clear until after `/to-tickets` has published the complete decomposition or made a staged remainder durable in a Calibration record — so the grilling, spec, and tickets all build on the same thinking. Each `/implement` then starts fresh, working from the ticket.
+
+When the user references a Calibration record, or says its named evidence checkpoint is complete, route immediately to a **fresh** `/to-tickets <calibration-record>` session. That session reconciles the record with the real linked Tickets and pull requests, assesses the evidence, and asks for approval before another Frontier. Do not continue from remembered conversation or clear context while a staged remainder exists only there; context may clear only after that remainder is durable.
 
 The limit on this is the **[smart zone](https://www.aihero.dev/ai-coding-dictionary/smart-zone)**: the window (~120k tokens on state-of-the-art models) within which the model still reasons sharply. If a session approaches it before `/to-tickets`, don't push on degraded — `/handoff` and continue in a fresh thread.
 

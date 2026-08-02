@@ -22,6 +22,8 @@ You invoke this by typing `/to-tickets` — the agent won't reach for it on its 
 
 Reach for it once you have an agreed plan or a written spec and you want it split into tickets. Point it at the conversation, or pass a spec or issue reference and it fetches the body and comments first. If the change hasn't been written up as a spec yet, produce one first — for that, use [to-spec](https://aihero.dev/skills-to-spec).
 
+You can also invoke `/to-tickets <calibration-record>` in a fresh session after a staged Frontier has produced its named evidence. That is a resumption of one durable decomposition, not a new breakdown.
+
 ## Prerequisites
 
 `to-tickets` publishes into your issue tracker, so [setup-matt-pocock-skills](https://aihero.dev/skills-setup-matt-pocock-skills) must have configured the tracker and its triage label vocabulary for this repo first. On a real tracker it applies the ready-for-agent label as it publishes.
@@ -50,6 +52,16 @@ And each semantic case or production mechanism gets exactly one owning ticket, b
 There are no size numbers in any of this, deliberately. Counts and diff estimates are a prompt to look again at a slice, not a pass mark — a decomposition-time estimate is a guess about code that doesn't exist yet. For the slices where that judgement is hardest, the skill reaches for its own calibration reference — the risk taxonomy and a set of worked examples — and ordinary decompositions never pay for it.
 
 Before slicing, `to-tickets` looks for prefactoring — "make the change easy, then make the easy change" — and orders that work first. It then quizzes you on the breakdown (granularity, blocking edges, what to merge or split) before publishing anything, and publishes blockers first so each ticket's "Blocked by" can reference a real ticket.
+
+## Staged calibration
+
+Most runs publish the whole approved decomposition. **Staged calibration** is the narrow exception for work whose behaviour and architecture are already settled but whose later reviewable Ticket boundaries depend on evidence from implementing an initial Frontier. It is not a way to defer design decisions: unresolved product behaviour, legal transitions, authority, or architecture sends the work back upstream and publishes nothing.
+
+Before that first Frontier is published, `to-tickets` requires a durable Parent/source-contract reference, then creates a durable **Calibration record** in the configured tracker. The record and every staged Ticket link that source, while the record also links every published Frontier, the still-coarse settled remainder, sizing assumptions, and a concrete production evidence checkpoint. Without a durable source reference, staged publication stops. Deferred work stays in the record—not in placeholder Issues, hidden drafts, or human-ready Tickets—so implementation can start in fresh contexts without losing it.
+
+Each Frontier gets one complete approval covering its edges, remainder, assumptions, and checkpoint. On `/to-tickets <calibration-record>`, the tracker is reconciled with the record before the evidence is assessed or more work is proposed. Production diffs, review/remediation findings, production-path validation, or relevant operational measurements may qualify; a throwaway prototype does not expose the integration and review burden being calibrated.
+
+The record makes revisions visible instead of rewriting history: the original contract or assumption, contradiction/evidence, and affected Tickets are recorded before suspension or Ticket/dependency changes; the replacement conclusion and Ticket dispositions are completed before resumption. It can pause as `suspended-for-design`, finish as `complete`, or be deliberately `abandoned`; abandonment closes only the coordination record, not its Parent or implementation Tickets. Nothing expires or reconciles in the background.
 
 ## Fences go in Out of scope, not acceptance criteria
 

@@ -22,9 +22,13 @@ You invoke this by typing `/ask-matt` — the agent won't reach for it on its ow
 
 Reach for it whenever you're unsure which skill or flow a situation calls for: you have an idea and don't know where to start, a pile of bug reports and don't know if they're for `/triage`, or two skills that look interchangeable and you can't tell them apart. If you already know the skill you want, skip the router and invoke it directly.
 
+A referenced Calibration record—or news that its evidence checkpoint is complete—has a direct route: start a fresh `/to-tickets <record>` session. The staged remainder is already durable there, so the fresh session can reconcile real Ticket and pull-request state before proposing the next Frontier.
+
 ## Flows, not just skills
 
 The idea `ask-matt` gives you to think with is the **flow** — a path *through* the skills rather than a single one. Most work runs along one **main flow** (idea → ship: grill → spec → tickets → implement → review), two **on-ramps** merge onto it (a triage lane for incoming bugs and requests; a codebase-health lane that generates ideas), and everything else is a **standalone** you reach for on its own. Ask a question and you get placed on the right flow, at the right step — not just handed a tool.
+
+Context clears between implementation Tickets only after `/to-tickets` has made the complete decomposition—or a staged undecomposed remainder—durable. This is what lets the implementation sessions start clean without throwing away the next calibration checkpoint.
 
 ## Where it fits
 
