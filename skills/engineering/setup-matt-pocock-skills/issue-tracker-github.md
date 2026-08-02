@@ -4,7 +4,7 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 
 ## Which repository
 
-When this checkout has both `origin` and `upstream`, treat `origin` as the GitHub mutation target unless the user explicitly names another repository. Before any GitHub mutation, run `gh repo set-default origin` (or set the explicitly named repository), verify the target with `gh repo set-default --view`, and use the returned `owner/repo` as `<verified-owner/repo>`. Pass `-R <verified-owner/repo>` on every mutation; never rely on unqualified `gh` repository resolution for a mutation.
+When this checkout has both `origin` and `upstream`, treat `origin` as the GitHub mutation target unless the user explicitly names another repository. Before any GitHub mutation, run `gh repo set-default origin` (or set the explicitly named repository), verify the target with `gh repo set-default --view`, and use the returned `owner/repo` as `<verified-owner/repo>`. Pass `-R <verified-owner/repo>` on every mutation and every calibration-resumption read or search; use `repos/<verified-owner/repo>/...` for REST calls. Never rely on unqualified repository resolution for those operations.
 
 ## Conventions
 
@@ -40,11 +40,12 @@ Run `gh issue view <number> --comments`.
 Used by staged `/to-tickets`. A Calibration record is a coordination Issue labelled `calibration:record`; it never receives an implementation-ready triage label and is excluded from Frontier queries.
 
 - **Create and mark**: after setting and verifying the repository as described in **Which repository**, ensure the dedicated marker exists with `gh label create calibration:record -R <verified-owner/repo> --description "Staged-calibration coordination record" --force`, then create the record first with `gh issue create -R <verified-owner/repo> --label calibration:record`; its body contains the current snapshot and a `Parent: #<n>` reference.
-- **Read/update snapshot**: use `gh issue view <record> --comments` and `gh issue edit <record> -R <verified-owner/repo> --body-file <file>`.
+- **Read/update snapshot**: use `gh issue view <record> -R <verified-owner/repo> --comments` and `gh issue edit <record> -R <verified-owner/repo> --body-file <file>`.
 - **Append history**: post each dated history entry with `gh issue comment <record> -R <verified-owner/repo> --body "..."`; never edit or delete earlier history comments.
-- **Find from Parent**: search `gh issue list --label calibration:record --search '"Parent: #<n>"'`; the Parent is not modified.
-- **Bidirectional Ticket discovery**: every implementation Issue body references both `Parent: #<n>` and `Calibration: #<record>`. Read the latter to find the record; find Tickets from the record's ordered Published Frontiers and verify them with an Issue search for `"Calibration: #<record>"`.
-- **Reconcile**: on resumption, read every discovered Issue and its linked PRs with `gh issue view` / `gh pr view`; compare real open/closed and PR state with the snapshot, repair the snapshot and missing references, and append a dated reconciliation comment. Never infer an unreachable artifact.
+- **Find from Parent**: search `gh issue list -R <verified-owner/repo> --state all --label calibration:record --search '"Parent: #<n>"'`; the Parent is not modified.
+- **Bidirectional Ticket discovery**: every implementation Issue body references both `Parent: #<n>` and `Calibration: #<record>`. Read it with `gh issue view <ticket> -R <verified-owner/repo> --comments` to find the record; find Tickets from the record's ordered Published Frontiers and verify them with `gh issue list -R <verified-owner/repo> --state all --search '"Calibration: #<record>"'`.
+- **Linked PR discovery**: for each staged Ticket, query its native timeline with `gh api --paginate -H "Accept: application/vnd.github+json" repos/<verified-owner/repo>/issues/<ticket>/timeline --jq '.[] | select(.event == "cross-referenced" and .source.issue.pull_request) | .source.issue.number'`; also collect explicit PR references from the Ticket and record. Read each identifier with `gh pr view <pr> -R <verified-owner/repo> --comments` and `gh pr diff <pr> -R <verified-owner/repo>`; if the timeline or any referenced PR cannot be read, stop rather than infer its state or contents.
+- **Reconcile**: on resumption, read the Parent, record, and every discovered Issue with `gh issue view <number> -R <verified-owner/repo> --comments`, then perform linked-PR discovery above; compare real Issue and PR state with the snapshot, repair the snapshot and missing references, and append a dated reconciliation comment.
 - **Abandon**: append the dated reason and remaining-work dispositions, set snapshot status `abandoned`, then close the record with `gh issue close <record> -R <verified-owner/repo>`. Do not close the Parent or implementation Issues.
 - **Complete successfully**: append final approval/history, set snapshot status `complete`, then close the record with `gh issue close <record> -R <verified-owner/repo>`. Do not close the Parent.
 

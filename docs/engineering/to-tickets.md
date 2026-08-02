@@ -14,6 +14,8 @@ npx skills update to-tickets
 
 `to-tickets` breaks a plan, spec, or the current conversation into a set of **tickets** — each a tracer-bullet vertical slice — and publishes them to your configured tracker, with every ticket declaring the tickets that block it.
 
+Ordinary runs publish the approved full decomposition. The rare staged-calibration mode publishes only an approved initial Frontier and durably retains the settled remainder until production evidence can calibrate its later Ticket boundaries.
+
 Every ticket is a **tracer bullet** — a thin *vertical* slice that cuts through all integration layers end-to-end (schema, API, UI, tests), never a horizontal slice of one layer. A completed slice is demoable or verifiable on its own, which is what makes each ticket safe to hand to an agent.
 
 ## When to reach for it
@@ -22,7 +24,7 @@ You invoke this by typing `/to-tickets` — the agent won't reach for it on its 
 
 Reach for it once you have an agreed plan or a written spec and you want it split into tickets. Point it at the conversation, or pass a spec or issue reference and it fetches the body and comments first. If the change hasn't been written up as a spec yet, produce one first — for that, use [to-spec](https://aihero.dev/skills-to-spec).
 
-You can also invoke `/to-tickets <calibration-record>` in a fresh session after a staged Frontier has produced its named evidence. That is a resumption of one durable decomposition, not a new breakdown.
+You can also invoke `/to-tickets <calibration-record>` whenever you are resuming that record, including to reconcile or assess a checkpoint whose evidence may still be missing. That is a resumption of one durable decomposition, not a new breakdown.
 
 ## Prerequisites
 

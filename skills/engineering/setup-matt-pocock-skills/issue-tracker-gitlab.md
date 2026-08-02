@@ -43,7 +43,8 @@ Used by staged `/to-tickets`. A Calibration record is a coordination Issue label
 - **Append history**: add dated notes with `glab issue note <record> --message "..."`; never replace earlier notes.
 - **Find from Parent**: list/search Issues carrying `calibration:record` and match `Parent: #<n>`; never modify the Parent for discovery.
 - **Bidirectional Ticket discovery**: every implementation Issue description references both `Parent: #<n>` and `Calibration: #<record>`. The Ticket points to the record; the record's ordered Published Frontiers plus a search for `Calibration: #<record>` find every Ticket.
-- **Reconcile**: on resumption, read every discovered Issue and linked merge request with `glab issue view` / `glab mr view`; compare real open/closed and MR state with the snapshot, repair the snapshot and missing references, and append a dated reconciliation note. Never infer an unreachable artifact.
+- **Linked MR discovery**: for each staged Ticket, run `glab api "projects/:id/issues/<ticket-iid>/related_merge_requests" --paginate --jq '.[].iid'`; also collect explicit MR references from the Ticket and record. Read every identifier with `glab mr view <mr-iid> --comments` and `glab mr diff <mr-iid>`. If the related-MR query or any referenced MR cannot be read, stop rather than infer its state or contents.
+- **Reconcile**: on resumption, read the Parent, record, and every discovered Issue with `glab issue view <iid> --comments`, then perform linked-MR discovery above; compare real Issue and MR state with the snapshot, repair the snapshot and missing references, and append a dated reconciliation note.
 - **Abandon**: append the dated reason and remaining-work dispositions, set snapshot status `abandoned`, then close the record Issue. Do not close the Parent or implementation Issues.
 - **Complete successfully**: append final approval/history, set snapshot status `complete`, then close the record Issue. Do not close the Parent.
 

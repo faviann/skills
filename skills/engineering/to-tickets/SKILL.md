@@ -104,6 +104,8 @@ Do NOT close or modify any parent issue.
 
 **Calibration record:** `../calibration.md` when published through staged calibration; otherwise omit.
 
+**Implementation artifacts:** for staged calibration, append durable production diff, PR/MR, review, remediation, validation, or operational-evidence references as they become available. Use `None yet` until then; tracker-native links remain authoritative where available. Otherwise omit.
+
 **What to build:** the end-to-end behaviour this ticket makes work, from the user's perspective — not a layer-by-layer implementation list.
 
 **Blocked by:** the numbers/titles of the tickets that gate this one, or "None — can start immediately".
@@ -126,6 +128,10 @@ A durable reference to the source contract. Required when published through stag
 ## Calibration record
 
 A reference to the Calibration record when published through staged calibration; otherwise omit this section.
+
+## Implementation artifacts
+
+For staged calibration, append durable production diff, PR/MR, review, remediation, validation, or operational-evidence references as they become available. If the tracker exposes native Issue-to-PR/MR links, those links are authoritative and this section may say so; otherwise use explicit references. Omit for ordinary publication.
 
 ## What to build
 
@@ -188,7 +194,7 @@ Exactly what remains unknown about capacity or reviewability.
 
 ## Evidence checkpoint
 
-The concrete production implementation, review, remediation, validation, fault-injection, or relevant operational evidence required before another pass, including its source.
+The concrete production implementation, review, remediation, validation, fault-injection, or relevant operational evidence required before another pass, including its source and, once known, its actual artifact identifiers.
 
 ## Next action
 
@@ -214,12 +220,12 @@ Treat publication as incomplete until the record and all Ticket links agree. If 
 
 ### Resume staged calibration
 
-On every `/to-tickets <calibration-record>` resumption, reload the Parent, the complete record, every linked Ticket, the linked diffs or pull/merge requests, and the named checkpoint evidence. Before proposing work, reconcile the record against the real tracker artifacts:
+On every `/to-tickets <calibration-record>` resumption, reload the Parent, the complete record, and every linked Ticket. For each staged Ticket, run the configured tracker's native linked-PR/MR discovery operation and also follow explicit durable artifact references in the Ticket or record; read every discovered diff, pull/merge request, and named checkpoint artifact. If the tracker has no native linkage, require explicit durable references. Before proposing work, reconcile the record against the real tracker artifacts:
 
 - the tracker is authoritative for current Ticket and pull-request implementation state;
 - the record is authoritative for the undecomposed remainder, sizing assumptions, evidence checkpoint, and decision history;
 - repair snapshot discrepancies and append a dated reconciliation entry before continuing; and
-- never silently infer a missing or unreachable Ticket, pull request, Parent, link, or checkpoint artifact. Stop and surface what cannot be read or repaired.
+- never silently infer an absent identifier or a missing or unreachable Ticket, pull/merge request, Parent, link, or checkpoint artifact. Stop and surface what cannot be read or repaired.
 
 Then transition explicitly:
 
