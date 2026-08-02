@@ -16,7 +16,7 @@ The issue tracker and triage label vocabulary should have been provided to you â
 
 Work from whatever is already in the conversation context. If the user passes a reference (a spec path, an issue number or URL) as an argument, fetch it and read its full body and comments.
 
-When resuming from a Parent with staged-calibration checkpoints, read every checkpoint in tracker order. The last one controls. Take the union of their non-`None` `Published Frontier` references, read those Tickets, and never republish work they already represent. If the controlling checkpoint is closed, treat none of its remainder as pending: propose only source-contract work not represented by those Tickets, and report completion instead of creating Tickets when nothing remains.
+When resuming from a Parent with staged-calibration checkpoints, read every checkpoint in tracker order. The last one controls. Take the union of their non-`None` `Published Frontier` references, read those tickets, and never republish work they already represent. If the controlling checkpoint is closed, treat none of its remainder as pending: propose only source-contract work not represented by those tickets, and report completion instead of creating tickets when nothing remains.
 
 ### 2. Explore the codebase (optional)
 
@@ -51,9 +51,9 @@ Read [CALIBRATION.md](CALIBRATION.md) before you settle a slice that crosses sev
 Use staged calibration only when all four conditions hold:
 
 1. Product behavior, architecture, authority boundaries, and cross-slice contracts are settled.
-2. The immediate Frontier satisfies the ordinary Ticket rules.
-3. The settled remainder cannot yet be divided into safely reviewable Tickets.
-4. Named production evidence from implementing the immediate Frontier will materially inform later Ticket boundaries.
+2. The immediate Frontier satisfies the ordinary ticket rules.
+3. The settled remainder cannot yet be divided into safely reviewable tickets.
+4. Named production evidence from implementing the immediate Frontier will materially inform later ticket boundaries.
 
 If condition 1 fails, use the unresolved-design hand-back above and publish nothing.
 
@@ -100,7 +100,7 @@ Checkpoints are append-only. The last checkpoint in tracker order controls, so a
 ## Staged calibration checkpoint â€” <date>
 
 Checkpoint: active
-Published Frontier: <non-empty Ticket references>
+Published Frontier: <non-empty ticket references>
 Undecomposed remainder: <coarse settled remainder>
 Sizing assumption: <what production evidence must clarify>
 Resume when: <named evidence and where to find it>
@@ -111,14 +111,14 @@ Resume when: <named evidence and where to find it>
 
 Checkpoint: closed
 Disposition: published | cancelled
-Published Frontier: <non-empty Ticket references when published; None when cancelled>
+Published Frontier: <non-empty ticket references when published; None when cancelled>
 ```
 
 Every active checkpoint and closed `published` checkpoint has a non-empty `Published Frontier`; only closed `cancelled` uses `None`.
 
-Publish the approved Frontier first, then append the checkpoint with the real Ticket references. When more calibration remains, append an active checkpoint naming the newly published Tickets. When the final Frontier is published, append a closed `published` checkpoint naming those Tickets. If assessment finds that existing Tickets already satisfy the remainder, present that finding in the ordinary quiz; after approval, append closed `published` naming them. If the user explicitly decides to drop the remainder or remove it from the source contract, append closed `cancelled` with `None`.
+Publish the approved Frontier first, then append the checkpoint with the real ticket references. When more calibration remains, append an active checkpoint naming the newly published tickets. When the final Frontier is published, append a closed `published` checkpoint naming those tickets. If assessment finds that existing tickets already satisfy the remainder, present that finding in the ordinary quiz; after approval, append closed `published` naming them. If the user explicitly decides to drop the remainder or remove it from the source contract, append closed `cancelled` with `None`.
 
-If publication is partial or checkpoint persistence fails, retry the checkpoint with the exact Tickets that exist and the remaining work. If checkpoint persistence still fails, stop and report the failure. Do not report success or clear context until the checkpoint is durable.
+If publication is partial or checkpoint persistence fails, retry the checkpoint with the exact tickets that exist and the remaining work. If checkpoint persistence still fails, stop and report the failure. Do not report success or clear context until the checkpoint is durable.
 
 <local-ticket-template>
 

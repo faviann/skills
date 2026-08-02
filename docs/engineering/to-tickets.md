@@ -49,25 +49,25 @@ And each semantic case or production mechanism gets exactly one owning ticket, b
 
 There are no size numbers in any of this, deliberately. Counts and diff estimates are a prompt to look again at a slice, not a pass mark — a decomposition-time estimate is a guess about code that doesn't exist yet. For the slices where that judgement is hardest, the skill reaches for its own calibration reference — the risk taxonomy and a set of worked examples — and ordinary decompositions never pay for it.
 
-## Staged calibration
+Before slicing, `to-tickets` looks for prefactoring — "make the change easy, then make the easy change" — and orders that work first. It then quizzes you on the breakdown (granularity, blocking edges, what to merge or split) before publishing anything, and publishes blockers first so each ticket's "Blocked by" can reference a real ticket.
+
+### Staged calibration
 
 Sometimes the design and contracts are settled while the right boundaries for later tickets depend on what an initial production slice reveals. `to-tickets` can publish only that pilot Frontier and leave a durable checkpoint on the Parent, preserving the coarse remainder, sizing assumption, and evidence needed to reopen decomposition. After the pilot lands, invoke `/to-tickets <parent>` in a fresh session to continue from that checkpoint.
 
-This is for sizing uncertainty, not design uncertainty. The evidence must come from the maintained production path — its integration, validation, review, remediation, or relevant operational behaviour. A throwaway prototype can answer a design question, but it cannot reveal the production burden being calibrated; unresolved design still returns upstream without publishing Tickets.
+This is for sizing uncertainty, not design uncertainty. The evidence must come from the maintained production path — its integration, validation, review, remediation, or relevant operational behaviour. A throwaway prototype can answer a design question, but it cannot reveal the production burden being calibrated; unresolved design still returns upstream without publishing tickets.
 
-Before slicing, `to-tickets` looks for prefactoring — "make the change easy, then make the easy change" — and orders that work first. It then quizzes you on the breakdown (granularity, blocking edges, what to merge or split) before publishing anything, and publishes blockers first so each ticket's "Blocked by" can reference a real ticket.
+### The wide-refactor exception
+
+A slice normally lands the behaviour it is meant to keep — its final form. One shape breaks that rule: a **wide refactor** — a single mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so one edit breaks thousands of call sites at once and no vertical slice can land green. `to-tickets` slices it as **expand–contract** instead: expand (introduce a compatibility form beside the old one), migrate (named batches sized by blast radius, one ticket per batch, consuming that form while both exist so CI stays green), then contract (remove the old form once every named batch has landed). When even the batches can't stay green alone, they share an integration branch that all block a final integrate-and-verify ticket, and green is promised only there.
+
+What makes this legitimate is that the transitional arrangement is a contract, not an improvisation: the compatibility form is introduced deliberately, consumed by batches named up front, and the old form it stands beside is retired by a contract ticket that already exists in the breakdown. That is the exception — it isn't a general licence to leave a half-finished behavioural seam behind and call it transitional.
 
 ## Fences go in Out of scope, not acceptance criteria
 
 A spec usually carries prohibitions as well as requirements — "capture adds no message broker", "no mutable `latest` tag". When a ticket inherits one, it goes in the ticket's **Out of scope** section, never in its acceptance criteria.
 
 The reason is that a fence asserts some code *doesn't* exist, so there is no input that could make it fail. As a criterion it can only ever be ticked on faith, and it invites someone to build machinery proving a negative. Both templates carry an Out of scope section for exactly this, with the standing note that these are fences for the reviewer — nothing should be built to prove them.
-
-## The wide-refactor exception
-
-A slice normally lands the behaviour it is meant to keep — its final form. One shape breaks that rule: a **wide refactor** — a single mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so one edit breaks thousands of call sites at once and no vertical slice can land green. `to-tickets` slices it as **expand–contract** instead: expand (introduce a compatibility form beside the old one), migrate (named batches sized by blast radius, one ticket per batch, consuming that form while both exist so CI stays green), then contract (remove the old form once every named batch has landed). When even the batches can't stay green alone, they share an integration branch that all block a final integrate-and-verify ticket, and green is promised only there.
-
-What makes this legitimate is that the transitional arrangement is a contract, not an improvisation: the compatibility form is introduced deliberately, consumed by batches named up front, and the old form it stands beside is retired by a contract ticket that already exists in the breakdown. That is the exception — it isn't a general licence to leave a half-finished behavioural seam behind and call it transitional.
 
 ## Where it fits
 

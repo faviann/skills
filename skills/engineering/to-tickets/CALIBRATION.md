@@ -6,7 +6,7 @@ Use it to answer three questions in order: which independent models this slice i
 
 ## Production evidence for staged calibration
 
-**Calibration evidence** comes from the maintained production path and can genuinely inform later Ticket boundaries: landed implementation, exercised integration seams, validation or fault injection, independent review and remediation, or operational evidence when operations drive the uncertainty. A throwaway prototype may settle a design question, but it cannot substitute for this evidence because it deliberately omits the maintained integration, validation, error handling, review, and remediation burden being calibrated.
+**Calibration evidence** comes from the maintained production path and can genuinely inform later ticket boundaries: landed implementation, exercised integration seams, validation or fault injection, independent review and remediation, or operational evidence when operations drive the uncertainty. A throwaway prototype may settle a design question, but it cannot substitute for this evidence because it deliberately omits the maintained integration, validation, error handling, review, and remediation burden being calibrated.
 
 Overmind Phase 2 is the positive case. [#78](https://github.com/faviann/overmind/issues/78) first published [#130](https://github.com/faviann/overmind/issues/130)–[#133](https://github.com/faviann/overmind/issues/133); their production implementation exposed enough variation in integration, fault injection, validation, review, and remediation to shape the later [#144](https://github.com/faviann/overmind/issues/144)–[#156](https://github.com/faviann/overmind/issues/156) boundaries.
 
