@@ -16,7 +16,7 @@ The issue tracker and triage label vocabulary should have been provided to you �
 
 Work from whatever is already in the conversation context. If the user passes a reference (a spec path, an issue number or URL) as an argument, fetch it and read its full body and comments.
 
-When resuming from a Parent with staged-calibration checkpoints, read every checkpoint in tracker order. The last one controls. Take the union of their non-`None` `Published Frontier` references, read those tickets, and never republish work they already represent. If the controlling checkpoint is closed, treat none of its remainder as pending: propose only source-contract work not represented by those tickets, and report completion instead of creating tickets when nothing remains.
+Check any Parent you are working from for staged-calibration checkpoints on its comment surface; if it has any, read [STAGED-CALIBRATION.md](STAGED-CALIBRATION.md) first.
 
 ### 2. Explore the codebase (optional)
 
@@ -42,28 +42,15 @@ Break the work into **tracer bullet** tickets.
 
 Risk decides **whether** a split is required; the seam rule decides **where** that split can land. Apply them together — neither overrides the other. The unit the risk rule counts is the **independent model**: a state, lifecycle, or authorization model that can be got wrong on its own. Alternatives within one shared determination — whose state space has to stay complete and coherent — are one model however many outcomes, authorities, or code paths they span; two genuinely independent instances of the same shape are two. Where the rule never fired, the slice is one ticket on those grounds. Where it did fire, its verdict stands — the seam rule places the split, it does not cancel it.
 
-Where the required split has no seam, first consider whether a prefactor ticket can create one for the settled design. If the missing seam instead exposes an unresolved design question, the input is not ready for `to-tickets`: show the user the independent models that fired the rule, the seams and prefactors considered, and the question blocking a safe decomposition; then end the run without publishing. Tell the user to return to `/grilling` and `/domain-modeling` for a sharp decision, `/prototype` when the answer must be runnable or visible, or `/wayfinder` when the remaining fog is too large for one session. Do not resolve that design work inside the publication quiz. Once the decision is recorded in the source conversation or spec, rerun `to-tickets`. An ordinary decomposition advances to step 5 only when the complete set satisfies these rules and the user has approved it; staged publication instead follows the gate below.
+Where the required split has no seam, first consider whether a prefactor ticket can create one for the settled design. If the missing seam instead exposes an unresolved design question, the input is not ready for `to-tickets`: show the user the independent models that fired the rule, the seams and prefactors considered, and the question blocking a safe decomposition; then end the run without publishing. Tell the user to return to `/grilling` and `/domain-modeling` for a sharp decision, `/prototype` when the answer must be runnable or visible, or `/wayfinder` when the remaining fog is too large for one session. Do not resolve that design work inside the publication quiz. Once the decision is recorded in the source conversation or spec, rerun `to-tickets`. An ordinary decomposition advances to step 5 only when the complete set satisfies these rules and the user has approved it; staged publication instead follows the gate in [STAGED-CALIBRATION.md](STAGED-CALIBRATION.md).
 
 Read [CALIBRATION.md](CALIBRATION.md) before you settle a slice that crosses several production models, protocols, trust boundaries, compatibility paths, or resource-governance boundaries, when the codebase offers no close implementation analogue for what the slice introduces, or before entering staged calibration. Otherwise skip it.
 
-<staged-calibration>
-
-Use staged calibration only when all four conditions hold:
-
-1. Product behavior, architecture, authority boundaries, and cross-slice contracts are settled.
-2. The immediate Frontier satisfies the ordinary ticket rules.
-3. The settled remainder cannot yet be divided into safely reviewable tickets.
-4. Named production evidence from implementing the immediate Frontier will materially inform later ticket boundaries.
-
-If condition 1 fails, use the unresolved-design hand-back above and publish nothing.
-
-On resumption from an active checkpoint, recheck condition 1 before assessing evidence. If it fails, use that hand-back, publish nothing, and leave the checkpoint active. If the user explicitly decides to drop the remainder or remove it from the source contract instead, append a closed `cancelled` checkpoint with `Published Frontier: None`. If design remains settled, assess the named evidence against the sizing assumption. When the evidence is missing or unreadable, ask the user for exact references and stop. Every subsequent staged Frontier must satisfy all four conditions before publication.
-
-</staged-calibration>
+When the design is settled but the remainder cannot yet be safely divided into reviewable tickets, staged calibration may apply — read [STAGED-CALIBRATION.md](STAGED-CALIBRATION.md).
 
 Give each ticket its **blocking edges** — the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
-**Prefer final-form behavioural contracts** — a slice lands the behaviour it is meant to keep. **Wide refactors are the one exception**, and their transitional form is an intentional contract, not an improvised seam. A **wide refactor** is one mechanical change — rename a column, retype a shared symbol — whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Sequence it as **expand–contract**: the expand ticket introduces a **compatibility form** beside the old one; **name the migration batches that consume it**, sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand; **retain the compatibility form until every named batch has landed**, and keep the old form standing beside it — call sites no batch has reached yet still compile against the old form, which is what keeps CI green batch to batch; then the contract ticket, blocked by every batch, removes the old form. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket — green is promised only there. This is the exception to final-form slicing, not a licence to invent temporary behavioural seams elsewhere.
+**Prefer final-form behavioural contracts** — a slice lands the behaviour it is meant to keep. **Wide refactors are the exception to vertical slicing**, and their transitional form is an intentional contract, not an improvised seam. A **wide refactor** is one mechanical change — rename a column, retype a shared symbol — whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Don't force it into a tracer bullet; sequence it as **expand–contract**. First expand: add the **compatibility form** beside the old one so nothing breaks. Then migrate the call sites over in batches sized by blast radius (per package, per directory) — **name those batches in the expand ticket** — each batch its own ticket blocked by the expand, keeping CI green batch to batch because the old form still exists. Finally contract: delete the old form once every named batch has landed and no caller remains, in a ticket blocked by every migrate batch. **Both forms stand until then** — the compatibility form is never withdrawn while a named batch is still outstanding. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket — green is promised only there. This is the exception to final-form slicing, not a licence to invent temporary behavioural seams elsewhere.
 
 ### 4. Quiz the user
 
@@ -81,8 +68,6 @@ Ask the user:
 
 Iterate until the user approves the breakdown.
 
-For staged publication, include the reason for staging, the immediate Frontier and its blocking edges, the coarse undecomposed remainder, the sizing assumption, and the named evidence location in this same quiz and approval.
-
 ### 5. Publish the tickets to the configured tracker
 
 Publish the approved tickets. **How** depends on the tracker `/setup-matt-pocock-skills` configured — the tickets are the same either way, only the shape of the blocking edges changes:
@@ -92,33 +77,7 @@ Publish the approved tickets. **How** depends on the tracker `/setup-matt-pocock
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
-Never change a Parent's source-contract content, scope, or lifecycle. After approved staged publication, append a checkpoint to its comment surface: a comment or note on a real tracker, or beneath `## Comments` in the local Parent file. Create that local heading when absent without changing the source-contract content above it.
-
-Checkpoints are append-only. The last checkpoint in tracker order controls, so at most one is active at a time; its written date is human metadata. Use exactly these shapes:
-
-```md
-## Staged calibration checkpoint — <date>
-
-Checkpoint: active
-Published Frontier: <non-empty ticket references>
-Undecomposed remainder: <coarse settled remainder>
-Sizing assumption: <what production evidence must clarify>
-Resume when: <named evidence and where to find it>
-```
-
-```md
-## Staged calibration checkpoint — <date>
-
-Checkpoint: closed
-Disposition: published | cancelled
-Published Frontier: <non-empty ticket references when published; None when cancelled>
-```
-
-Every active checkpoint and closed `published` checkpoint has a non-empty `Published Frontier`; only closed `cancelled` uses `None`.
-
-Publish the approved Frontier first, then append the checkpoint with the real ticket references. When more calibration remains, append an active checkpoint naming the newly published tickets. When the final Frontier is published, append a closed `published` checkpoint naming those tickets. If assessment finds that existing tickets already satisfy the remainder, present that finding in the ordinary quiz; after approval, append closed `published` naming them. If the user explicitly decides to drop the remainder or remove it from the source contract, append closed `cancelled` with `None`.
-
-If publication is partial or checkpoint persistence fails, retry the checkpoint with the exact tickets that exist and the remaining work. If checkpoint persistence still fails, stop and report the failure. Do not report success or clear context until the checkpoint is durable.
+Do NOT close or modify any parent issue.
 
 <local-ticket-template>
 
