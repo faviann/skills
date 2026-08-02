@@ -13,7 +13,7 @@ A single tracked unit of work inside an **Issue tracker** — a bug, task, spec,
 _Avoid_: ticket (use only when quoting external systems that call them tickets, or for a **Decision ticket** — see below)
 
 **Map**:
-A `wayfinder` artifact — a single **Issue** labelled `wayfinder:map` charting one effort toward its **Destination**. It is an *index, not a store*: it gists the decisions made and links to the **Decision tickets** holding their detail, and is loaded once per session at low resolution. Where its child tickets, blocking edges, and **Frontier** queries physically live is tracker-specific — see `docs/agents/issue-tracker.md`.
+A `wayfinder` artifact — a single **Issue** labelled `wayfinder:map` charting one effort toward its **Destination**. It is an *index, not a store*: it gists the decisions made and links to the **Decision tickets** holding their detail, and is loaded once per session at low resolution.
 
 **Destination**:
 What reaching the end of a **Map** looks like — the spec, decision, or change the effort is finding its way to. Named first when charting, because it fixes the effort's scope: work beyond it is *out of scope* rather than **Not yet specified**.
@@ -22,11 +22,10 @@ What reaching the end of a **Map** looks like — the spec, decision, or change 
 A `wayfinder` unit — a child **Issue** of a `wayfinder:map` holding a *question* whose resolution is a decision, not a slice of a build to execute. The **decision** qualifier is what keeps it distinct from an implementation ticket; `wayfinder` introduces the term, then uses "ticket".
 
 **Frontier**:
-The work takeable right now. Two scoped uses, not one contested definition — `wayfinder` adds an *unclaimed* condition because it claims before working; `to-tickets` omits it because it publishes rather than dispatches. See **Flagged ambiguities**. Written lowercase in skill prose, as upstream writes it; the capital here is a headword, not a style to copy.
-_Avoid_: pilot Frontier, Frontier mid-sentence
+The work takeable right now. Two scoped uses, not one contested definition — `wayfinder` adds an *unclaimed* condition because it claims before working; `to-tickets` omits it because it publishes rather than dispatches — see **Flagged ambiguities**.
 
 **Not yet specified** (the *fog of war*):
-The section of a **Map** holding what is in scope but not yet sharp enough to ticket — the decisions and investigations you can tell are coming but cannot yet pin down. The test is whether the *question* can be stated precisely now, not whether it can be answered. Deliberately coarser than a ticket: one patch may **Graduate** into several **Decision tickets**, or none. Excludes what is already decided, already a live ticket, or out of scope.
+The section of a **Map** holding what is in scope but not yet sharp enough to ticket — the decisions and investigations you can tell are coming but cannot yet pin down. The test is whether the *question* can be stated precisely now, not whether it can be answered.
 
 **Graduate**:
 What happens when resolving a **Decision ticket** clears the fog ahead of it: material in **Not yet specified** becomes sharp enough to state as a question and is promoted into fresh **Decision tickets** — one at a time. Work ruled out of scope never graduates.
