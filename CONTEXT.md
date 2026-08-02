@@ -23,7 +23,6 @@ A `wayfinder` unit — a child **Issue** of a `wayfinder:map` holding a *questio
 
 **Frontier**:
 The work takeable right now. Two scoped uses, not one contested definition — `wayfinder` adds an *unclaimed* condition because it claims before working; `to-tickets` omits it because it publishes rather than dispatches — see **Flagged ambiguities**.
-_Avoid_: pilot Frontier
 
 **Not yet specified** (the *fog of war*):
 The section of a **Map** holding what is in scope but not yet sharp enough to ticket — the decisions and investigations you can tell are coming but cannot yet pin down. The test is whether the *question* can be stated precisely now, not whether it can be answered.
