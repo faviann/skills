@@ -13,6 +13,13 @@ Before any GitHub mutation, run `gh repo set-default origin`, verify the target
 with `gh repo set-default --view`, and pass that verified `owner/repo` via
 `-R`. Never rely on unqualified `gh` repository resolution for a mutation.
 
+Prose inherited from `upstream`: edit only what changes what a skill **does**, never
+what reads better or matches a neighbour's voice. Preserve the sentence skeleton, patch
+the minimum, and word-diff every delta against `upstream` — not against `HEAD` — before
+committing (`af55d4f`, `9f3515c`). Regenerating is the default when a model is asked to
+add to a paragraph, so check even when confident. Additions are exempt from this
+paragraph, not from the rest of this file.
+
 Every skill in `engineering/` or `productivity/` (the **promoted** buckets) must have a reference in the top-level `README.md` and an entry in `.claude-plugin/plugin.json`'s `skills` array (the Claude Code plugin ships exactly the promoted set). Skills in `misc/`, `personal/`, `in-progress/`, and `deprecated/` must not appear in either.
 
 The repo is also its own single-plugin Claude Code marketplace: `.claude-plugin/marketplace.json` lists the one `faviann-skills` plugin. When bumping the release version, keep `.claude-plugin/plugin.json`'s `version` in sync with `package.json`'s — Claude uses the plugin `version` to decide when installed users see an update. Run `claude plugin validate . --strict` after touching either manifest. Why a Claude plugin but not (yet) a Codex one lives in [.agents/adr/0002-ship-as-a-claude-code-plugin.md](./.agents/adr/0002-ship-as-a-claude-code-plugin.md).
