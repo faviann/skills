@@ -15,10 +15,12 @@ with `gh repo set-default --view`, and pass that verified `owner/repo` via
 
 Prose inherited from `upstream`: edit only what changes what a skill **does**, never
 what reads better or matches a neighbour's voice. Preserve the sentence skeleton, patch
-the minimum, and word-diff every delta against `upstream` — not against `HEAD` — before
-committing (`af55d4f`, `9f3515c`). Regenerating is the default when a model is asked to
-add to a paragraph, so check even when confident. Additions are exempt from this
-paragraph, not from the rest of this file.
+the minimum, and word-diff every delta against `upstream` — not `HEAD` — before
+committing. If a feature needs an exception to an upstream rule, put the feature in its
+own file rather than caveating the rule. `git log -S` a distinctive phrase before
+rewriting or deleting a sentence — the fork's own wording is often deliberate too.
+Additions are exempt from this paragraph, not from the rest of this file. Why, and the
+incidents behind each rule: [.agents/upstream-fidelity.md](./.agents/upstream-fidelity.md).
 
 Every skill in `engineering/` or `productivity/` (the **promoted** buckets) must have a reference in the top-level `README.md` and an entry in `.claude-plugin/plugin.json`'s `skills` array (the Claude Code plugin ships exactly the promoted set). Skills in `misc/`, `personal/`, `in-progress/`, and `deprecated/` must not appear in either.
 
