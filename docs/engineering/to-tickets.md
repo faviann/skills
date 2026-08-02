@@ -53,7 +53,7 @@ Before slicing, `to-tickets` looks for prefactoring — "make the change easy, t
 
 ### Staged calibration
 
-Sometimes the design and contracts are settled while the right boundaries for later tickets depend on what an initial production slice reveals. `to-tickets` can publish only that pilot Frontier and leave a durable checkpoint on the Parent, preserving the coarse remainder, sizing assumption, and evidence needed to reopen decomposition. After the pilot lands, invoke `/to-tickets <parent>` in a fresh session to continue from that checkpoint.
+Sometimes the design and contracts are settled while the right boundaries for later tickets depend on what an initial production slice reveals. `to-tickets` can publish only that immediate frontier and leave a durable checkpoint on the Parent, preserving the coarse remainder, sizing assumption, and evidence needed to reopen decomposition. After that frontier lands, invoke `/to-tickets <parent>` in a fresh session to continue from that checkpoint.
 
 This is for sizing uncertainty, not design uncertainty. The evidence must come from the maintained production path — its integration, validation, review, remediation, or relevant operational behaviour. A throwaway prototype can answer a design question, but it cannot reveal the production burden being calibrated; unresolved design still returns upstream without publishing tickets.
 
