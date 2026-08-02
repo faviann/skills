@@ -71,6 +71,21 @@ are what it covers."* The deletion would also have left `independent` undefined 
 always-loaded lines. Nothing about upstream was involved — the fork's own wording was
 load-bearing, and only the history said so.
 
+## Fork-owned regions
+
+`README.md`'s install section is fork-owned: take ours on conflict without
+deliberating. Upstream ships in Claude Code's official marketplace, so their install
+collapses to `claude plugins install mattpocock-skills`. This fork runs its own
+single-plugin marketplace, so it needs `/plugin marketplace add faviann/skills` then
+`/plugin install faviann-skills@faviann`. Their commands cannot work here and never
+will.
+
+Their *structure* can transfer even though their commands can't. The 2026-08-02 merge
+adopted upstream's audience-split `<details>` layout while keeping the fork's commands,
+which is the shape to aim for. Read their version while you are resolving the conflict —
+you are already looking at both — and copy the layout if it is better. Do not schedule it
+as a separate review; if it ever becomes one, drop it and always take ours.
+
 ## What this cannot do
 
 There are no tests, no evals and no CI here beyond `release.yml`. These are prose rules
