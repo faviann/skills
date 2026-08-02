@@ -16,7 +16,7 @@ The issue tracker and triage label vocabulary should have been provided to you �
 
 Work from whatever is already in the conversation context. If the user passes a reference (a spec path, an issue number or URL) as an argument, fetch it and read its full body and comments.
 
-When resuming from a Parent with staged-calibration checkpoints, read every checkpoint in tracker order. The last one controls. Take the union of their non-`None` `Published Frontier` references, read those tickets, and never republish work they already represent. If the controlling checkpoint is closed, treat none of its remainder as pending: propose only source-contract work not represented by those tickets, and report completion instead of creating tickets when nothing remains.
+Check any Parent you are working from for staged-calibration checkpoints on its comment surface; if it has any, read [STAGED-CALIBRATION.md](STAGED-CALIBRATION.md) first.
 
 ### 2. Explore the codebase (optional)
 
@@ -46,20 +46,7 @@ Where the required split has no seam, first consider whether a prefactor ticket 
 
 Read [CALIBRATION.md](CALIBRATION.md) before you settle a slice that crosses several production models, protocols, trust boundaries, compatibility paths, or resource-governance boundaries, when the codebase offers no close implementation analogue for what the slice introduces, or before entering staged calibration. Otherwise skip it.
 
-<staged-calibration>
-
-Use staged calibration only when all four conditions hold:
-
-1. Product behavior, architecture, authority boundaries, and cross-slice contracts are settled.
-2. The immediate Frontier satisfies the ordinary ticket rules.
-3. The settled remainder cannot yet be divided into safely reviewable tickets.
-4. Named production evidence from implementing the immediate Frontier will materially inform later ticket boundaries.
-
-If condition 1 fails, use the unresolved-design hand-back above and publish nothing.
-
-On resumption from an active checkpoint, recheck condition 1 before assessing evidence. If it fails, use that hand-back, publish nothing, and leave the checkpoint active. If the user explicitly decides to drop the remainder or remove it from the source contract instead, append a closed `cancelled` checkpoint with `Published Frontier: None`. If design remains settled, assess the named evidence against the sizing assumption. When the evidence is missing or unreadable, ask the user for exact references and stop. Every subsequent staged Frontier must satisfy all four conditions before publication.
-
-</staged-calibration>
+When the design is settled but the remainder cannot yet be safely divided into reviewable tickets, staged calibration may apply — read [STAGED-CALIBRATION.md](STAGED-CALIBRATION.md).
 
 Give each ticket its **blocking edges** — the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
@@ -81,8 +68,6 @@ Ask the user:
 
 Iterate until the user approves the breakdown.
 
-For staged publication, include the reason for staging, the immediate Frontier and its blocking edges, the coarse undecomposed remainder, the sizing assumption, and the named evidence location in this same quiz and approval.
-
 ### 5. Publish the tickets to the configured tracker
 
 Publish the approved tickets. **How** depends on the tracker `/setup-matt-pocock-skills` configured — the tickets are the same either way, only the shape of the blocking edges changes:
@@ -92,33 +77,7 @@ Publish the approved tickets. **How** depends on the tracker `/setup-matt-pocock
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
-Never change a Parent's source-contract content, scope, or lifecycle. After approved staged publication, append a checkpoint to its comment surface: a comment or note on a real tracker, or beneath `## Comments` in the local Parent file. Create that local heading when absent without changing the source-contract content above it.
-
-Checkpoints are append-only. The last checkpoint in tracker order controls, so at most one is active at a time; its written date is human metadata. Use exactly these shapes:
-
-```md
-## Staged calibration checkpoint — <date>
-
-Checkpoint: active
-Published Frontier: <non-empty ticket references>
-Undecomposed remainder: <coarse settled remainder>
-Sizing assumption: <what production evidence must clarify>
-Resume when: <named evidence and where to find it>
-```
-
-```md
-## Staged calibration checkpoint — <date>
-
-Checkpoint: closed
-Disposition: published | cancelled
-Published Frontier: <non-empty ticket references when published; None when cancelled>
-```
-
-Every active checkpoint and closed `published` checkpoint has a non-empty `Published Frontier`; only closed `cancelled` uses `None`.
-
-Publish the approved Frontier first, then append the checkpoint with the real ticket references. When more calibration remains, append an active checkpoint naming the newly published tickets. When the final Frontier is published, append a closed `published` checkpoint naming those tickets. If assessment finds that existing tickets already satisfy the remainder, present that finding in the ordinary quiz; after approval, append closed `published` naming them. If the user explicitly decides to drop the remainder or remove it from the source contract, append closed `cancelled` with `None`.
-
-If publication is partial or checkpoint persistence fails, retry the checkpoint with the exact tickets that exist and the remaining work. If checkpoint persistence still fails, stop and report the failure. Do not report success or clear context until the checkpoint is durable.
+Do NOT close or modify any parent issue.
 
 <local-ticket-template>
 
