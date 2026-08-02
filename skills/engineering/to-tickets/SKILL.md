@@ -18,6 +18,8 @@ Work from whatever is already in the conversation context. If the user passes a 
 
 If the argument is a **Calibration record**, this is a resumption. Follow **Resume staged calibration** below instead of starting a new decomposition. A record reference may be a labelled coordination Issue, a GitLab Issue, or a local `.scratch/<feature>/calibration.md` path as defined by the configured tracker.
 
+If the argument is a durable **Parent/source reference**, run the configured tracker's Parent-to-record discovery operation before beginning a new decomposition. If it returns one record, surface and load that record, then follow **Resume staged calibration** for a non-terminal status or report the terminal status without creating another record. If it returns more than one record, stop and show the ambiguity; never choose silently. If discovery or a returned record cannot be read, stop and surface the failure rather than inferring that no record exists. Begin a new decomposition only when the authoritative query succeeds and returns no record.
+
 ### 2. Explore the codebase (optional)
 
 If you have not already explored the codebase, do so to understand the current state of the code. Ticket titles and descriptions should use the project's domain glossary vocabulary, and respect ADRs in the area you're touching.
