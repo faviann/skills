@@ -284,8 +284,8 @@ authorization-taxonomy reproduction tracked in
 The green baseline is the stable subset whose model identity and verdict both match
 the fixed key: Cases 1, 6, 7, and 8. Cases 2–5 remain in the eval as reproductions but
 do not gate unrelated reference changes until their linked design decisions settle.
-Case 9 postdates every run recorded above and has never been run; it is keyed but
-unmeasured, and joins neither the green baseline nor the reproductions.
+Case 9 postdates every run recorded above. Its own baseline is below; it is a stable
+mismatch and joins the reproductions, not the green baseline.
 
 ## Pre-reorganisation control
 
@@ -304,3 +304,60 @@ The control exonerates the reorganisation for every isolated defect. None of Cas
 had a stable, key-matching pre-reorganisation baseline that the finished document lost.
 The branch is therefore eligible to merge on the four-case green subset while #36 and
 #37 track the pre-existing reference defects.
+
+## Case 9 baseline
+
+Run on 2026-08-08 against the live `RISK-SHAPES.md` at `b49a753`, whose content for that
+file is identical to `e92a6a6` — so this baseline is comparable with the isolated
+baseline above. Three fresh blind evaluators, case 9 only, no other case and no key
+visible.
+
+| Case | Run 1 | Run 2 | Run 3 | Fixed key | Classification |
+| --- | --- | --- | --- | --- | --- |
+| 9 | 0 / no | 0 / no | 0 / no | 2 / yes | **stable mismatch** |
+
+**This is not a candidate-identification failure.** All three runs named exactly the two
+determinations the case was built from — sensitivity from contents, retention class from
+record type — and all three tested independence correctly, stating that either can be
+wrong while the other is right and that they are not alternatives within one shared
+determination. One recorded the two determinations in its verdict and labelled them
+"advisory, not the trigger". The candidate set matches the key; only the count diverges.
+
+The divergence is entirely the shape gate, and all three found it in the reference
+unprompted. Each quoted both sides of the contradiction and each resolved it the same
+way. The clearest statement of it:
+
+> A reader who applies the definition before the discriminators gets 2 and a split; one
+> who applies shapes first gets 0. I commit to shapes-first.
+
+Two consequences worth keeping.
+
+**A shape-gated reading returns 0 here, not 1.** The gate as evaluators actually apply
+it drops the primary determination too, because a bare classification instantiates no
+shape either. Any argument that a shape-gated rule "returns one model" on this case
+overstates that rule's behaviour; observed behaviour is one step further from the key.
+
+**The current wording transmits shapes-first unanimously**, not ambiguously. That makes
+the transmission problem harder than a split result would have: a rewording has to
+overturn a reading three of three evaluators reached independently and defended by
+quotation, so a subtle patch is unlikely to move it. Reasons given were the discriminators'
+unconditional "Ordinary work does not count toward the split", the shape-anchored
+"the rule counts the independent models instantiating them", and the softness of "these
+shapes are where independent models *usually* live".
+
+One run also noted a gap no case had exposed: the reference has no worked example of two
+determinations that each stay whole while touching no risk shape. The counterexample only
+teaches how to collapse alternatives into one model. Weigh that against the recorded null
+result on adding a fifth worked example, which over-taught and introduced an over-split.
+
+### Method caveat
+
+These three runs were subagents *instructed* not to use tools, with the reference pasted
+inline, rather than evaluators with no tool access. "Told not to look" is weaker than
+"could not look", and the same caveat may apply to earlier runs unless they were executed
+under tighter conditions. None of the three reported using a tool, and none cited a key
+or an expected answer.
+
+A fourth run was discarded before scoring: its case text carried a stray glyph, so its
+input was not identical to the other three. It returned `0 / no` and explicitly noted the
+glyph and ignored it, so it corroborates the result without counting as one of the three.
