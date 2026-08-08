@@ -32,7 +32,8 @@ Break the work into **tracer bullet** tickets.
 
 - Each slice cuts a narrow but COMPLETE path through every layer (schema, API, UI, tests) — vertical, NOT a horizontal slice of one layer
 - A completed slice is demoable or verifiable on its own
-- Each slice is sized by two constraints that both must hold: it fits in a single fresh context window, AND it closes as one reviewable pull request
+- Each slice is sized to fit in a single fresh context window
+- Each slice is sized to close as one pull request a human can review in one sitting
 - **Risk decides whether to split**: split a slice that introduces more than one independent state, lifecycle, or authorization model — even one that fits both budgets
 - **Safe and useful seams decide where to split**: once risk calls for a split, place the seam so every resulting slice is independently safe and useful — where the settled design needs a code seam, create one in its own prefactor ticket, sequenced ahead of the split slices by a real blocking edge; where an unresolved design question prevents a safe seam, stop without publishing and hand the question back to the appropriate fog-clearing flow
 - **One owner per mechanism**: each semantic case and production mechanism belongs to exactly one ticket. Where two tickets genuinely must touch the same one, give them an explicit sequence — a real blocking edge, not a remark — and state in the later ticket how it integrates with what the earlier one landed
