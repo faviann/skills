@@ -16,7 +16,7 @@ The issue tracker and triage label vocabulary should have been provided to you �
 
 Work from whatever is already in the conversation context. If the user passes a reference (a spec path, an issue number or URL) as an argument, fetch it and read its full body and comments.
 
-If the Parent's comment surface contains `## Staged calibration checkpoint` entries, read [STAGED-CALIBRATION.md](STAGED-CALIBRATION.md) before proposing anything. Otherwise skip it.
+If the Parent's comment surface contains `## Staged calibration checkpoint` entries, read [CHECKPOINTS.md](CHECKPOINTS.md) before proposing anything. Otherwise skip it.
 
 ### 2. Explore the codebase (optional)
 
@@ -32,9 +32,10 @@ Break the work into **tracer bullet** tickets.
 
 - Each slice cuts a narrow but COMPLETE path through every layer (schema, API, UI, tests) — vertical, NOT a horizontal slice of one layer
 - A completed slice is demoable or verifiable on its own
-- Each slice is sized by two constraints that both must hold: it fits in a single fresh context window, AND it closes as one reviewable pull request
+- Each slice is sized to fit in a single fresh context window
+- Each slice is sized to close as one pull request a human can review in one sitting
 - **Risk decides whether to split**: split a slice that introduces more than one independent state, lifecycle, or authorization model — even one that fits both budgets
-- **Safe and useful seams decide where to split**: once risk calls for a split, place the seam so every resulting slice is independently safe and useful — where the settled design needs a code seam, create one in its own prefactor ticket, sequenced ahead of the split slices by a real blocking edge; where an unresolved design question prevents a safe seam, stop without publishing and hand the question back to the appropriate fog-clearing flow
+- **Safe and useful seams decide where to split**: once risk calls for a split, place the seam so every resulting slice is independently safe and useful
 - **One owner per mechanism**: each semantic case and production mechanism belongs to exactly one ticket. Where two tickets genuinely must touch the same one, give them an explicit sequence — a real blocking edge, not a remark — and state in the later ticket how it integrates with what the earlier one landed
 - Any prefactoring should be done first
 
@@ -42,11 +43,11 @@ Break the work into **tracer bullet** tickets.
 
 Risk decides **whether** a split is required; the seam rule decides **where** that split can land. Apply them together — neither overrides the other. The unit the risk rule counts is the **independent model**: a state, lifecycle, or authorization model that can be got wrong on its own. Alternatives within one shared determination — whose state space has to stay complete and coherent — are one model however many outcomes, authorities, or code paths they span; two genuinely independent instances of the same shape are two. Where the rule never fired, the slice is one ticket on those grounds. Where it did fire, its verdict stands — the seam rule places the split, it does not cancel it.
 
-Where the required split has no seam, first consider whether a prefactor ticket can create one for the settled design. If the missing seam instead exposes an unresolved design question, the input is not ready for `to-tickets`: show the user the independent models that fired the rule, the seams and prefactors considered, and the question blocking a safe decomposition; then end the run without publishing. Tell the user to return to `/grilling` and `/domain-modeling` for a sharp decision, `/prototype` when the answer must be runnable or visible, or `/wayfinder` when the remaining fog is too large for one session. Do not resolve that design work inside the publication quiz. Once the decision is recorded in the source conversation or spec, rerun `to-tickets`. An ordinary decomposition advances to step 5 only when the complete set satisfies these rules and the user has approved it; staged publication instead follows the gate in [STAGED-CALIBRATION.md](STAGED-CALIBRATION.md).
+Where the required split has no seam, first consider whether a prefactor ticket can create one for the settled design, sequenced ahead of the split slices by a real blocking edge. If the missing seam instead exposes an unresolved design question, the input is not ready for `to-tickets`: show the user the independent models that fired the rule, the seams and prefactors considered, and the question blocking a safe decomposition; then end the run without publishing. Tell the user to return to `/grilling` and `/domain-modeling` for a sharp decision, `/prototype` when the answer must be runnable or visible, or `/wayfinder` when the remaining fog is too large for one session. Do not resolve that design work inside the publication quiz. Once the decision is recorded in the source conversation or spec, rerun `to-tickets`. An ordinary decomposition advances to step 5 only when the complete set satisfies these rules and the user has approved it; staged publication instead follows the gate in [CHECKPOINTS.md](CHECKPOINTS.md).
 
-Read [CALIBRATION.md](CALIBRATION.md) before you settle a slice that crosses several production models, protocols, trust boundaries, compatibility paths, or resource-governance boundaries, when the codebase offers no close implementation analogue for what the slice introduces, or before entering staged calibration. Otherwise skip it.
+Read [RISK-SHAPES.md](RISK-SHAPES.md) before you settle a slice that crosses several production models, protocols, trust boundaries, compatibility paths, or resource-governance boundaries, or when the codebase offers no close implementation analogue for what the slice introduces. Otherwise skip it.
 
-When the design is settled but the remainder cannot yet be safely divided into reviewable tickets, staged calibration may apply — read [STAGED-CALIBRATION.md](STAGED-CALIBRATION.md).
+When the design is settled but the remainder cannot yet be safely divided into reviewable tickets, staged calibration may apply — read [CHECKPOINTS.md](CHECKPOINTS.md).
 
 Give each ticket its **blocking edges** — the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
