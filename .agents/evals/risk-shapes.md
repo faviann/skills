@@ -6,7 +6,7 @@ diagnostic; it enforces nothing automatically.
 
 ## Protocol
 
-Run every case in isolation three times: 24 fresh blind evaluations in total. Never
+Run every case in isolation three times: 27 fresh blind evaluations in total. Never
 reuse an evaluator across cases. Each evaluator receives, in this order:
 
 1. The complete live contents of `RISK-SHAPES.md`, assembled at run time. Never
@@ -98,6 +98,15 @@ is exactly one of trialing, active, past_due, or canceled. One predicate compute
 value. Three consumers read it: the billing runner, the notification emailer, and the
 public API serializer.
 
+### Case 9 — sensitivity and retention class
+
+The slice determines a document's sensitivity — exactly one of public, internal, or
+secret — from its contents. The same slice determines the document's retention class
+— exactly one of transient, standard, or permanent — from its record type. Both
+values are written to the document row and read back from it. Nothing expires,
+deletes, or schedules on the retention class, and no export path reads the
+sensitivity.
+
 ## Expected results
 
 | Case | Models | Fires | Shapes and purpose |
@@ -110,6 +119,68 @@ public API serializer.
 | 6 | 2 | yes | A hiring-stage determination and an independent new persistence lifecycle for the immutable audit trail. Tests append-only state with its own retention invariant. |
 | 7 | 2 | yes | A redaction authorization/content-policy model and a backward-compatibility protocol. Tests the single clause that distinguishes it from Case 3: consumers on the previous release must still parse the representation. |
 | 8 | 1 | no | One billing-state determination with several mutually exclusive outcomes. The three consumers traverse that shared determination; their plurality does not create plural models. |
+| 9 | 2 | yes | Two orthogonal determinations, neither introducing a named risk shape. Tests whether a discriminator can still count a second model when the taxonomy has no shape to place it under. |
+
+## Case 9's key, and how it was set
+
+Case 9 was added on 2026-08-08 while [issue #37](https://github.com/faviann/skills/issues/37)
+was open, and its key was fixed by argument before any run and before any candidate
+wording was written.
+
+The key is **2 models / fires**. Sensitivity is determined from contents; retention
+class is determined from record type. Neither value is computed from the other, so
+neither determination's correctness follows from the other's, and each can be wrong
+while the other is right. That is the counting sentence applied directly: more than
+one independent state determination.
+
+Neither determination introduces any of the five named shapes. Nothing expires or
+schedules on the retention class, so no persistence lifecycle appears; no export path
+reads the sensitivity, so no refusal authority appears. Those two clauses are
+load-bearing and must not be relaxed — the first keeps the case clear of Case 6's
+persistence shape, and the second keeps it clear of Case 4's unresolved authorization
+question. A case 9 that gates an export on sensitivity is case 4 again.
+
+The case therefore separates two families of discriminator that agree on every other
+case. One that counts an additional candidate only when it introduces a named shape
+returns 1 model here. One that counts an additional candidate when it is a distinct
+state, lifecycle, or authorization model returns 2. The suite had no case that
+distinguished these, so a shape-gated rule could pass all eight while systematically
+under-counting.
+
+**Read this key with its authorship in mind.** Cases 1–8 were written before any
+candidate discriminator existed, so their keys cannot have been tuned to favour one.
+Case 9 was written with two candidates already in view, specifically to separate them.
+A case built to discriminate is at risk of being keyed toward the candidate its author
+preferred. The reasoning above is recorded so a future editor can attack the key on its
+merits rather than infer it from results.
+
+## Corroborated keys and argued keys
+
+No case here is a real slice. Every case is written in a neutral domain, and
+`.agents/risk-shapes-provenance.md` maps the worked examples in `RISK-SHAPES.md` to
+their sources without mapping any case in this file. But two cases are deliberate
+structural abstractions of real Overmind slices, and they borrow those slices' actual
+verdicts. That makes their keys corroborated rather than argued.
+
+| Case | Abstracted from | Borrowed verdict |
+| --- | --- | --- |
+| 7 | *Omit binary capture bytes before persistence* — issue #153, PR #174 | Should have been split. A singular-sounding rule spanning a trust boundary and a serialization boundary. Key `2 / yes` matches. |
+| 8 | The terminality counterexample — issue #154, PR #175 | Correctly stayed one ticket. One determination touching several contracts. Key `1 / no` matches. |
+
+Evaluators recognised Case 7's lineage unprompted, one naming it "the *Omit binary
+capture bytes* trap."
+
+Cases 1–6 and 9 have no such anchor. They were built from the five shapes' categories,
+and their keys follow from the counting sentence alone.
+
+So the split is not grounded against invented — it is **two keys corroborated by a
+production verdict that was actually made and reviewed, and seven keys resting on
+reasoning**. That matters twice. Two of the four cases in the green baseline are 7 and
+8, so the baseline is not merely self-consistent with the rule it tests; it agrees with
+two decisions taken in production. And it prices what an anchor for Case 9 would be
+worth: a real orthogonal-determination slice would make Case 9 the only case keyed
+against a real outcome rather than against argument, which is a larger upgrade than it
+sounds while seven of nine keys are argued.
 
 ## Prior experiments and null results
 
@@ -213,6 +284,8 @@ authorization-taxonomy reproduction tracked in
 The green baseline is the stable subset whose model identity and verdict both match
 the fixed key: Cases 1, 6, 7, and 8. Cases 2–5 remain in the eval as reproductions but
 do not gate unrelated reference changes until their linked design decisions settle.
+Case 9 postdates every run recorded above and has never been run; it is keyed but
+unmeasured, and joins neither the green baseline nor the reproductions.
 
 ## Pre-reorganisation control
 
