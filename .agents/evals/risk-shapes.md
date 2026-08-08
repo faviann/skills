@@ -6,24 +6,25 @@ diagnostic; it enforces nothing automatically.
 
 ## Protocol
 
-Run three blind evaluations. Each evaluator receives, in this order:
+Run every case in isolation three times: 24 fresh blind evaluations in total. Never
+reuse an evaluator across cases. Each evaluator receives, in this order:
 
 1. The complete live contents of `RISK-SHAPES.md`, assembled at run time. Never
    paste or snapshot that reference here.
-2. The instructions and seven scored cases under **Blind prompt** below, ending before
+2. The instructions under **Isolated prompt** below.
+3. Exactly one case from **Cases**, with no other case visible, ending before
    **Expected results**.
 
-Evaluators get no repository or web access and no expected answers. For every case
-they must identify candidate models before testing independence, then give the model
-count and verdict. The acceptance bar is unanimity across all three runs on all seven
-scored cases. Any miss is a finding about the live reference, not a result to average
-away.
+Evaluators get no repository or web access and no expected answers. They must identify
+candidate models before testing independence, then give the model count and verdict.
+For each case, three unanimous answers matching its fixed key pass; three unanimous
+answers that differ from the key are a stable mismatch; disagreement is instability.
+Never re-key a case from its observed result.
 
-## Blind prompt
+## Isolated prompt
 
-Seven proposed slices follow. Each fits one fresh context window and closes as one
-reviewable pull request, so capacity is never the reason to split. Judge each slice
-on its own.
+The proposed slice fits one fresh context window and closes as one reviewable pull
+request, so capacity is never the reason to split.
 
 For each slice, answer in this exact order:
 
@@ -35,7 +36,9 @@ For each slice, answer in this exact order:
    (yes or no), and the risk shapes identified.
 
 Report any contradiction or ambiguity in the reference, quoting the exact phrase.
-Commit to one count and verdict per case.
+Commit to one count and verdict.
+
+## Cases
 
 ### Case 1 — classification and reconciliation
 
@@ -58,6 +61,12 @@ The slice determines a payment's outcome — exactly one of captured, declined, 
 requires-action. The same slice defines the canonical response body returned to the
 caller for each outcome, including which fields appear for which outcome. Every
 caller is on the current release; no older client must parse the response.
+
+### Case 4 — document sensitivity
+
+The slice determines a document's sensitivity — exactly one of public, internal, or
+secret. The same slice adds an export path that refuses to emit any document above
+internal, returning an error to the caller instead of the document.
 
 ### Case 5 — derived subscription expiry
 
@@ -94,6 +103,7 @@ public API serializer.
 | 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. |
 | 2 | 2 | yes | A priority determination and an independent concurrency protocol with a lease lifecycle. Tests a consumer whose coordination can be wrong while classification is right. |
 | 3 | 1 | no | One outcome determination; response fields are its current canonical representation, with no backward-compatibility protocol. This is the no-compatibility half of the Case 7 pair. |
+| 4 | 1 | no | The pre-registered key treats refusal as the direct application of one sensitivity/authorization determination. The key remains fixed but unscored while issue #36 decides whether the reference supports it. |
 | 5 | 1 | no | One subscription-state determination; expiry is derived on read and introduces no persistence lifecycle. Tests that several outcomes and derived behavior do not become plural models. |
 | 6 | 2 | yes | A hiring-stage determination and an independent new persistence lifecycle for the immutable audit trail. Tests append-only state with its own retention invariant. |
 | 7 | 2 | yes | A redaction authorization/content-policy model and a backward-compatibility protocol. Tests the single clause that distinguishes it from Case 3: consumers on the previous release must still parse the representation. |
@@ -141,7 +151,7 @@ across all three evaluators because the case named several candidate mechanisms 
 the reference deliberately does not teach how to group. It was a malformed eval case,
 not a discrimination finding, and was replaced by the specified billing-state case.
 
-## Baseline
+## Multi-case baseline
 
 The corrected suite ran on 2026-08-08 against `RISK-SHAPES.md` at commit
 `e92a6a6`, using three fresh blind evaluators and the protocol above.
@@ -167,3 +177,7 @@ first suite against the same reference commit. Their verdict therefore changed w
 unrelated cases changed, so the corrected suite does not establish a green baseline.
 The recurring audit explanation was the tension between “can be got wrong on its own”
 and the one-model guidance for several outcomes, code paths, and failure modes.
+
+## Isolated baseline
+
+Pending 24 fresh runs against `RISK-SHAPES.md` at commit `e92a6a6`.
