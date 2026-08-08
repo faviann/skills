@@ -10,17 +10,18 @@ Run three blind evaluations. Each evaluator receives, in this order:
 
 1. The complete live contents of `RISK-SHAPES.md`, assembled at run time. Never
    paste or snapshot that reference here.
-2. The instructions and eight cases under **Blind prompt** below, ending before
+2. The instructions and seven scored cases under **Blind prompt** below, ending before
    **Expected results**.
 
 Evaluators get no repository or web access and no expected answers. For every case
 they must identify candidate models before testing independence, then give the model
-count and verdict. The acceptance bar is unanimity across all three runs on all eight
-cases. Any miss is a finding about the live reference, not a result to average away.
+count and verdict. The acceptance bar is unanimity across all three runs on all seven
+scored cases. Any miss is a finding about the live reference, not a result to average
+away.
 
 ## Blind prompt
 
-Eight proposed slices follow. Each fits one fresh context window and closes as one
+Seven proposed slices follow. Each fits one fresh context window and closes as one
 reviewable pull request, so capacity is never the reason to split. Judge each slice
 on its own.
 
@@ -58,12 +59,6 @@ requires-action. The same slice defines the canonical response body returned to 
 caller for each outcome, including which fields appear for which outcome. Every
 caller is on the current release; no older client must parse the response.
 
-### Case 4 — document sensitivity
-
-The slice determines a document's sensitivity — exactly one of public, internal, or
-secret. The same slice adds an export path that refuses to emit any document above
-internal, returning an error to the caller instead of the document.
-
 ### Case 5 — derived subscription expiry
 
 The slice determines whether a subscription is trialing, active, past_due, or
@@ -85,13 +80,12 @@ The slice adds one redaction rule for personal data. The rule decides which fiel
 may leave the service. The same rule defines how a redacted record is serialized so
 that consumers running the previous release can still parse it.
 
-### Case 8 — relationship evidence and authorized reads
+### Case 8 — billing state and consumers
 
-The slice stores parent, spawn-evidence, fork-origin, and child-classification as
-distinct typed relationships, with parent, child, and sibling streams progressing on
-independent queues. It also adds an authorization-aware read model that resolves
-those stated relationships to captured sessions when the operator may see them. A
-late-arriving target changes only the read answer and never the stored rows.
+The slice defines how a subscription's billing state is determined. A subscription
+is exactly one of trialing, active, past_due, or canceled. One predicate computes the
+value. Three consumers read it: the billing runner, the notification emailer, and the
+public API serializer.
 
 ## Expected results
 
@@ -100,11 +94,10 @@ late-arriving target changes only the read answer and never the stored rows.
 | 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. |
 | 2 | 2 | yes | A priority determination and an independent concurrency protocol with a lease lifecycle. Tests a consumer whose coordination can be wrong while classification is right. |
 | 3 | 1 | no | One outcome determination; response fields are its current canonical representation, with no backward-compatibility protocol. This is the no-compatibility half of the Case 7 pair. |
-| 4 | 1 | no | One sensitivity/authorization model; refusal directly applies that determination. The original key said two models, but five of six blind judges converged on one: the export threshold introduces no separately owned question or lifecycle. This correction is recorded because the tempting two-model key is the trap future editors are likely to repeat. |
 | 5 | 1 | no | One subscription-state determination; expiry is derived on read and introduces no persistence lifecycle. Tests that several outcomes and derived behavior do not become plural models. |
 | 6 | 2 | yes | A hiring-stage determination and an independent new persistence lifecycle for the immutable audit trail. Tests append-only state with its own retention invariant. |
 | 7 | 2 | yes | A redaction authorization/content-policy model and a backward-compatibility protocol. Tests the single clause that distinguishes it from Case 3: consumers on the previous release must still parse the representation. |
-| 8 | 2 | yes | A relationship-evidence/concurrency model and an authorization-aware read model. Tests one-way dependence: the read model consumes the stored relationships, but storage correctness does not establish authorization correctness. |
+| 8 | 1 | no | One billing-state determination with several mutually exclusive outcomes. The three consumers traverse that shared determination; their plurality does not create plural models. |
 
 ## Prior experiments and null results
 
@@ -123,30 +116,31 @@ late-arriving target changes only the read answer and never the stored rows.
 - Across roughly 50 reference-audit complaints, no evaluator requested an external
   link, pull request, or source artifact.
 
+## Blocked reproduction — document sensitivity
+
+This case is excluded from the scored baseline until
+[issue #36](https://github.com/faviann/skills/issues/36) decides how authorization
+fits the taxonomy:
+
+> The slice determines a document's sensitivity — exactly one of public, internal,
+> or secret. The same slice adds an export path that refuses to emit any document
+> above internal, returning an error to the caller instead of the document.
+
+Five of six reconstruction runs returned one model / does not fire. Three of three
+runs against the finished reference at `e92a6a6` returned two models / fires, reasoning
+that classification can be correct while threshold enforcement is wrong. The current
+reference does not determine which answer governs: the shape narrows resource
+governance to bounds, the discriminator adds refusal authority, and the deciding
+sentence counts authorization while no named shape covers it. Re-keying this case
+would decide #36 inside the eval rather than in the skill.
+
+## First-run correction
+
+The first run used an out-of-scope consumed-model scenario as Case 8. Counts varied
+across all three evaluators because the case named several candidate mechanisms that
+the reference deliberately does not teach how to group. It was a malformed eval case,
+not a discrimination finding, and was replaced by the specified billing-state case.
+
 ## Baseline
 
-Run on 2026-08-08 against `RISK-SHAPES.md` at commit `e92a6a6`, using three
-blind evaluators and the protocol above.
-
-| Case | Run 1 | Run 2 | Run 3 | Expected | Result |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
-| 2 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
-| 3 | 1 / no | 1 / no | 1 / no | 1 / no | pass |
-| 4 | 2 / yes | 2 / yes | 2 / yes | 1 / no | **fail** |
-| 5 | 1 / no | 1 / no | 1 / no | 1 / no | pass |
-| 6 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
-| 7 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
-| 8 | 6 / yes | 5 / yes | 2 / yes | 2 / yes | **fail** |
-
-The branch failed its unanimity gate. All three evaluators read document
-sensitivity and export refusal as independent because classification can be correct
-while threshold enforcement is wrong. On the one-way-dependence case, one evaluator
-kept relationship evidence and queue progression together, one split the three
-queues, and one split the queues plus late-target resolution; all still agreed that
-the risk rule fires.
-
-All three also independently reported the same taxonomy ambiguity: “usually live”
-permits counted models outside the named shapes, while “these shapes are what it
-covers” can read as exhaustive. Authorization was the recurring uncovered model.
-No result requested an external source.
+Pending the corrected run against `RISK-SHAPES.md` at commit `e92a6a6`.
