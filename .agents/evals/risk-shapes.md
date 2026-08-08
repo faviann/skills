@@ -137,12 +137,13 @@ fits the taxonomy:
 > above internal, returning an error to the caller instead of the document.
 
 Five of six reconstruction runs returned one model / does not fire. Three of three
-runs against the finished reference at `e92a6a6` returned two models / fires, reasoning
-that classification can be correct while threshold enforcement is wrong. The current
-reference does not determine which answer governs: the shape narrows resource
-governance to bounds, the discriminator adds refusal authority, and the deciding
-sentence counts authorization while no named shape covers it. Re-keying this case
-would decide #36 inside the eval rather than in the skill.
+multi-case runs and three of three isolated runs against the finished reference at
+`e92a6a6` returned two models / fires, reasoning that classification can be correct
+while threshold enforcement is wrong. The current reference does not determine which
+answer governs: the shape narrows resource governance to bounds, the discriminator
+adds refusal authority, and the deciding sentence counts authorization while no named
+shape covers it. Re-keying this case would decide #36 inside the eval rather than in
+the skill.
 
 ## First-run correction
 
@@ -180,4 +181,33 @@ and the one-model guidance for several outcomes, code paths, and failure modes.
 
 ## Isolated baseline
 
-Pending 24 fresh runs against `RISK-SHAPES.md` at commit `e92a6a6`.
+Run on 2026-08-08 against `RISK-SHAPES.md` at commit `e92a6a6`: eight cases,
+three fresh blind evaluators per case, with no evaluator seeing another case.
+
+| Case | Run 1 | Run 2 | Run 3 | Fixed key | Classification |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 2 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | **stable semantic mismatch** |
+| 3 | 1 / no | 2 / yes | 2 / yes | 1 / no | **unstable** |
+| 4 | 2 / yes | 2 / yes | 2 / yes | 1 / no | **stable mismatch — #36** |
+| 5 | 0 / no | 1 / no | 1 / no | 1 / no | **unstable count** |
+| 6 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 7 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 8 | 1 / no | 1 / no | 1 / no | 1 / no | pass |
+
+Case 2 is not a pass-by-count. All three evaluators excluded priority classification
+from the counted models, then split lease exclusivity from lease expiry and
+reassignment. The fixed key counts priority determination plus one lease model. The
+same number names different models, so the result is a stable semantic mismatch.
+
+Cases 3 and 5 isolate the missing positive test for one determination. Payment outcome
+versus its current response mapping changed verdict across runs; subscription state
+versus its derived, unstored expiry changed count even though every run agreed the rule
+does not fire. These findings and Case 2's model-identity mismatch are tracked in
+[issue #37](https://github.com/faviann/skills/issues/37). Case 4 remains the narrower
+authorization-taxonomy reproduction tracked in
+[issue #36](https://github.com/faviann/skills/issues/36).
+
+The green baseline is the stable subset whose model identity and verdict both match
+the fixed key: Cases 1, 6, 7, and 8. Cases 2–5 remain in the eval as reproductions but
+do not gate unrelated reference changes until their linked design decisions settle.
