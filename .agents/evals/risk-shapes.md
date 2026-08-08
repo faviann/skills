@@ -19,7 +19,9 @@ Evaluators get no repository or web access and no expected answers. They must id
 candidate models before testing independence, then give the model count and verdict.
 For each case, three unanimous answers matching its fixed key pass; three unanimous
 answers that differ from the key are a stable mismatch; disagreement is instability.
-Never re-key a case from its observed result.
+A match requires the same candidate models, not merely the same count and verdict. A
+right number reached from the wrong candidate set is a semantic mismatch. Never re-key
+a case from its observed result.
 
 ## Isolated prompt
 
@@ -138,12 +140,12 @@ fits the taxonomy:
 
 Five of six reconstruction runs returned one model / does not fire. Three of three
 multi-case runs and three of three isolated runs against the finished reference at
-`e92a6a6` returned two models / fires, reasoning that classification can be correct
-while threshold enforcement is wrong. The current reference does not determine which
-answer governs: the shape narrows resource governance to bounds, the discriminator
-adds refusal authority, and the deciding sentence counts authorization while no named
-shape covers it. Re-keying this case would decide #36 inside the eval rather than in
-the skill.
+`e92a6a6`, plus three of three isolated controls against `d21bd3f`, returned two
+models / fires, reasoning that classification can be correct while threshold
+enforcement is wrong. The current reference does not determine which answer governs:
+the shape narrows resource governance to bounds, the discriminator adds refusal
+authority, and the deciding sentence counts authorization while no named shape covers
+it. Re-keying this case would decide #36 inside the eval rather than in the skill.
 
 ## First-run correction
 
@@ -211,3 +213,21 @@ authorization-taxonomy reproduction tracked in
 The green baseline is the stable subset whose model identity and verdict both match
 the fixed key: Cases 1, 6, 7, and 8. Cases 2–5 remain in the eval as reproductions but
 do not gate unrelated reference changes until their linked design decisions settle.
+
+## Pre-reorganisation control
+
+Cases 2–5 ran in isolation three times each against the exact file at `d21bd3f`, before
+the reorganisation changed heading levels, section order, or removed staged-calibration
+evidence. Candidate identity, count, and verdict were all scored.
+
+| Case | `d21bd3f` runs | `e92a6a6` runs | Comparison |
+| --- | --- | --- | --- |
+| 2 | 3 / yes; 2 / yes; 2 / yes | 2 / yes; 2 / yes; 2 / yes | Pre-existing semantic mismatch and count instability. Every control named priority classification, lease exclusivity, and lease expiry/recovery; two declined to count priority. The finished runs used the same wrong candidate decomposition. |
+| 3 | 1 / no; 2 / yes; 2 / yes | 1 / no; 2 / yes; 2 / yes | Exact pre-existing instability. |
+| 4 | 2 / yes; 2 / yes; 2 / yes | 2 / yes; 2 / yes; 2 / yes | Exact pre-existing stable mismatch; tracked in #36. |
+| 5 | 1 / no; 2 / yes; 1 / no | 0 / no; 1 / no; 1 / no | Pre-existing instability. Both references disagreed about whether state and derived expiry are one candidate model; the reorganisation did not turn a stable reading into a failure. |
+
+The control exonerates the reorganisation for every isolated defect. None of Cases 2–5
+had a stable, key-matching pre-reorganisation baseline that the finished document lost.
+The branch is therefore eligible to merge on the four-case green subset while #36 and
+#37 track the pre-existing reference defects.
