@@ -1,6 +1,6 @@
 # Staged calibration
 
-How to publish an immediate frontier when the design is settled but the remainder cannot yet be safely divided, and how to record what remains so a later run can resume it. Assumes the vocabulary in [SKILL.md](SKILL.md) — **tracer bullet**, **vertical slice**, **frontier**, **Parent**. What counts as the production evidence this mode waits on lives in [CALIBRATION.md](CALIBRATION.md). The unresolved-design hand-back named below is the one in step 3 of [SKILL.md](SKILL.md).
+How to publish an immediate frontier when the design is settled but the remainder cannot yet be safely divided, and how to record what remains so a later run can resume it. Assumes the vocabulary in [SKILL.md](SKILL.md) — **tracer bullet**, **vertical slice**, **frontier**, **Parent**. What counts as the production evidence this mode waits on lives in [RISK-SHAPES.md](RISK-SHAPES.md). The unresolved-design hand-back named below is the one in step 3 of [SKILL.md](SKILL.md).
 
 This mode is the one exception to *Do NOT close or modify any parent issue* — append the checkpoint to its comment surface, leaving all source-contract content unchanged.
 
