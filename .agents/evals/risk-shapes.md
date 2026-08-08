@@ -143,4 +143,27 @@ not a discrimination finding, and was replaced by the specified billing-state ca
 
 ## Baseline
 
-Pending the corrected run against `RISK-SHAPES.md` at commit `e92a6a6`.
+The corrected suite ran on 2026-08-08 against `RISK-SHAPES.md` at commit
+`e92a6a6`, using three fresh blind evaluators and the protocol above.
+
+| Case | Run 1 | Run 2 | Run 3 | Expected | Result |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 2 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 3 | 2 / yes | 2 / yes | 2 / yes | 1 / no | **fail** |
+| 5 | 2 / yes | 2 / yes | 2 / yes | 1 / no | **fail** |
+| 6 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 7 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 8 | 1 / no | 1 / no | 1 / no | 1 / no | pass |
+
+Case 8 now tests the intended discrimination and passes unanimously: three consumers
+of one billing-state predicate do not become three models. Cases 3 and 5 failed
+unanimously. Evaluators treated outcome determination versus current response mapping,
+and subscription state versus derived expiry mapping, as separately falsifiable
+questions even though neither second candidate instantiates a named risk shape.
+
+Those same two case texts returned one model / does not fire in all three runs of the
+first suite against the same reference commit. Their verdict therefore changed when
+unrelated cases changed, so the corrected suite does not establish a green baseline.
+The recurring audit explanation was the tension between “can be got wrong on its own”
+and the one-model guidance for several outcomes, code paths, and failure modes.
