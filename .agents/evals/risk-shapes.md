@@ -125,4 +125,28 @@ late-arriving target changes only the read answer and never the stored rows.
 
 ## Baseline
 
-Pending the first run against the reorganized live reference.
+Run on 2026-08-08 against `RISK-SHAPES.md` at commit `e92a6a6`, using three
+blind evaluators and the protocol above.
+
+| Case | Run 1 | Run 2 | Run 3 | Expected | Result |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 2 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 3 | 1 / no | 1 / no | 1 / no | 1 / no | pass |
+| 4 | 2 / yes | 2 / yes | 2 / yes | 1 / no | **fail** |
+| 5 | 1 / no | 1 / no | 1 / no | 1 / no | pass |
+| 6 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 7 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 8 | 6 / yes | 5 / yes | 2 / yes | 2 / yes | **fail** |
+
+The branch failed its unanimity gate. All three evaluators read document
+sensitivity and export refusal as independent because classification can be correct
+while threshold enforcement is wrong. On the one-way-dependence case, one evaluator
+kept relationship evidence and queue progression together, one split the three
+queues, and one split the queues plus late-target resolution; all still agreed that
+the risk rule fires.
+
+All three also independently reported the same taxonomy ambiguity: “usually live”
+permits counted models outside the named shapes, while “these shapes are what it
+covers” can read as exhaustive. Authorization was the recurring uncovered model.
+No result requested an external source.
