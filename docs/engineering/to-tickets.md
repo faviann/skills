@@ -40,7 +40,7 @@ Risk decides *whether* a slice splits; a **safe and useful seam** decides *where
 
 Each semantic case or production mechanism gets exactly one owning ticket, because two tickets quietly claiming the same mechanism only discover each other as integration work after both have landed. Where two genuinely must touch the same one, the overlap gets scheduled rather than discovered.
 
-There are no size numbers in any of this, deliberately. Counts and diff estimates are a prompt to look again at a slice, not a pass mark — a decomposition-time estimate is a guess about code that doesn't exist yet. For the slices where that judgement is hardest, the skill reaches for its own calibration reference — the risk taxonomy and a set of worked examples — and ordinary decompositions never pay for it.
+There are no size numbers in any of this, deliberately. Counts and diff estimates are a prompt to look again at a slice, not a pass mark — a decomposition-time estimate is a guess about code that doesn't exist yet. For the slices where that judgement is hardest, the skill reaches for its risk-shapes reference — the taxonomy and worked examples — and ordinary decompositions never pay for it. Staged calibration keeps its production-evidence guidance with the checkpoints that consume it.
 
 ## Blocking edges
 

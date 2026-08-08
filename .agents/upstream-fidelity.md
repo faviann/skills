@@ -90,7 +90,7 @@ byte-identical with no caveat attached.
 **Line 43 — nearly reverting our own deliberate work.** A proposal to delete
 `to-tickets/SKILL.md`'s independent-model paragraph, on the grounds it was "only nuance"
 already held in `CALIBRATION.md`. `git log -S` showed `5dd5609` and `99e164d` had each
-deliberately hoisted that wording into `SKILL.md`, and `CALIBRATION.md` documents the
+deliberately hoisted that wording into `SKILL.md`, and `RISK-SHAPES.md` documents the
 duplication as intentional: *"The skill states the rule in shorter words; these shapes
 are what it covers."* The deletion would also have left `independent` undefined in two
 always-loaded lines. Nothing about upstream was involved — the fork's own wording was
@@ -113,6 +113,7 @@ as a separate review; if it ever becomes one, drop it and always take ours.
 
 ## What this cannot do
 
-There are no tests, no evals and no CI here beyond `release.yml`. These are prose rules
-read by agents, not enforcement. They make a violation provable once someone looks; they
-do not make anyone look.
+There are no tests and no CI here beyond `release.yml`, and the one eval — hand-run,
+covering a single skill's discrimination — enforces nothing. These are prose rules read
+by agents, not enforcement. They make a violation provable once someone looks; they do
+not make anyone look.

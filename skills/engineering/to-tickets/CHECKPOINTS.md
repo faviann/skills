@@ -1,6 +1,6 @@
 # Staged calibration
 
-How to publish an immediate frontier when the design is settled but the remainder cannot yet be safely divided, and how to record what remains so a later run can resume it. Assumes the vocabulary in [SKILL.md](SKILL.md) — **tracer bullet**, **vertical slice**, **frontier**, **Parent**. What counts as the production evidence this mode waits on lives in [RISK-SHAPES.md](RISK-SHAPES.md). The unresolved-design hand-back named below is the one in step 3 of [SKILL.md](SKILL.md).
+How to publish an immediate frontier when the design is settled but the remainder cannot yet be safely divided, and how to record what remains so a later run can resume it. Assumes the vocabulary in [SKILL.md](SKILL.md) — **tracer bullet**, **vertical slice**, **frontier**, **Parent**. The unresolved-design hand-back named below is the one in step 3 of [SKILL.md](SKILL.md).
 
 This mode is the one exception to *Do NOT close or modify any parent issue* — append the checkpoint to its comment surface, leaving all source-contract content unchanged.
 
@@ -16,6 +16,14 @@ Use staged calibration only when all four conditions hold:
 If condition 1 fails, use the unresolved-design hand-back above and publish nothing.
 
 On resumption from an active checkpoint, recheck condition 1 before assessing evidence. If it fails, use that hand-back, publish nothing, and leave the checkpoint active. If the user explicitly decides to drop the remainder or remove it from the source contract instead, append a closed `cancelled` checkpoint with `Published Frontier: None`. If design remains settled, assess the named evidence against the sizing assumption. When the evidence is missing or unreadable, ask the user for exact references and stop. Every subsequent staged frontier must satisfy all four conditions before publication.
+
+## Production evidence for staged calibration
+
+**Calibration evidence** comes from the maintained production path and can genuinely inform later ticket boundaries: landed implementation, exercised integration seams, validation or fault injection, independent review and remediation, or operational evidence when operations drive the uncertainty. A throwaway prototype may settle a design question, but it cannot substitute for this evidence because it deliberately omits the maintained integration, validation, error handling, review, and remediation burden being calibrated.
+
+One production wave is the positive case. Its immediate frontier exposed enough variation in integration, fault injection, validation, review, and remediation to shape the later boundaries.
+
+Two nearby cases do not qualify. One still had unresolved-design fog, so it needed a design hand-back rather than partial publication. The other excluded a possible future adapter; evidence about excluded future design would begin a new design effort, not calibrate a settled remainder.
 
 ## Resuming from a Parent
 
