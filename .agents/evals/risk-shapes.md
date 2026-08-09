@@ -6,7 +6,7 @@ diagnostic; it enforces nothing automatically.
 
 ## Protocol
 
-Run every case in isolation three times: 30 fresh blind evaluations in total. Never
+Run every case in isolation three times: 33 fresh blind evaluations in total. Never
 reuse an evaluator across cases. Each evaluator receives, in this order:
 
 1. The complete live contents of `RISK-SHAPES.md`, assembled at run time. Never
@@ -118,6 +118,18 @@ time and reports the repeat as a repeat, while changed content at a locator alre
 recorded is refused without altering what is stored. Submissions are written to the
 existing records table, and nothing expires, converges, or advances on its own schedule.
 
+### Case 11 — a new access check and repeat submission
+
+The slice adds an access check to a submission endpoint that currently performs none.
+Callers keep using the one token format they already use: no second credential form is
+introduced, and nothing negotiates between old and new callers. A token that is not
+recognised is refused before any work executes, and a recognised caller may submit but may
+not read stored content. The same slice makes submission idempotent against a
+caller-supplied locator: submitting the same locator twice records nothing the second time
+and reports the repeat as a repeat, while changed content at a locator already recorded is
+refused without altering what is stored. Submissions are written to the existing records
+table, and nothing expires, converges, or advances on its own schedule.
+
 ## Expected results
 
 | Case | Models | Fires | Shapes and purpose |
@@ -131,7 +143,8 @@ existing records table, and nothing expires, converges, or advances on its own s
 | 7 | 2 | yes | A redaction authorization/content-policy model and a backward-compatibility protocol. Tests the single clause that distinguishes it from Case 3: consumers on the previous release must still parse the representation. |
 | 8 | 1 | no | One billing-state determination with several mutually exclusive outcomes. The three consumers traverse that shared determination; their plurality does not create plural models. |
 | 9 | 2 | yes | Two orthogonal determinations, neither introducing a named risk shape. Tests whether a discriminator can still count a second model when the taxonomy has no shape to place it under. |
-| 10 | 2 | yes | A capability-authorization model and an independent deduplication protocol. The dedup half instantiates a named shape and the authorization half instantiates none, so a reader who counts only shape-instantiating models returns 1 and does not fire. Abstracted from production; see **Reality check**. |
+| 10 | 2 | yes | A capability-authorization model and an independent deduplication protocol. **Both halves instantiate a named shape** — the dedup half concurrency, the authorization half backward compatibility, because two credential forms coexist. Green-baseline guard, not a reproduction. Abstracted from production; see **Reality check**. |
+| 11 | 2 | yes | Case 10 with the coexisting credential form removed, so the authorization half instantiates no named shape. Tests whether a reader still counts an authorization model when the taxonomy offers it no home. Keyed by argument from the deciding sentence: two determinations, neither's correctness following from the other's. |
 
 ## Case 9's key, and how it was set
 
@@ -519,6 +532,43 @@ And the complaint is universal. Across the case-10 runs, the reality-check runs,
 earlier case-4 evidence, every evaluator reported the gap unprompted, and several proposed
 the same fix in their own words: add an authorization or trust-boundary entry to the shape
 list, or state outright that the list is non-exhaustive.
+
+### Mutation probe — is "usually" load-bearing?
+
+Case 10 passes, so it cannot show a fix working. Before accepting that, the guard was
+probed by mutation: does any small, *realistic* edit make case 10 go red? The candidate was
+the hedge every evaluator cited when it counted the authorization model — "These shapes are
+where independent models **usually** live" — deleted, so the list reads as closed. That is
+exactly what an editor tightening prose would do.
+
+Three fresh blind runs against the mutated text, case 10 unchanged. **All three still
+returned `2 / yes`.** The mutation is survivable, and the runs said why.
+
+**Case 10 supplies its own escape hatch.** All three filed the authorization model under
+**backward-compatibility protocols** — "two forms coexist and something must read, write, or
+negotiate both" — because case 10 adds a *second* credential class while existing bearer
+keys keep their access. That is a genuine fit on the shape's own wording, so the
+authorization half was never shapeless. **The expected-results rationale for case 10 was
+wrong on this point and has been corrected.** One run named the remedy: "a slice introducing
+a single new credential class with no legacy form to coexist with would be an authorization
+model with no shape to name it." Case 11 is that slice.
+
+**And the hedge is not the only licence.** Runs also leaned on the deciding sentence naming
+authorization directly, and on "the shapes say what to inspect, and the rule counts the
+independent models instantiating them" with taxonomy counts "advisory". One put it flatly:
+"the count is driven by the independence test, which the reference is explicit is the
+operative test."
+
+So there are three independent routes by which a reader places an authorization model: the
+backward-compatibility shape when credential forms coexist, the deciding sentence plus the
+independence test, and the resource-governance near-fit through "refusal authority" — the
+unscoped term #36 owns. Closing all three would mean rewriting the rule, not making a
+realistic editing mistake.
+
+**Conclusion: the reference is robust here in three redundant ways.** That is a further
+argument that the authorization gap is a contradiction readers resolve rather than a defect
+producing wrong splits, and it lowers the stakes of #39 again without making it not worth
+fixing.
 
 ### What this means for validating a fix
 
