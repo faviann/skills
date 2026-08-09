@@ -6,7 +6,7 @@ diagnostic; it enforces nothing automatically.
 
 ## Protocol
 
-Run every case in isolation three times: 30 fresh blind evaluations in total. Never
+Run every case in isolation three times: 33 fresh blind evaluations in total. Never
 reuse an evaluator across cases. Each evaluator receives, in this order:
 
 1. The complete live contents of `RISK-SHAPES.md`, assembled at run time. Never
@@ -118,6 +118,18 @@ time and reports the repeat as a repeat, while changed content at a locator alre
 recorded is refused without altering what is stored. Submissions are written to the
 existing records table, and nothing expires, converges, or advances on its own schedule.
 
+### Case 11 — a new access check and repeat submission
+
+The slice adds an access check to a submission endpoint that currently performs none.
+Callers keep using the one token format they already use: no second credential form is
+introduced, and nothing negotiates between old and new callers. A token that is not
+recognised is refused before any work executes, and a recognised caller may submit but may
+not read stored content. The same slice makes submission idempotent against a
+caller-supplied locator: submitting the same locator twice records nothing the second time
+and reports the repeat as a repeat, while changed content at a locator already recorded is
+refused without altering what is stored. Submissions are written to the existing records
+table, and nothing expires, converges, or advances on its own schedule.
+
 ## Expected results
 
 | Case | Models | Fires | Shapes and purpose |
@@ -131,7 +143,8 @@ existing records table, and nothing expires, converges, or advances on its own s
 | 7 | 2 | yes | A redaction authorization/content-policy model and a backward-compatibility protocol. Tests the single clause that distinguishes it from Case 3: consumers on the previous release must still parse the representation. |
 | 8 | 1 | no | One billing-state determination with several mutually exclusive outcomes. The three consumers traverse that shared determination; their plurality does not create plural models. |
 | 9 | 2 | yes | Two orthogonal determinations, neither introducing a named risk shape. Tests whether a discriminator can still count a second model when the taxonomy has no shape to place it under. |
-| 10 | 2 | yes | A capability-authorization model and an independent deduplication protocol. The dedup half instantiates a named shape and the authorization half instantiates none, so a reader who counts only shape-instantiating models returns 1 and does not fire. Abstracted from production; see **Reality check**. |
+| 10 | 2 | yes | A capability-authorization model and an independent deduplication protocol. **Both halves instantiate a named shape** — the dedup half concurrency, the authorization half backward compatibility, because two credential forms coexist. Green-baseline guard, not a reproduction. Abstracted from production; see **Reality check**. |
+| 11 | 2 | yes | Case 10 with the coexisting credential form removed, so the authorization half instantiates no named shape. Tests whether a reader still counts an authorization model when the taxonomy offers it no home. Keyed by argument from the deciding sentence: two determinations, neither's correctness following from the other's. |
 
 ## Case 9's key, and how it was set
 
@@ -298,7 +311,8 @@ The green baseline is the stable subset whose model identity and verdict both ma
 the fixed key: Cases 1, 6, 7, and 8. Cases 2–5 remain in the eval as reproductions but
 do not gate unrelated reference changes until their linked design decisions settle.
 Case 9 postdates every run recorded above. Its own baseline is below; it is a stable
-mismatch and joins the reproductions, not the green baseline.
+mismatch and joins the reproductions, not the green baseline. Case 10 also postdates them,
+and its baseline puts it in the green baseline: Cases 1, 6, 7, 8, and 10.
 
 ## Pre-reorganisation control
 
@@ -438,16 +452,20 @@ capability-authorization model and the deduplication protocol. The persistence l
 is removed, and the case says so explicitly — writes go to an existing table and nothing
 advances on its own schedule.
 
-The reason is that on the real issue, dedup and persistence fired the rule *whether or not*
-authorization was counted, which is exactly why the gap cost a misclassification rather
-than a missed split. A regression test that keeps them masks the thing it exists to guard.
-With one shaped model and one shapeless one, the case discriminates: count the
-authorization model and the answer is `2 / fires`; drop it and the answer is `1 / does not
-fire`. Case 10 is therefore a sharper test of the gap than the production slice it came
-from.
+The intent was that on the real issue, dedup and persistence fired the rule *whether or
+not* authorization was counted, so a test keeping them would mask what it exists to guard.
+The expectation was that with one shaped model and one shapeless one the case would
+discriminate — count the authorization model and get `2 / fires`, drop it and get `1 / does
+not fire`.
 
-Case 10 has not been run. Its key rests on this reality check's unanimous verdict plus the
-production outcome, not on a measurement of the abstracted text.
+**The baseline falsified that expectation.** Three of three runs counted the authorization
+model and returned `2 / fires` against the unamended reference. Removing the persistence
+half did not starve the case of shape-material enough to provoke a shapes-first reading;
+one shape was sufficient to keep readers on the deciding sentence. Case 10 therefore does
+not discriminate for the authorization gap, and its role is reclassified below.
+
+Case 10's baseline is below. It was run before any reference change, and the result
+falsified the design reasoning in this section.
 
 ### Method caveat
 
@@ -461,3 +479,153 @@ shares their vocabulary. The asymmetry is what makes the result usable — a con
 recognition can only push toward firing, so a fire is weak evidence and a failure to fire
 would have been strong. In fact none of the three grounded its firing decision in those
 examples; they were cited only for a collapse warning and an ownership note.
+
+## Case 10 baseline, and what it changes
+
+Run on 2026-08-09 against the live `RISK-SHAPES.md`, whose content was still identical to
+`e92a6a6` — so this is a genuine pre-change baseline, comparable with every measurement
+above. Three fresh blind evaluators, case 10 only, no key visible.
+
+| Case | Run 1 | Run 2 | Run 3 | Fixed key | Classification |
+| --- | --- | --- | --- | --- | --- |
+| 10 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | **pass** |
+
+Candidate identity matched on all three: a credential-class authorization model and a
+submission idempotency/deduplication model, independent in both directions, with the
+existing-table write correctly excluded as ordinary traversal and the three
+new/repeat/conflict outcomes correctly collapsed into one determination.
+
+**Case 10 is a pass, not a reproduction — which is the opposite of what it was built for.**
+It was written to fail while an authorization model is uncounted, so that fixing the
+taxonomy would flip it. It already passes, so it cannot show that a fix worked. Its role is
+therefore a **green-baseline guard**: it records that this configuration yields `2 / fires`
+today, so a later edit that drops it to `1 / does not fire` is a detectable regression.
+
+### The pattern across every configuration tested
+
+| Configuration | Shape-material | Reading taken | Result |
+| --- | ---: | --- | --- |
+| Case 9 — two bare classifications | none | shapes-first | `0 / no` ×3 |
+| Case 10 — authorization + dedup | one | deciding-sentence | `2 / yes` ×3 |
+| Case 4 — sensitivity + export refusal | near-fit only | deciding-sentence | `2 / yes` ×6 |
+| Reality check — real umbrella | three | deciding-sentence | `2–3 / yes` ×3 |
+
+Wherever a slice carries *any* shape-material, evaluators fall back to the deciding sentence
+and count the authorization model correctly. The one configuration that under-counts carries
+no shape at all, and there they under-count everything to zero rather than singling
+authorization out.
+
+**So no tested configuration shows the authorization gap causing a missed split.** Case 4
+over-counts against its key; case 10 passes; the real umbrella fires correctly. What the gap
+reliably produces instead is friction the reader has to resolve by hand, and a
+classification filed under a shape that does not fit.
+
+### Why the gap is still worth closing
+
+Because the resolution is not guaranteed — it is a reader's choice the reference leaves
+open, and the same evaluator population chooses differently on case 9. Every run named the
+alternative explicitly before rejecting it: "A narrower reading — only listed shapes count —
+would yield one model and no firing. I do not adopt it." A reader who does adopt it lands
+the slice whole.
+
+And the complaint is universal. Across the case-10 runs, the reality-check runs, and the
+earlier case-4 evidence, every evaluator reported the gap unprompted, and several proposed
+the same fix in their own words: add an authorization or trust-boundary entry to the shape
+list, or state outright that the list is non-exhaustive.
+
+### Mutation probe — is "usually" load-bearing?
+
+Case 10 passes, so it cannot show a fix working. Before accepting that, the guard was
+probed by mutation: does any small, *realistic* edit make case 10 go red? The candidate was
+the hedge every evaluator cited when it counted the authorization model — "These shapes are
+where independent models **usually** live" — deleted, so the list reads as closed. That is
+exactly what an editor tightening prose would do.
+
+Three fresh blind runs against the mutated text, case 10 unchanged. **All three still
+returned `2 / yes`.** The mutation is survivable, and the runs said why.
+
+**Case 10 supplies its own escape hatch.** All three filed the authorization model under
+**backward-compatibility protocols** — "two forms coexist and something must read, write, or
+negotiate both" — because case 10 adds a *second* credential class while existing bearer
+keys keep their access. That is a genuine fit on the shape's own wording, so the
+authorization half was never shapeless. **The expected-results rationale for case 10 was
+wrong on this point and has been corrected.** One run named the remedy: "a slice introducing
+a single new credential class with no legacy form to coexist with would be an authorization
+model with no shape to name it." Case 11 is that slice.
+
+**And the hedge is not the only licence.** Runs also leaned on the deciding sentence naming
+authorization directly, and on "the shapes say what to inspect, and the rule counts the
+independent models instantiating them" with taxonomy counts "advisory". One put it flatly:
+"the count is driven by the independence test, which the reference is explicit is the
+operative test."
+
+So there are three independent routes by which a reader places an authorization model: the
+backward-compatibility shape when credential forms coexist, the deciding sentence plus the
+independence test, and the resource-governance near-fit through "refusal authority" — the
+unscoped term #36 owns. Closing all three would mean rewriting the rule, not making a
+realistic editing mistake.
+
+**Conclusion: the reference is robust here in three redundant ways.** That is a further
+argument that the authorization gap is a contradiction readers resolve rather than a defect
+producing wrong splits, and it lowers the stakes of #39 again without making it not worth
+fixing.
+
+### Case 11 baseline — the gap is cosmetic, and red cannot be forced
+
+Run on 2026-08-09 against the live reference, three fresh blind evaluators.
+
+| Case | Run 1 | Run 2 | Run 3 | Fixed key | Classification |
+| --- | --- | --- | --- | --- | --- |
+| 11 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | **pass** |
+
+**Case 11's design worked; its purpose did not.** All three runs confirmed what case 10 could
+not deliver — the authorization model instantiates none of the five shapes, with the
+backward-compatibility route explicitly ruled out: "no second credential form is introduced,
+and nothing negotiates between old and new callers — two forms do not coexist." So the case
+genuinely offers authorization no home.
+
+All three counted it anyway, through the deciding sentence, and all three named the fork as
+the one thing the verdict turns on:
+
+> A reader who instead treats the five shapes as the closed set of countable models would
+> find only B, count one, and not fire the rule. That is the single point on which this
+> verdict turns, and the reference does not settle it.
+
+### The tally across every configuration
+
+Fifteen runs now bear on the authorization gap: case 4 (six), case 10 (three, plus three
+against mutated text), the production umbrella (three), and case 11 (three). **Every
+evaluator with an independent second model in view took the rule-first route and counted the
+authorization model.** Not one under-counted it.
+
+The only under-counting configuration on record is case 9, which carries no shape at all and
+drops *everything* to zero rather than singling authorization out. That is #37's problem.
+
+**Conclusion: the authorization gap is cosmetic across every configuration tested.** It is a
+contradiction readers reliably resolve, not a defect producing wrong decompositions. Red
+cannot be forced by any realistic edit — the mutation probe showed the hedge is not
+load-bearing, and case 11 shows removing the shape route is not sufficient either. Producing
+a red result would require stripping "authorization" from the deciding sentence and removing
+the independence test's primacy, which is rewriting the rule rather than simulating a
+regression.
+
+### Case 11's standing role
+
+Case 11 joins the green baseline: cases 1, 6, 7, 8, 10, and 11. Beyond guarding the verdict,
+it is the **primary case for the contradiction-report signal**, because it isolates the fork
+with no alternative shape route and all three runs named it unprompted. After a fix for the
+authorization gap lands, case 11's runs should stop reporting it. If they still do, the
+wording did not land.
+
+### What this means for validating a fix
+
+A fix for the authorization gap **cannot be validated by any case flipping**, because no case
+currently fails on it. Two criteria are available instead:
+
+1. **The green baseline holds** — Cases 1, 6, 7, 8, and 10 keep matching on candidate
+   identity as well as count and verdict. Case 10's value is here.
+2. **The contradiction reports stop.** The **Isolated prompt** instructs every evaluator to
+   "Report any contradiction or ambiguity in the reference, quoting the exact phrase."
+   Authorization's absence from the shape list is currently reported by every evaluator who
+   meets it. That rate is the measurable signal: if the amended reference still draws the
+   same complaint, the wording did not land.
