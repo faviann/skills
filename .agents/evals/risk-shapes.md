@@ -137,7 +137,7 @@ table, and nothing expires, converges, or advances on its own schedule.
 | 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. |
 | 2 | 2 | yes | A priority determination and an independent concurrency protocol with a lease lifecycle. Tests a consumer whose coordination can be wrong while classification is right. |
 | 3 | 1 | no | One outcome determination; response fields are its current canonical representation, with no backward-compatibility protocol. This is the no-compatibility half of the Case 7 pair. |
-| 4 | 1 | no | The pre-registered key treats refusal as the direct application of one sensitivity/authorization determination. The key remains fixed but unscored while issue #39 decides whether the reference supports it. |
+| 4 | 1 | no | The pre-registered key treats refusal as the direct application of one sensitivity/authorization determination. The key is fixed and the case is scored: against the post-#39 reference it returns `2 / yes` unanimously, a stable mismatch. Whether an export gate refusing above a threshold is a distinct model is [issue #37](https://github.com/faviann/skills/issues/37)'s to settle by argument, never by re-keying. |
 | 5 | 1 | no | One subscription-state determination; expiry is derived on read and introduces no persistence lifecycle. Tests that several outcomes and derived behavior do not become plural models. |
 | 6 | 2 | yes | A hiring-stage determination and an independent new persistence lifecycle for the immutable audit trail. Tests append-only state with its own retention invariant. |
 | 7 | 2 | yes | A redaction authorization/content-policy model and a backward-compatibility protocol. Tests the single clause that distinguishes it from Case 3: consumers on the previous release must still parse the representation. |
@@ -225,24 +225,37 @@ sounds while seven of nine keys are argued.
 - Across roughly 50 reference-audit complaints, no evaluator requested an external
   link, pull request, or source artifact.
 
-## Blocked reproduction — document sensitivity
+## Reproduction — document sensitivity
 
-This case is excluded from the scored baseline until
-[issue #39](https://github.com/faviann/skills/issues/39) decides how authorization
-fits the taxonomy:
+Case 4 is scored. Its key is fixed at one model / does not fire, and the observed result
+against the post-#39 reference is a stable `2 / yes` mismatch; see
+**Post-#39 re-baseline** below. #39 has landed, so nothing about this case is blocked any
+more. The open question is [issue #37](https://github.com/faviann/skills/issues/37)'s:
+whether an export path refusing above a threshold is a distinct model or the direct
+application of the sensitivity determination. Re-keying this case would decide #37 inside
+the eval rather than in the skill.
 
 > The slice determines a document's sensitivity — exactly one of public, internal,
 > or secret. The same slice adds an export path that refuses to emit any document
 > above internal, returning an error to the caller instead of the document.
 
-Five of six reconstruction runs returned one model / does not fire. Three of three
-multi-case runs and three of three isolated runs against the finished reference at
-`e92a6a6`, plus three of three isolated controls against `d21bd3f`, returned two
-models / fires, reasoning that classification can be correct while threshold
-enforcement is wrong. The current reference does not determine which answer governs:
-the shape narrows resource governance to bounds, the discriminator adds refusal
-authority, and the deciding sentence counts authorization while no named shape covers
-it. Re-keying this case would decide #39 inside the eval rather than in the skill.
+**Superseded record — the pre-#39 text as it stood at `d73dd98`.** Everything inside the
+blockquote below is a verbatim quotation of how this section read before the post-#39
+measurement, retained as evidence of the earlier text; it is superseded, not wrong. The
+section's current position is the lead paragraph above, outside the quotation.
+
+> This case is excluded from the scored baseline until
+> [issue #39](https://github.com/faviann/skills/issues/39) decides how authorization
+> fits the taxonomy:
+>
+> Five of six reconstruction runs returned one model / does not fire. Three of three
+> multi-case runs and three of three isolated runs against the finished reference at
+> `e92a6a6`, plus three of three isolated controls against `d21bd3f`, returned two
+> models / fires, reasoning that classification can be correct while threshold
+> enforcement is wrong. The current reference does not determine which answer governs:
+> the shape narrows resource governance to bounds, the discriminator adds refusal
+> authority, and the deciding sentence counts authorization while no named shape covers
+> it. Re-keying this case would decide #39 inside the eval rather than in the skill.
 
 ## First-run correction
 
@@ -313,6 +326,16 @@ do not gate unrelated reference changes until their linked design decisions sett
 Case 9 postdates every run recorded above. Its own baseline is below; it is a stable
 mismatch and joins the reproductions, not the green baseline. Case 10 also postdates them,
 and its baseline puts it in the green baseline: Cases 1, 6, 7, 8, and 10.
+
+> **Standing claims superseded.** The green-baseline membership and the "Cases 2–5 remain
+> in the eval as reproductions" claim in the paragraph above, and the earlier sentence in
+> this section calling case 4 "the narrower authorization-taxonomy reproduction tracked in
+> [issue #39](https://github.com/faviann/skills/issues/39)", were all measured against
+> `e92a6a6`. Against the post-#39 reference, cases 3 and 5 are stable passes, and case 4's
+> disposition is no longer #39's: it is scored rather than blocked, and its open question
+> is owned by [issue #37](https://github.com/faviann/skills/issues/37). The result table
+> and prose above are retained as the `e92a6a6` record; for current standing see
+> **Post-#39 re-baseline** at the end of this file.
 
 ## Pre-reorganisation control
 
@@ -629,3 +652,149 @@ currently fails on it. Two criteria are available instead:
    Authorization's absence from the shape list is currently reported by every evaluator who
    meets it. That rate is the measurable signal: if the amended reference still draws the
    same complaint, the wording did not land.
+
+## Post-#39 re-baseline
+
+Run on 2026-08-09 against the live `RISK-SHAPES.md` at repo commit `d73dd98`, whose content
+for that file was last changed by `fdc5cc5` — the #39 merge that added the authorization
+shape. Model: `claude-opus-5`. Fifteen runs: five cases, three fresh blind evaluators each,
+one case per evaluator, no key and no other case visible.
+
+This measurement exists to bring the recorded results back into correspondence with the
+live reference. It re-measures only the cases whose recordings predated #39 or were never
+scored against it — 2, 3, 5, 9, and 4. Cases 1, 6, 7, 8, 10, and 11 were not re-run here,
+and no key changed.
+
+| Case | Run 1 | Run 2 | Run 3 | Fixed key | Classification |
+| --- | --- | --- | --- | --- | --- |
+| 2 | 2 / yes | 2 / yes | 1 / no | 2 / yes | **unstable** |
+| 3 | 1 / no | 1 / no | 1 / no | 1 / no | **pass** |
+| 4 | 2 / yes | 2 / yes | 2 / yes | 1 / no | **stable mismatch** |
+| 5 | 1 / no | 1 / no | 1 / no | 1 / no | **pass** |
+| 9 | 0 / no | 0 / no | 0 / no | 2 / yes | **stable mismatch** |
+
+### Case 2 — candidate identity, and a changed failure mode
+
+The key's candidate set is priority determination plus one lease model.
+
+- Run 1 (`2 / yes`): a priority-determination-plus-per-tier-capacity model, and a lease
+  model with exclusivity and expiry explicitly fused. It reached the key's count, but routed
+  the priority half's countability through a *resource-governance* reading of the per-tier
+  pool ("degrade rather than continue") rather than through the determination itself.
+- Run 2 (`2 / yes`): tier determination plus lease ownership, with concurrency and
+  persistence lifecycle explicitly fused as one model — the key's decomposition exactly.
+- Run 3 (`1 / no`): the same two candidates, but it ruled tier determination *ordinary work*
+  instantiating no shape, and counted only the lease model.
+
+**Delta from the superseded recording.** The **Isolated baseline** above, measured against
+`e92a6a6`, recorded `2 / yes` ×3 as a **stable semantic mismatch**: all three runs there
+excluded priority classification from the counted models and split the lease model into
+exclusivity and expiry/reassignment. That decomposition did not recur in any of the three
+new runs. Every new run kept the lease halves fused, which is the key's reading, and every
+new run treated priority determination as the candidate in question rather than discarding
+it silently.
+
+So the defect has changed character rather than disappearing: from
+wrong-candidates-right-count to right-candidates-unstable-count. All three runs turn on one
+fork — whether a determination instantiating no named shape counts toward the split. That
+is #37's question.
+The `e92a6a6` recording is retained above as the record of how that text read.
+
+### Case 3 — candidate identity
+
+The key is one outcome determination, with response fields as its current canonical
+representation.
+
+All three runs named exactly outcome determination plus canonical response body, folded the
+body into the determination as its per-outcome projection, and explicitly ruled out a
+backward-compatibility model by quoting the case's own release clause. Candidate identity
+matches the key on all three runs, as do count and verdict.
+
+**Delta from the superseded recording.** The **Isolated baseline** at `e92a6a6` recorded
+case 3 as **unstable** (`1 / no`, `2 / yes`, `2 / yes`), and the `d21bd3f` control in
+**Pre-reorganisation control** reproduced that instability exactly. Both recordings are
+retained above with their commits. Case 3 is now a stable pass.
+
+### Case 5 — candidate identity
+
+The key is one subscription-state determination, with expiry derived on read and introducing
+no persistence lifecycle.
+
+All three runs named state determination plus expiry derivation, folded the derivation in as
+per-state branches of one determination, and rejected the resource-governance reading on the
+enforcement clause ("nothing acts on it"). Candidate identity matches the key on all three
+runs.
+
+**Delta from the superseded recording.** The **Isolated baseline** at `e92a6a6` recorded an
+**unstable count** (`0 / no`, `1 / no`, `1 / no`); that recording is retained above. Case 5
+is now a stable pass, and the `0` reading did not recur.
+
+### Case 4 — scored against its fixed key
+
+The key is `1 / no`: refusal as the direct application of one sensitivity determination.
+
+All three runs returned `2 / yes`, naming a sensitivity determination and an independently
+falsifiable export refusal authority. Each gave the same two-directional independence
+argument — classification right while the gate leaks, gate right while a mislabelled secret
+walks through.
+
+**What #39 changed here, and what it did not.** Before #39 the reference had no
+authorization shape, and case 4's runs filed the refusal under a resource-governance
+near-fit while complaining about the gap. All three new runs file it under
+**Authorization boundaries**, citing the new shape and the new discriminator's "introduces
+or materially widens" line; two explicitly used the discriminator's separation of who or
+what may act from how much may be consumed to reject the resource-governance filing. The
+near-fit complaint is gone and the count is unchanged. #39 fixed where the model is filed,
+not whether it is counted.
+
+**Delta from the superseded recording.** No delta in count or verdict — six pre-#39 runs
+and three post-#39 runs all return `2 / yes`. The six are the isolated runs: three against
+`e92a6a6` and three controls against `d21bd3f`. The delta is in the reasoning route and in
+the case's standing: the case was scored in this re-baseline and is no longer excluded, and
+the exclusion condition recorded in **Reproduction — document sensitivity** is void. The key
+stays `1 / no`.
+
+Two of three runs still report a residual contradiction: the fail-closed shape's refusal
+clause reads onto a content-policy refusal while its own headword lists only quantitative
+bounds. One noted that the taxonomy still has no clean slot for a pure classification
+predicate that is computed and not persisted.
+
+### Case 9 — candidate identity
+
+The key is `2 / fires`.
+
+All three runs named exactly the two determinations the case was built from — sensitivity
+from contents, retention class from record type — and tested independence correctly, each
+stating that either can be wrong while the other is right. All three then applied the shape
+gate and returned 0. Candidate identity matches the key; only the count diverges — the same
+finding as the `b49a753` **Case 9 baseline**, reproduced unchanged against the post-#39
+text.
+
+**Delta from the superseded recording.** None. Adding the authorization shape did not move
+this case, which is the expected result: neither of case 9's determinations instantiates it,
+because no export path reads the sensitivity and nothing schedules on the retention class.
+
+All three quoted the same contradiction — the unqualified headline sentence against "the
+rule counts the independent models instantiating them" — and all three resolved it
+shapes-first. One proposed the same repair the earlier baseline drew: qualify the headline
+as "more than one independent model *instantiating these shapes*".
+
+### Standing after this re-baseline
+
+This list supersedes every earlier enumeration of the green baseline in this file; those
+earlier sections predate this measurement and were left unedited as historical record.
+
+- Green baseline, unchanged and not re-run in this issue: cases 1, 6, 7, 8, 10, 11.
+- Newly joining the green baseline: **cases 3 and 5**, both now stable passes on candidate
+  identity as well as count and verdict.
+- Reproductions: **case 2** (unstable), **case 4** (stable mismatch), **case 9** (stable
+  mismatch). All three are #37's, and none is blocked on #39 any more.
+
+### Method caveat
+
+As with the Case 9, reality-check, and Case 10 baselines, these evaluators were subagents
+*instructed* not to use tools, with the reference pasted inline, rather than evaluators
+sandboxed without tool access. "Told not to look" is weaker than "could not look". None of
+the fifteen reported using a tool, and none cited a key or an expected answer.
+
+No run was discarded and no run errored. All three inputs within each case were identical.
