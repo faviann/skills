@@ -6,7 +6,7 @@ diagnostic; it enforces nothing automatically.
 
 ## Protocol
 
-Run every case in isolation three times: 27 fresh blind evaluations in total. Never
+Run every case in isolation three times: 30 fresh blind evaluations in total. Never
 reuse an evaluator across cases. Each evaluator receives, in this order:
 
 1. The complete live contents of `RISK-SHAPES.md`, assembled at run time. Never
@@ -107,6 +107,17 @@ values are written to the document row and read back from it. Nothing expires,
 deletes, or schedules on the retention class, and no export path reads the
 sensitivity.
 
+### Case 10 — capability credentials and repeat submission
+
+The slice adds a second credential class. Existing bearer keys keep their current access,
+and the new class may call only one newly added submission endpoint: it cannot call the
+existing tool surface, and it cannot read stored content. An unrecognised credential is
+refused before any work executes. The same slice makes submission idempotent against a
+caller-supplied locator: submitting the same locator twice records nothing the second
+time and reports the repeat as a repeat, while changed content at a locator already
+recorded is refused without altering what is stored. Submissions are written to the
+existing records table, and nothing expires, converges, or advances on its own schedule.
+
 ## Expected results
 
 | Case | Models | Fires | Shapes and purpose |
@@ -114,12 +125,13 @@ sensitivity.
 | 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. |
 | 2 | 2 | yes | A priority determination and an independent concurrency protocol with a lease lifecycle. Tests a consumer whose coordination can be wrong while classification is right. |
 | 3 | 1 | no | One outcome determination; response fields are its current canonical representation, with no backward-compatibility protocol. This is the no-compatibility half of the Case 7 pair. |
-| 4 | 1 | no | The pre-registered key treats refusal as the direct application of one sensitivity/authorization determination. The key remains fixed but unscored while issue #36 decides whether the reference supports it. |
+| 4 | 1 | no | The pre-registered key treats refusal as the direct application of one sensitivity/authorization determination. The key remains fixed but unscored while issue #39 decides whether the reference supports it. |
 | 5 | 1 | no | One subscription-state determination; expiry is derived on read and introduces no persistence lifecycle. Tests that several outcomes and derived behavior do not become plural models. |
 | 6 | 2 | yes | A hiring-stage determination and an independent new persistence lifecycle for the immutable audit trail. Tests append-only state with its own retention invariant. |
 | 7 | 2 | yes | A redaction authorization/content-policy model and a backward-compatibility protocol. Tests the single clause that distinguishes it from Case 3: consumers on the previous release must still parse the representation. |
 | 8 | 1 | no | One billing-state determination with several mutually exclusive outcomes. The three consumers traverse that shared determination; their plurality does not create plural models. |
 | 9 | 2 | yes | Two orthogonal determinations, neither introducing a named risk shape. Tests whether a discriminator can still count a second model when the taxonomy has no shape to place it under. |
+| 10 | 2 | yes | A capability-authorization model and an independent deduplication protocol. The dedup half instantiates a named shape and the authorization half instantiates none, so a reader who counts only shape-instantiating models returns 1 and does not fire. Abstracted from production; see **Reality check**. |
 
 ## Case 9's key, and how it was set
 
@@ -166,6 +178,7 @@ verdicts. That makes their keys corroborated rather than argued.
 | --- | --- | --- |
 | 7 | *Omit binary capture bytes before persistence* — issue #153, PR #174 | Should have been split. A singular-sounding rule spanning a trust boundary and a serialization boundary. Key `2 / yes` matches. |
 | 8 | The terminality counterexample — issue #154, PR #175 | Correctly stayed one ticket. One determination touching several contracts. Key `1 / no` matches. |
+| 10 | *Import one Codex exchange through the capture spine* — issue #74, PR #121 | Should have been split. Shipped as one ticket across 28 files. Key `2 / yes`, and the verdict is corroborated by three blind runs against the unabstracted issue text; see **Reality check**. |
 
 Evaluators recognised Case 7's lineage unprompted, one naming it "the *Omit binary
 capture bytes* trap."
@@ -202,7 +215,7 @@ sounds while seven of nine keys are argued.
 ## Blocked reproduction — document sensitivity
 
 This case is excluded from the scored baseline until
-[issue #36](https://github.com/faviann/skills/issues/36) decides how authorization
+[issue #39](https://github.com/faviann/skills/issues/39) decides how authorization
 fits the taxonomy:
 
 > The slice determines a document's sensitivity — exactly one of public, internal,
@@ -216,7 +229,7 @@ models / fires, reasoning that classification can be correct while threshold
 enforcement is wrong. The current reference does not determine which answer governs:
 the shape narrows resource governance to bounds, the discriminator adds refusal
 authority, and the deciding sentence counts authorization while no named shape covers
-it. Re-keying this case would decide #36 inside the eval rather than in the skill.
+it. Re-keying this case would decide #39 inside the eval rather than in the skill.
 
 ## First-run correction
 
@@ -262,7 +275,7 @@ three fresh blind evaluators per case, with no evaluator seeing another case.
 | 1 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
 | 2 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | **stable semantic mismatch** |
 | 3 | 1 / no | 2 / yes | 2 / yes | 1 / no | **unstable** |
-| 4 | 2 / yes | 2 / yes | 2 / yes | 1 / no | **stable mismatch — #36** |
+| 4 | 2 / yes | 2 / yes | 2 / yes | 1 / no | **stable mismatch — #39** |
 | 5 | 0 / no | 1 / no | 1 / no | 1 / no | **unstable count** |
 | 6 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
 | 7 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
@@ -279,13 +292,13 @@ versus its derived, unstored expiry changed count even though every run agreed t
 does not fire. These findings and Case 2's model-identity mismatch are tracked in
 [issue #37](https://github.com/faviann/skills/issues/37). Case 4 remains the narrower
 authorization-taxonomy reproduction tracked in
-[issue #36](https://github.com/faviann/skills/issues/36).
+[issue #39](https://github.com/faviann/skills/issues/39).
 
 The green baseline is the stable subset whose model identity and verdict both match
 the fixed key: Cases 1, 6, 7, and 8. Cases 2–5 remain in the eval as reproductions but
 do not gate unrelated reference changes until their linked design decisions settle.
-Case 9 postdates every run recorded above and has never been run; it is keyed but
-unmeasured, and joins neither the green baseline nor the reproductions.
+Case 9 postdates every run recorded above. Its own baseline is below; it is a stable
+mismatch and joins the reproductions, not the green baseline.
 
 ## Pre-reorganisation control
 
@@ -297,10 +310,154 @@ evidence. Candidate identity, count, and verdict were all scored.
 | --- | --- | --- | --- |
 | 2 | 3 / yes; 2 / yes; 2 / yes | 2 / yes; 2 / yes; 2 / yes | Pre-existing semantic mismatch and count instability. Every control named priority classification, lease exclusivity, and lease expiry/recovery; two declined to count priority. The finished runs used the same wrong candidate decomposition. |
 | 3 | 1 / no; 2 / yes; 2 / yes | 1 / no; 2 / yes; 2 / yes | Exact pre-existing instability. |
-| 4 | 2 / yes; 2 / yes; 2 / yes | 2 / yes; 2 / yes; 2 / yes | Exact pre-existing stable mismatch; tracked in #36. |
+| 4 | 2 / yes; 2 / yes; 2 / yes | 2 / yes; 2 / yes; 2 / yes | Exact pre-existing stable mismatch; tracked in #39. |
 | 5 | 1 / no; 2 / yes; 1 / no | 0 / no; 1 / no; 1 / no | Pre-existing instability. Both references disagreed about whether state and derived expiry are one candidate model; the reorganisation did not turn a stable reading into a failure. |
 
 The control exonerates the reorganisation for every isolated defect. None of Cases 2–5
 had a stable, key-matching pre-reorganisation baseline that the finished document lost.
-The branch is therefore eligible to merge on the four-case green subset while #36 and
+The branch is therefore eligible to merge on the four-case green subset while #39 and
 #37 track the pre-existing reference defects.
+
+## Case 9 baseline
+
+Run on 2026-08-08 against the live `RISK-SHAPES.md` at `b49a753`, whose content for that
+file is identical to `e92a6a6` — so this baseline is comparable with the isolated
+baseline above. Three fresh blind evaluators, case 9 only, no other case and no key
+visible.
+
+| Case | Run 1 | Run 2 | Run 3 | Fixed key | Classification |
+| --- | --- | --- | --- | --- | --- |
+| 9 | 0 / no | 0 / no | 0 / no | 2 / yes | **stable mismatch** |
+
+**This is not a candidate-identification failure.** All three runs named exactly the two
+determinations the case was built from — sensitivity from contents, retention class from
+record type — and all three tested independence correctly, stating that either can be
+wrong while the other is right and that they are not alternatives within one shared
+determination. One recorded the two determinations in its verdict and labelled them
+"advisory, not the trigger". The candidate set matches the key; only the count diverges.
+
+The divergence is entirely the shape gate, and all three found it in the reference
+unprompted. Each quoted both sides of the contradiction and each resolved it the same
+way. The clearest statement of it:
+
+> A reader who applies the definition before the discriminators gets 2 and a split; one
+> who applies shapes first gets 0. I commit to shapes-first.
+
+Two consequences worth keeping.
+
+**A shape-gated reading returns 0 here, not 1.** The gate as evaluators actually apply
+it drops the primary determination too, because a bare classification instantiates no
+shape either. Any argument that a shape-gated rule "returns one model" on this case
+overstates that rule's behaviour; observed behaviour is one step further from the key.
+
+**The current wording transmits shapes-first unanimously**, not ambiguously. That makes
+the transmission problem harder than a split result would have: a rewording has to
+overturn a reading three of three evaluators reached independently and defended by
+quotation, so a subtle patch is unlikely to move it. Reasons given were the discriminators'
+unconditional "Ordinary work does not count toward the split", the shape-anchored
+"the rule counts the independent models instantiating them", and the softness of "these
+shapes are where independent models *usually* live".
+
+One run also noted a gap no case had exposed: the reference has no worked example of two
+determinations that each stay whole while touching no risk shape. The counterexample only
+teaches how to collapse alternatives into one model. Weigh that against the recorded null
+result on adding a fifth worked example, which over-taught and introduced an over-split.
+
+### Method caveat
+
+These three runs were subagents *instructed* not to use tools, with the reference pasted
+inline, rather than evaluators with no tool access. "Told not to look" is weaker than
+"could not look", and the same caveat may apply to earlier runs unless they were executed
+under tighter conditions. None of the three reported using a tool, and none cited a key
+or an expected answer.
+
+A fourth run was discarded before scoring: its case text carried a stray glyph, so its
+input was not identical to the other three. It returned `0 / no` and explicitly noted the
+glyph and ignored it, so it corroborates the result without counting as one of the three.
+
+## Reality check — a production umbrella
+
+Run on 2026-08-09. Every case above is written in a neutral domain, so none of them tests
+the reference against work that actually happened. This is that test, and it is the first
+one this eval has ever had.
+
+The input was the unabstracted text of a real umbrella issue — its "what to build"
+paragraph and its nine acceptance criteria, verbatim apart from a removed parent link and
+scope-fence section. It shipped as one ticket across 28 files and should have been
+several. Three fresh blind evaluators, the live reference, no key, no other case.
+
+| Run 1 | Run 2 | Run 3 | Should fire | Result |
+| --- | --- | --- | --- | --- |
+| 3 / yes | 2 / yes | 3 / yes | yes | **verdict correct and unanimous; count unstable** |
+
+**The rule works on real umbrella work.** All three fired, and all three produced a
+usable decomposition: pull the capability-scoped credential model out as a prefactor,
+sequence it with a real blocking edge, and pin ownership where two proposed tickets touch
+the same mechanism. One found, unprompted, that the receipt shape was claimed by two of
+its own proposed tickets — the ownership-collision pattern, in a slice the reference does
+not teach.
+
+The count varied over one question: whether a stream checkpoint written *atomically* with
+the record is a separate model. Run 2 folded it in, citing "a slice reaching across two
+shapes carries one model when neither half can be got wrong without the other", and noted
+that a checkpoint advancing on its own schedule would make it three. The other two counted
+it separately. Both readings are defensible from the reference, and the verdict is
+unaffected.
+
+**All three flagged the authorization gap, unprompted and independently:**
+
+> a reader working only from the five bullets would plausibly drop it and reach two
+
+> would count one model here and let the slice land whole — the opposite verdict from the
+> same document
+
+> a fit of convenience, not a clean match — the taxonomy appears to be missing an
+> access-control/authorization shape
+
+That is three production-anchored reproductions of the defect tracked in
+[issue #39](https://github.com/faviann/skills/issues/39).
+
+### What this and the Case 9 baseline together show
+
+The reference's contradiction resolves *differently depending on the slice*, and that
+explains both results without either being anomalous.
+
+- Where a slice carries shape-material — dedup, persistence, compatibility — evaluators
+  trust the deciding sentence, count the authorization model, and fire correctly.
+- Where a slice carries none — case 9's bare pair of classifications — the same "usually"
+  hedge sends them shapes-first and they count zero.
+
+So the realistic production hazard is not case 9. It is a slice whose *only* second model
+is an authorization model, with no other shape to fire in its place. That is case 4, and
+case 10 is its corroborated cousin.
+
+### Why case 10 drops the persistence half
+
+Case 10 abstracts this umbrella but deliberately keeps only two of its three models: the
+capability-authorization model and the deduplication protocol. The persistence lifecycle
+is removed, and the case says so explicitly — writes go to an existing table and nothing
+advances on its own schedule.
+
+The reason is that on the real issue, dedup and persistence fired the rule *whether or not*
+authorization was counted, which is exactly why the gap cost a misclassification rather
+than a missed split. A regression test that keeps them masks the thing it exists to guard.
+With one shaped model and one shapeless one, the case discriminates: count the
+authorization model and the answer is `2 / fires`; drop it and the answer is `1 / does not
+fire`. Case 10 is therefore a sharper test of the gap than the production slice it came
+from.
+
+Case 10 has not been run. Its key rests on this reality check's unanimous verdict plus the
+production outcome, not on a measurement of the abstracted text.
+
+### Method caveat
+
+As with the Case 9 baseline, these evaluators were instructed not to use tools rather than
+sandboxed without them. A fourth run failed with a server-side error before producing
+output and was relaunched with identical text; no partial result from it was scored.
+
+One confound is inherent and worth stating: the reference's four *Oversized shapes*
+examples are themselves drawn from this same production wave, so a real slice from it
+shares their vocabulary. The asymmetry is what makes the result usable — a confound of
+recognition can only push toward firing, so a fire is weak evidence and a failure to fire
+would have been strong. In fact none of the three grounded its firing decision in those
+examples; they were cited only for a collapse warning and an ownership note.

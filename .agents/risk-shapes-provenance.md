@@ -32,6 +32,27 @@ ground them. Consult it before changing or removing an example.
 - *Report fidelity loss separately from capture safety failure* — Overmind PR
   [#176](https://github.com/faviann/overmind/pull/176).
 
+## Eval case abstractions
+
+Cases in `.agents/evals/risk-shapes.md` are written in neutral domains. Three abstract a
+real slice and borrow its verdict; the rest are constructed. Consult this before changing
+those three, because their keys rest on the production outcome rather than on argument.
+
+- Case 7 — *Omit binary capture bytes before persistence*, Overmind issue
+  [#153](https://github.com/faviann/overmind/issues/153) and PR
+  [#174](https://github.com/faviann/overmind/pull/174). Should have been split.
+- Case 8 — the terminality counterexample, Overmind issue
+  [#154](https://github.com/faviann/overmind/issues/154) and PR
+  [#175](https://github.com/faviann/overmind/pull/175). Correctly stayed one ticket.
+- Case 10 — *Import one Codex exchange through the capture spine*, Overmind issue
+  [#74](https://github.com/faviann/overmind/issues/74) and PR
+  [#121](https://github.com/faviann/overmind/pull/121). Should have been split; shipped as
+  one ticket across 28 files. The eval's **Reality check** section ran issue #74's
+  unabstracted text against the live reference three times before the case was written.
+  Case 10 keeps that slice's authorization and deduplication models and deliberately drops
+  its persistence lifecycle, so that the case fails when an authorization model is not
+  counted. The eval explains why.
+
 ## Counterexample
 
 The terminality-determination example originated in Overmind issue
