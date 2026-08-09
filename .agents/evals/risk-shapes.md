@@ -570,6 +570,53 @@ argument that the authorization gap is a contradiction readers resolve rather th
 producing wrong splits, and it lowers the stakes of #39 again without making it not worth
 fixing.
 
+### Case 11 baseline — the gap is cosmetic, and red cannot be forced
+
+Run on 2026-08-09 against the live reference, three fresh blind evaluators.
+
+| Case | Run 1 | Run 2 | Run 3 | Fixed key | Classification |
+| --- | --- | --- | --- | --- | --- |
+| 11 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | **pass** |
+
+**Case 11's design worked; its purpose did not.** All three runs confirmed what case 10 could
+not deliver — the authorization model instantiates none of the five shapes, with the
+backward-compatibility route explicitly ruled out: "no second credential form is introduced,
+and nothing negotiates between old and new callers — two forms do not coexist." So the case
+genuinely offers authorization no home.
+
+All three counted it anyway, through the deciding sentence, and all three named the fork as
+the one thing the verdict turns on:
+
+> A reader who instead treats the five shapes as the closed set of countable models would
+> find only B, count one, and not fire the rule. That is the single point on which this
+> verdict turns, and the reference does not settle it.
+
+### The tally across every configuration
+
+Fifteen runs now bear on the authorization gap: case 4 (six), case 10 (three, plus three
+against mutated text), the production umbrella (three), and case 11 (three). **Every
+evaluator with an independent second model in view took the rule-first route and counted the
+authorization model.** Not one under-counted it.
+
+The only under-counting configuration on record is case 9, which carries no shape at all and
+drops *everything* to zero rather than singling authorization out. That is #37's problem.
+
+**Conclusion: the authorization gap is cosmetic across every configuration tested.** It is a
+contradiction readers reliably resolve, not a defect producing wrong decompositions. Red
+cannot be forced by any realistic edit — the mutation probe showed the hedge is not
+load-bearing, and case 11 shows removing the shape route is not sufficient either. Producing
+a red result would require stripping "authorization" from the deciding sentence and removing
+the independence test's primacy, which is rewriting the rule rather than simulating a
+regression.
+
+### Case 11's standing role
+
+Case 11 joins the green baseline: cases 1, 6, 7, 8, 10, and 11. Beyond guarding the verdict,
+it is the **primary case for the contradiction-report signal**, because it isolates the fork
+with no alternative shape route and all three runs named it unprompted. After a fix for the
+authorization gap lands, case 11's runs should stop reporting it. If they still do, the
+wording did not land.
+
 ### What this means for validating a fix
 
 A fix for the authorization gap **cannot be validated by any case flipping**, because no case
