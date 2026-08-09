@@ -239,10 +239,12 @@ the eval rather than in the skill.
 > or secret. The same slice adds an export path that refuses to emit any document
 > above internal, returning an error to the caller instead of the document.
 
-**Superseded record — the pre-#39 text as it stood at `d73dd98`.** Everything inside the
-blockquote below is a verbatim quotation of how this section read before the post-#39
-measurement, retained as evidence of the earlier text; it is superseded, not wrong. The
-section's current position is the lead paragraph above, outside the quotation.
+**Superseded record — the pre-#39 text as it stood at `d73dd98`.** The blockquote below
+reproduces this section's two prose paragraphs verbatim as they read before the post-#39
+measurement; they were not contiguous in the original — the case text, unchanged and shown
+above, sat between them — and they are retained as evidence of the earlier text, superseded
+rather than wrong. The section's current position is the lead paragraph above, outside the
+quotation.
 
 > This case is excluded from the scored baseline until
 > [issue #39](https://github.com/faviann/skills/issues/39) decides how authorization
@@ -354,6 +356,13 @@ The control exonerates the reorganisation for every isolated defect. None of Cas
 had a stable, key-matching pre-reorganisation baseline that the finished document lost.
 The branch is therefore eligible to merge on the four-case green subset while #39 and
 #37 track the pre-existing reference defects.
+
+> **Standing claim superseded.** [Issue #39](https://github.com/faviann/skills/issues/39)
+> has since landed. Case 4 is no longer tracked by #39: it is scored against its fixed key,
+> and its open question is owned by
+> [issue #37](https://github.com/faviann/skills/issues/37). The table row and closing
+> sentence above are retained as the `d21bd3f`/`e92a6a6` control record; for current
+> standing see **Post-#39 re-baseline** at the end of this file.
 
 ## Case 9 baseline
 
@@ -616,6 +625,15 @@ the one thing the verdict turns on:
 
 ### The tally across every configuration
 
+> **Pre-#39 argument.** The run tallies and the contradiction-report claim in this section
+> and the ones following it were written before the post-#39 measurement, and two of their
+> facts have since been overtaken: case 4 now has nine pre-#39 runs on record rather than
+> six, so the fifteen-run tally below undercounts it; and "Authorization's absence from the
+> shape list is currently reported by every evaluator who meets it", in **What this means
+> for validating a fix**, no longer holds — the post-#39 case-4 runs report the near-fit
+> complaint is gone. The reasoning is retained unedited as pre-#39 argument; for current
+> results see **Post-#39 re-baseline** at the end of this file.
+
 Fifteen runs now bear on the authorization gap: case 4 (six), case 10 (three, plus three
 against mutated text), the production umbrella (three), and case 11 (three). **Every
 evaluator with an independent second model in view took the rule-first route and counted the
@@ -658,7 +676,8 @@ currently fails on it. Two criteria are available instead:
 Run on 2026-08-09 against the live `RISK-SHAPES.md` at repo commit `d73dd98`, whose content
 for that file was last changed by `fdc5cc5` — the #39 merge that added the authorization
 shape. Model: `claude-opus-5`. Fifteen runs: five cases, three fresh blind evaluators each,
-one case per evaluator, no key and no other case visible.
+one case per evaluator, each receiving the **Isolated prompt** from this file, no key and no
+other case visible.
 
 This measurement exists to bring the recorded results back into correspondence with the
 live reference. It re-measures only the cases whose recordings predated #39 or were never
@@ -698,7 +717,7 @@ So the defect has changed character rather than disappearing: from
 wrong-candidates-right-count to right-candidates-unstable-count. All three runs turn on one
 fork — whether a determination instantiating no named shape counts toward the split. That
 is #37's question.
-The `e92a6a6` recording is retained above as the record of how that text read.
+The `e92a6a6` run results are retained above in **Isolated baseline**.
 
 ### Case 3 — candidate identity
 
@@ -747,9 +766,12 @@ what may act from how much may be consumed to reject the resource-governance fil
 near-fit complaint is gone and the count is unchanged. #39 fixed where the model is filed,
 not whether it is counted.
 
-**Delta from the superseded recording.** No delta in count or verdict — six pre-#39 runs
-and three post-#39 runs all return `2 / yes`. The six are the isolated runs: three against
-`e92a6a6` and three controls against `d21bd3f`. The delta is in the reasoning route and in
+**Delta from the superseded recording.** No delta in count or verdict — nine pre-#39 runs
+and three post-#39 runs all return `2 / yes`. The nine are those recorded in
+**Reproduction — document sensitivity**: three multi-case runs, three isolated runs against
+`e92a6a6`, and three isolated controls against `d21bd3f`. The six reconstruction runs
+recorded in that same section are a separate, earlier population — five of them returned
+`1 / no` — and are not included in the nine. The delta is in the reasoning route and in
 the case's standing: the case was scored in this re-baseline and is no longer excluded, and
 the exclusion condition recorded in **Reproduction — document sensitivity** is void. The key
 stays `1 / no`.
@@ -781,8 +803,11 @@ as "more than one independent model *instantiating these shapes*".
 
 ### Standing after this re-baseline
 
-This list supersedes every earlier enumeration of the green baseline in this file; those
-earlier sections predate this measurement and were left unedited as historical record.
+For the five cases re-measured here — 2, 3, 5, 9, and 4 — this list supersedes every
+earlier enumeration of the green baseline in this file; those earlier sections predate this
+measurement and were left unedited as historical record. The members not re-run in this
+issue — cases 1, 6, 7, 8, 10, and 11 — carry forward on their prior record, which this
+measurement neither confirms nor supersedes.
 
 - Green baseline, unchanged and not re-run in this issue: cases 1, 6, 7, 8, 10, 11.
 - Newly joining the green baseline: **cases 3 and 5**, both now stable passes on candidate
@@ -792,7 +817,7 @@ earlier sections predate this measurement and were left unedited as historical r
 
 ### Method caveat
 
-As with the Case 9, reality-check, and Case 10 baselines, these evaluators were subagents
+As with the Case 9 baseline and the reality check, these evaluators were subagents
 *instructed* not to use tools, with the reference pasted inline, rather than evaluators
 sandboxed without tool access. "Told not to look" is weaker than "could not look". None of
 the fifteen reported using a tool, and none cited a key or an expected answer.
