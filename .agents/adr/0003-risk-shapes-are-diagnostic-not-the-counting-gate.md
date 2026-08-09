@@ -1,6 +1,27 @@
 # Risk shapes locate what the risk rule counts; they do not gate it
 
-**Status: proposed.** Drafted from the [#39](https://github.com/faviann/skills/issues/39) grilling and awaiting the maintainer's acceptance. Nothing in `RISK-SHAPES.md`, `SKILL.md`, the docs page, or the eval has been changed to match it.
+**Status: rejected.** Drafted from the [#39](https://github.com/faviann/skills/issues/39) grilling, then rejected on 2026-08-09 when the eval was first tested against a production umbrella. Kept as a record of the reasoning and of why it did not survive contact with real work. Nothing in `RISK-SHAPES.md`, `SKILL.md`, the docs page, or the eval was changed to match it.
+
+## Why this was rejected
+
+This ADR rejected extending the taxonomy on the grounds that the shapes would remain the gate, so the next uncovered kind would under-count exactly as authorization does. Its evidence for that was eval case 9 — two orthogonal determinations instantiating no shape, keyed `2 / fires`, measured at `0 / does not fire` across three blind runs.
+
+Then a real umbrella issue was run through the live reference: a slice that shipped as one ticket across 28 files and should have been several, in a domain the reference does not teach. Three blind runs, and every one fired. Counts of three, two, three, with usable decompositions and a prefactor for the authorization model. The rule made the right call on real work.
+
+Read with case 9, that gives the finding this ADR did not have:
+
+**The contradiction resolves differently depending on the slice.** Where a slice carries shape-material — deduplication, persistence, compatibility — evaluators trust the deciding sentence, count the authorization model, and fire correctly. Where a slice carries none, the same "usually" hedge sends them shapes-first and they count zero.
+
+So case 9's shape is exotic. The realistic hazard is a slice whose *only* second model is an authorization model, with no other shape to fire in its place — eval case 4, and now case 10. And on the real umbrella, all three evaluators reported the authorization gap unprompted, one calling its nearest classification "a fit of convenience, not a clean match — the taxonomy appears to be missing an access-control/authorization shape."
+
+The observed cost of the gap is a misclassification, not a missed split. **Adding an authorization shape is the direct fix for what can actually be observed**, and it is the option this ADR turned down. Demoting the whole taxonomy is a far larger change resting mainly on a case no production slice has resembled.
+
+Two things below survive the rejection and should be read even though the decision did not:
+
+- The reference genuinely contradicts itself, and the contradiction is quotable from both sides. That much is confirmed by six blind runs across two slices.
+- The case-9 caveat — that its key is argued, authored with the candidate discriminators in view, and measured only as a mismatch — is why this ADR should not have leaned on it as hard as it did.
+
+## The original argument, as drafted
 
 `to-tickets` splits a slice that introduces more than one independently failure-prone unit. `RISK-SHAPES.md` describes that unit two ways that do not line up. Its deciding sentence counts a **state, lifecycle, or authorization** model. Its taxonomy names five shapes — concurrency protocols, new persistence lifecycles, migration and convergence, backward compatibility, and fail-closed resource governance — and **none of them covers authorization**. Six of six blind evaluations found the mismatch, one summarising it as "authorization is a counted model kind but has no shape to be inspected under."
 
