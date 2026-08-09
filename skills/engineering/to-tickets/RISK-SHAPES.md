@@ -28,7 +28,7 @@ Both of these separate ordinary work from a risk shape. Ordinary work does not c
 
 **Persistence.** Traversing persistence is ordinary: reading, writing, or querying through a lifecycle that already exists, whose invariants already hold, and whose failure modes are already exercised. It becomes a risk shape when the slice *introduces* a lifecycle — new state with its own creation, convergence, or expiry — or a compatibility protocol, where new writes must stay legible to old readers or old records legible to new ones.
 
-**Resource governance.** Consuming an existing bound is ordinary: the slice runs inside a deadline, budget, quota, or size bound that something else already owns and enforces. It becomes a risk shape when the slice *introduces or materially changes* a deadline, budget, quota, or size bound — because afterwards a caller that previously always completed can now be refused, truncated, or bounded, and every caller inherits that failure mode.
+**Resource governance.** Consuming an existing bound is ordinary: the slice runs inside one named by the shape above that something else already owns and enforces. It becomes a risk shape when the slice *introduces or materially changes* one — because afterwards a caller that previously always completed can now be refused, truncated, or bounded, and every caller inherits that failure mode.
 
 ## Oversized shapes
 
