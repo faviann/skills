@@ -298,7 +298,8 @@ The green baseline is the stable subset whose model identity and verdict both ma
 the fixed key: Cases 1, 6, 7, and 8. Cases 2–5 remain in the eval as reproductions but
 do not gate unrelated reference changes until their linked design decisions settle.
 Case 9 postdates every run recorded above. Its own baseline is below; it is a stable
-mismatch and joins the reproductions, not the green baseline.
+mismatch and joins the reproductions, not the green baseline. Case 10 also postdates them,
+and its baseline puts it in the green baseline: Cases 1, 6, 7, 8, and 10.
 
 ## Pre-reorganisation control
 
@@ -438,16 +439,20 @@ capability-authorization model and the deduplication protocol. The persistence l
 is removed, and the case says so explicitly — writes go to an existing table and nothing
 advances on its own schedule.
 
-The reason is that on the real issue, dedup and persistence fired the rule *whether or not*
-authorization was counted, which is exactly why the gap cost a misclassification rather
-than a missed split. A regression test that keeps them masks the thing it exists to guard.
-With one shaped model and one shapeless one, the case discriminates: count the
-authorization model and the answer is `2 / fires`; drop it and the answer is `1 / does not
-fire`. Case 10 is therefore a sharper test of the gap than the production slice it came
-from.
+The intent was that on the real issue, dedup and persistence fired the rule *whether or
+not* authorization was counted, so a test keeping them would mask what it exists to guard.
+The expectation was that with one shaped model and one shapeless one the case would
+discriminate — count the authorization model and get `2 / fires`, drop it and get `1 / does
+not fire`.
 
-Case 10 has not been run. Its key rests on this reality check's unanimous verdict plus the
-production outcome, not on a measurement of the abstracted text.
+**The baseline falsified that expectation.** Three of three runs counted the authorization
+model and returned `2 / fires` against the unamended reference. Removing the persistence
+half did not starve the case of shape-material enough to provoke a shapes-first reading;
+one shape was sufficient to keep readers on the deciding sentence. Case 10 therefore does
+not discriminate for the authorization gap, and its role is reclassified below.
+
+Case 10's baseline is below. It was run before any reference change, and the result
+falsified the design reasoning in this section.
 
 ### Method caveat
 
@@ -461,3 +466,69 @@ shares their vocabulary. The asymmetry is what makes the result usable — a con
 recognition can only push toward firing, so a fire is weak evidence and a failure to fire
 would have been strong. In fact none of the three grounded its firing decision in those
 examples; they were cited only for a collapse warning and an ownership note.
+
+## Case 10 baseline, and what it changes
+
+Run on 2026-08-09 against the live `RISK-SHAPES.md`, whose content was still identical to
+`e92a6a6` — so this is a genuine pre-change baseline, comparable with every measurement
+above. Three fresh blind evaluators, case 10 only, no key visible.
+
+| Case | Run 1 | Run 2 | Run 3 | Fixed key | Classification |
+| --- | --- | --- | --- | --- | --- |
+| 10 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | **pass** |
+
+Candidate identity matched on all three: a credential-class authorization model and a
+submission idempotency/deduplication model, independent in both directions, with the
+existing-table write correctly excluded as ordinary traversal and the three
+new/repeat/conflict outcomes correctly collapsed into one determination.
+
+**Case 10 is a pass, not a reproduction — which is the opposite of what it was built for.**
+It was written to fail while an authorization model is uncounted, so that fixing the
+taxonomy would flip it. It already passes, so it cannot show that a fix worked. Its role is
+therefore a **green-baseline guard**: it records that this configuration yields `2 / fires`
+today, so a later edit that drops it to `1 / does not fire` is a detectable regression.
+
+### The pattern across every configuration tested
+
+| Configuration | Shape-material | Reading taken | Result |
+| --- | ---: | --- | --- |
+| Case 9 — two bare classifications | none | shapes-first | `0 / no` ×3 |
+| Case 10 — authorization + dedup | one | deciding-sentence | `2 / yes` ×3 |
+| Case 4 — sensitivity + export refusal | near-fit only | deciding-sentence | `2 / yes` ×6 |
+| Reality check — real umbrella | three | deciding-sentence | `2–3 / yes` ×3 |
+
+Wherever a slice carries *any* shape-material, evaluators fall back to the deciding sentence
+and count the authorization model correctly. The one configuration that under-counts carries
+no shape at all, and there they under-count everything to zero rather than singling
+authorization out.
+
+**So no tested configuration shows the authorization gap causing a missed split.** Case 4
+over-counts against its key; case 10 passes; the real umbrella fires correctly. What the gap
+reliably produces instead is friction the reader has to resolve by hand, and a
+classification filed under a shape that does not fit.
+
+### Why the gap is still worth closing
+
+Because the resolution is not guaranteed — it is a reader's choice the reference leaves
+open, and the same evaluator population chooses differently on case 9. Every run named the
+alternative explicitly before rejecting it: "A narrower reading — only listed shapes count —
+would yield one model and no firing. I do not adopt it." A reader who does adopt it lands
+the slice whole.
+
+And the complaint is universal. Across the case-10 runs, the reality-check runs, and the
+earlier case-4 evidence, every evaluator reported the gap unprompted, and several proposed
+the same fix in their own words: add an authorization or trust-boundary entry to the shape
+list, or state outright that the list is non-exhaustive.
+
+### What this means for validating a fix
+
+A fix for the authorization gap **cannot be validated by any case flipping**, because no case
+currently fails on it. Two criteria are available instead:
+
+1. **The green baseline holds** — Cases 1, 6, 7, 8, and 10 keep matching on candidate
+   identity as well as count and verdict. Case 10's value is here.
+2. **The contradiction reports stop.** The **Isolated prompt** instructs every evaluator to
+   "Report any contradiction or ambiguity in the reference, quoting the exact phrase."
+   Authorization's absence from the shape list is currently reported by every evaluator who
+   meets it. That rate is the measurable signal: if the amended reference still draws the
+   same complaint, the wording did not land.
