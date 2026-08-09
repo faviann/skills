@@ -1,0 +1,62 @@
+# Risk shapes locate what the risk rule counts; they do not gate it
+
+**Status: rejected.** Drafted from the [#39](https://github.com/faviann/skills/issues/39) grilling, then rejected on 2026-08-09 when the eval was first tested against a production umbrella. Kept as a record of the reasoning and of why it did not survive contact with real work. Nothing in `RISK-SHAPES.md`, `SKILL.md`, the docs page, or the eval was changed to match it.
+
+## Why this was rejected
+
+This ADR rejected extending the taxonomy on the grounds that the shapes would remain the gate, so the next uncovered kind would under-count exactly as authorization does. Its evidence for that was eval case 9 — two orthogonal determinations instantiating no shape, keyed `2 / fires`, measured at `0 / does not fire` across three blind runs.
+
+Then a real umbrella issue was run through the live reference: a slice that shipped as one ticket across 28 files and should have been several, in a domain the reference does not teach. Three blind runs, and every one fired. Counts of three, two, three, with usable decompositions and a prefactor for the authorization model. The rule made the right call on real work.
+
+Read with case 9, that gives the finding this ADR did not have:
+
+**The contradiction resolves differently depending on the slice.** Where a slice carries shape-material — deduplication, persistence, compatibility — evaluators trust the deciding sentence, count the authorization model, and fire correctly. Where a slice carries none, the same "usually" hedge sends them shapes-first and they count zero.
+
+So case 9's shape is exotic. The realistic hazard is a slice whose *only* second model is an authorization model, with no other shape to fire in its place — eval case 4, and now case 10. And on the real umbrella, all three evaluators reported the authorization gap unprompted, one calling its nearest classification "a fit of convenience, not a clean match — the taxonomy appears to be missing an access-control/authorization shape."
+
+The observed cost of the gap is a misclassification, not a missed split. **Adding an authorization shape is the direct fix for what can actually be observed**, and it is the option this ADR turned down. Demoting the whole taxonomy is a far larger change resting mainly on a case no production slice has resembled.
+
+Two things below survive the rejection and should be read even though the decision did not:
+
+- The reference genuinely contradicts itself, and the contradiction is quotable from both sides. That much is confirmed by six blind runs across two slices.
+- The case-9 caveat — that its key is argued, authored with the candidate discriminators in view, and measured only as a mismatch — is why this ADR should not have leaned on it as hard as it did.
+
+## The original argument, as drafted
+
+`to-tickets` splits a slice that introduces more than one independently failure-prone unit. `RISK-SHAPES.md` describes that unit two ways that do not line up. Its deciding sentence counts a **state, lifecycle, or authorization** model. Its taxonomy names five shapes — concurrency protocols, new persistence lifecycles, migration and convergence, backward compatibility, and fail-closed resource governance — and **none of them covers authorization**. Six of six blind evaluations found the mismatch, one summarising it as "authorization is a counted model kind but has no shape to be inspected under."
+
+The gap is not confined to authorization, and it is a gap in **shape** coverage rather than in the kinds the deciding sentence names. Eval case 9 makes that concrete: two orthogonal determinations — a document's sensitivity and its retention class — both of which the deciding sentence already covers, since both govern state, and neither of which instantiates any named shape. A shape-gated reading returns **none** there — measured, not predicted: three of three blind evaluators returned zero models against the case's key of two, and each reached it by dropping both determinations at the gate. The deciding sentence gives two. Authorization is the same phenomenon read from the other side: a kind the deciding sentence names, with no shape to inspect it under.
+
+The reference supports both readings, which is why this needs deciding rather than merely noticing. Its own words are *"the rule counts the independent models **instantiating them**"* — a real textual basis for treating the shapes as the gate — set against a deciding sentence that counts kinds the shapes do not cover. This ADR resolves that contradiction; it does not read off a plain meaning.
+
+That failure runs in the dangerous direction. `9f3515c` created the risk rule because "slices that cleared both [capacity budgets] still landed several independently failure-prone production contracts at once." Over-splitting wastes effort; under-splitting ships exactly the defect the rule exists to catch. So a rule whose blind spot is systematic under-counting is worse than one that occasionally over-counts.
+
+## Considered options
+
+**Extend the taxonomy while keeping it as the counting gate.** Give authorization its own shape, so the shape list covers every kind the counting sentence names. Rejected: it repairs the known omission and leaves in place the mechanism that produced it. The shapes would still gate the count, so anything instantiating none of the five still under-counts — case 9 included, even though its determinations are state determinations the deciding sentence already covers. It also commits the reference to enumerating shapes exhaustively, which nothing guarantees is possible.
+
+This rejection is narrow, and worth stating narrowly: the taxonomy must not be the **gate**. Nothing here rules out authorization becoming a useful diagnostic shape later. What is decided is that it does not need one in order to be counted.
+
+**Demote the taxonomy.** Make the shapes diagnostic — *where to look* rather than *what you count against* — and let counting key on the identity of the unit itself. Chosen.
+
+## Decision
+
+- The **risk shape** is a diagnostic pattern that helps locate the units the rule counts. It is not exhaustive, and it neither admits nor excludes a unit from the count.
+- The counted unit is the **correctness contract**: a coherent set of outcomes and invariants that must remain correct as one unit.
+- A **responsibility** is what a correctness contract decides or governs — state, lifecycle, and authorization are examples. Responsibilities are not exhaustive either, and they do not admit or exclude a contract from the count.
+- One correctness contract may hold several responsibilities, and several contracts may share a responsibility. **Authorization therefore needs no shape of its own to be countable.**
+
+## Consequences
+
+- A gap in the taxonomy stops being a silent under-split. This is the whole point, and it is what makes the decision worth recording rather than obvious.
+- Demoting the taxonomy removes risk-shape coverage as the source of eval case 4's ambiguity. It does **not** determine whether sensitivity classification and export refusal form one correctness contract or two. **Case 4 remains unkeyed until [#37](https://github.com/faviann/skills/issues/37) supplies the positive discriminator.** An earlier draft of this ADR claimed the settled semantics key it `1 / no`, on the grounds that refusal is the direct application of the sensitivity determination. That reasoning is entailment — exportability follows from sensitivity plus a threshold — and entailment is the excluded candidate B. Case 7 is the proof it cannot be the test: its serialization follows from the redaction rule and is still a second contract. The semantics permit case 4 to be one contract; they do not establish it.
+- Because keying case 4 is downstream of #37's discriminator, it cannot be the work that unblocks #37. #39's body bundled two deliverables — the *direction*, and the *key*. The direction is what #37 actually needed, and it is what this ADR records; the key is downstream. **Accepting this ADR is what discharges the dependency; while it is proposed, the edge stands.** On acceptance, `#37 blocked_by #39` should be replaced by `#39 blocked_by #37`, because #39's residual work genuinely does depend on #37's output.
+- Reversal rather than bare removal, for a measurement reason. The eval feeds evaluators "the complete live contents of `RISK-SHAPES.md`, assembled at run time", so any #39 edit demoting the taxonomy *in that file* is a change to the measured input and invalidates the same baseline this ADR is careful to protect for the Isolated prompt. #39's wording change and #37's rule wording must therefore land together and be measured by one 27-run pass. A reverse edge encodes that; a removed edge leaves it to memory.
+- #39's triage notes make the edge's release conditional on #37's step 3 producing a discriminator gated on neither risk shapes nor responsibilities. That condition must go regardless of how the edge is resolved: it is a deadlock by construction, and it is asymmetric — if #37's answer *does* gate on responsibilities, the condition is never satisfied and the edge survives permanently while #39 has nothing left to deliver.
+- Case 4 is demoted from a constraint on #37's discriminator to a consequence of it. #37 designs against the eight cases whose keys stand on independent argument; case 4 stays out of the scored baseline, where the eval already has it, and #39 closes by recording whatever key the accepted discriminator implies, with the argument written out. **This costs case 4 its diagnostic value** — a case keyed from the rule it tests can never falsify that rule. That is the price of the cycle, not a free move.
+- Any discriminator gated on named shapes is excluded. It fails case 9 by construction.
+- **That exclusion now rests on a measurement as well as an argument, and the two do different work.** Case 9's *key* of two remains argued, not corroborated — it was written with the candidate discriminators already in view, specifically to separate them, and the eval warns of itself that "a case built to discriminate is at risk of being keyed toward the candidate its author preferred." What is measured is the *behaviour*: three isolated blind runs against the live reference returned zero, unanimously, each quoting the contradiction and resolving it shapes-first. So the observation confirms that the shape-gated reading is what the current wording transmits; it does not confirm that two is the right answer. Attack the key if you want to attack the decision — but the under-split is no longer hypothetical.
+- **The rewording has to overturn a unanimous reading, not break a tie.** Three of three evaluators reached shapes-first independently and defended it by quotation, citing the discriminators' unconditional "Ordinary work does not count toward the split", the shape-anchored "the rule counts the independent models instantiating them", and the softness of "these shapes are where independent models *usually* live". A subtle patch will not move that. Whatever #37 lands has to be explicit about the order of operations.
+- The prose does not yet use this vocabulary. `SKILL.md`, `RISK-SHAPES.md`, the docs page, the eval, and `CLAUDE.md`'s risk-shapes trigger all still say *independent model*, and `CONTEXT.md` records the pending rename under **Flagged ambiguities** rather than retiring the live name. The rename lands with [#37](https://github.com/faviann/skills/issues/37)'s positive test, since that prose has to be rewritten anyway. `SKILL.md`'s paragraph is deliberate fork-authored wording hoisted by `5dd5609` and `99e164d` — `git log -S` it and patch the minimum. Note that the docs page also uses *model* to mean the LLM in several places; a mechanical rename will corrupt those.
+- The eval's **Isolated prompt** keeps its current wording until a candidate discriminator is ready. Renaming the vocabulary an evaluator reads would change the measured input and invalidate the baseline the change is judged against.
+- Accepting this does not settle [#37](https://github.com/faviann/skills/issues/37). It rules out one family of discriminator and licenses another; the positive test that identifies one correctness contract is still undecided.

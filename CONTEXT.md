@@ -42,10 +42,24 @@ Evidence from the maintained production path that answers a staged-calibration s
 **Triage role**:
 A canonical state-machine label applied to an **Issue** during triage (e.g. `needs-triage`, `ready-for-agent`). Each role maps to a real label string in the **Issue tracker** via `docs/agents/triage-labels.md`.
 
+**Risk shape**:
+A diagnostic pattern showing where independently failure-prone **Correctness contracts** commonly live. It guides inspection but is neither exhaustive nor the unit counted by `to-tickets`'s risk rule.
+_Avoid_: taxonomy gate, counted shape
+
+**Correctness contract**:
+A coherent set of outcomes and invariants that must remain correct as one unit. `to-tickets`'s risk rule counts independent correctness contracts.
+_Avoid_: production contract
+
+**Responsibility**:
+What a **Correctness contract** decides or governs, such as state, lifecycle, or authorization. One contract can have several responsibilities, and several contracts can have the same responsibility.
+_Avoid_: model kind, model family
+
 ## Relationships
 
 - An **Issue tracker** holds many **Issues**
 - An **Issue** carries one **Triage role** at a time
+- A **Correctness contract** has one or more **Responsibilities**, and several **Correctness contracts** may share one **Responsibility**
+- A **Risk shape** helps locate **Correctness contracts** but does not determine how many a slice contains
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
 - A **Map** holds many **Decision tickets** and one **Not yet specified** section
@@ -60,3 +74,6 @@ A canonical state-machine label applied to an **Issue** during triage (e.g. `nee
 - "epic" is an imported term (Jira/agile) with **two** targets here, so it is never used on its own. A **Map** and a **Parent** are both "a big thing with smaller things under it", but they route to different skills. The test is whether the decisions are settled: open decisions and no visible route → a **Map**, charted by `wayfinder`; decisions settled and the work is being sliced into a build → a **Parent**, produced by `to-spec` and decomposed by `to-tickets`. Say which one is meant.
 - **Frontier** is defined twice. `wayfinder`: "the open, unblocked, *unclaimed* children — the edge of the known". `to-tickets`: "any ticket whose blockers are all done", with no unclaimed condition. Resolved: the two are scoped, not contradictory. `wayfinder` claims a ticket by assigning it before any work, so its frontier query drops assigned children; `to-tickets` publishes and never dispatches, so its line orders work rather than allocating it. The unclaimed condition lives where claiming happens. Both definitions are upstream's and both our copies are byte-identical, so there is nothing here to patch. Our AFK path (`select-issue` → `work-on`) does not claim either, which is safe while one agent runs at a time; running several concurrently would need a claim step in those skills — a gap there, not in this term.
 - Whether the **Map** / **Not yet specified** / **Graduate** mechanism belongs to `wayfinder` alone or is shared — resolved by [#11](https://github.com/faviann/skills/issues/11): `wayfinder` retains that design-fog mechanism; `to-tickets` handles a settled deferred remainder with a **Staged calibration** checkpoint on the **Parent**.
+- **Correctness contract** is the settled name for the unit `to-tickets`'s risk rule counts, but the skill prose still calls it the *independent model* — in `SKILL.md`, `RISK-SHAPES.md`, and the risk-shapes eval. **Not yet resolved**, and deliberately not listed under `_Avoid_` — for two reasons, of which the second is the one that actually stops the edit. Retiring a name the prose still uses would make this glossary contradict every file it describes. And the eval's **Isolated prompt** is evaluator-visible *measured input*: renaming the vocabulary there forfeits comparability with the isolated baseline, the multi-case run, and the `d21bd3f` control, which is the only captured known-good reading of the pre-change text. An `_Avoid_` line is exactly the kind of instruction an agent acts on unilaterally in a file that looks like prose.
+
+  Scope, so whoever executes it knows what they are taking on: roughly 60 sites across `SKILL.md`, `RISK-SHAPES.md`, `docs/engineering/to-tickets.md`, the risk-shapes eval, and `CLAUDE.md`'s risk-shapes trigger sentence — and the docs page uses *model* to mean the LLM in several places, so a mechanical rename will corrupt those. It lands in one commit with [#37](https://github.com/faviann/skills/issues/37)'s discriminator wording, measured by one 27-run pass. `SKILL.md`'s paragraph is deliberate fork-authored wording — `git log -S` it and patch the minimum before touching it. Until then both names denote the same thing, and the prose's name is the one in force.
