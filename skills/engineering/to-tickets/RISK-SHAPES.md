@@ -10,6 +10,7 @@ A model is **independent** when it can be got wrong on its own — its correctne
 - **New persistence lifecycles** — state that something now has to create, mutate, converge, expire, or reconcile on its own schedule.
 - **Migration and convergence models** — existing data, or already-running instances, must arrive at a new form; correctness depends on what was already out there.
 - **Backward-compatibility protocols** — two forms coexist and something must read, write, or negotiate both.
+- **Authorization boundaries** — identity or capability checks that decide who or what may act.
 - **Fail-closed resource-governance authority** — a deadline, budget, quota, or size bound whose breach makes the system refuse, truncate, or degrade rather than continue.
 
 More than one **independent model** in a single slice is what the risk rule fires on — not more than one shape. The taxonomy works in both directions: the shapes say what to inspect, and the rule counts the independent models instantiating them. Two independent concurrency protocols are one shape and two models; a slice reaching across two shapes carries one model when neither half can be got wrong without the other.
@@ -24,9 +25,11 @@ The skill states the rule in shorter words; these shapes are what it covers.
 
 ## Discriminators
 
-Both of these separate ordinary work from a risk shape. Ordinary work does not count toward the split.
+Each of these separates ordinary work from a risk shape. Ordinary work does not count toward the split.
 
 **Persistence.** Traversing persistence is ordinary: reading, writing, or querying through a lifecycle that already exists, whose invariants already hold, and whose failure modes are already exercised. It becomes a risk shape when the slice *introduces* a lifecycle — new state with its own creation, convergence, or expiry — or a compatibility protocol, where new writes must stay legible to old readers or old records legible to new ones.
+
+**Authorization.** Traversing an existing authority is ordinary: the slice acts through identity or capability checks that something else already owns and enforces. It becomes a risk shape when the slice *introduces or materially widens* one. Authorization governs who or what may act; resource governance bounds how much may be consumed.
 
 **Resource governance.** Consuming an existing bound is ordinary: the slice runs inside one named by the shape above that something else already owns and enforces. It becomes a risk shape when the slice *introduces or materially changes* one — because afterwards a caller that previously always completed can now be refused, truncated, or bounded, and every caller inherits that failure mode.
 
