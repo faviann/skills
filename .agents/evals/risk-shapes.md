@@ -4,6 +4,10 @@ Run this eval after changing the independent-model rules, discriminators, or wor
 examples in `skills/engineering/to-tickets/RISK-SHAPES.md`. It is hand-run and
 diagnostic; it enforces nothing automatically.
 
+Before proposing a positive correctness-contract boundary rule or excluding
+candidates through shape provenance, read
+[ADR 0005](../adr/0005-do-not-add-a-short-boundary-rule.md).
+
 ## Protocol
 
 Run every scored case in isolation three times: 30 fresh blind evaluations in total.
