@@ -23,6 +23,12 @@ A match requires the same candidate models, not merely the same count and verdic
 right number reached from the wrong candidate set is a semantic mismatch. Never re-key
 a case from its observed result.
 
+A **targeted single-case probe** is permitted: one case, run in isolation as many times as
+the question needs, to size a defect or settle an instability. Record its case, run count,
+date, reference commit, and model. A probe never substitutes for the full-suite regression
+required after a change to the independent-model rules, the discriminators, or the worked
+examples.
+
 ## Isolated prompt
 
 The proposed slice fits one fresh context window and closes as one reviewable pull
@@ -137,7 +143,7 @@ table, and nothing expires, converges, or advances on its own schedule.
 | 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. |
 | 2 | 2 | yes | A priority determination and an independent concurrency protocol with a lease lifecycle. Tests a consumer whose coordination can be wrong while classification is right. |
 | 3 | 1 | no | One outcome determination; response fields are its current canonical representation, with no backward-compatibility protocol. This is the no-compatibility half of the Case 7 pair. |
-| 4 | 1 | no | The pre-registered key treats refusal as the direct application of one sensitivity/authorization determination. The key is fixed and the case is scored: against the post-#39 reference it returns `2 / yes` unanimously, a stable mismatch. Whether an export gate refusing above a threshold is a distinct model is [issue #37](https://github.com/faviann/skills/issues/37)'s to settle by argument, never by re-keying. |
+| 4 | 2 | yes | A sensitivity determination and an independent export-refusal authority. The threshold is a decision the three-valued determination does not contain, and the export path acts: a caller that previously received a document now receives an error. Restored to `2 / yes` by [issue #48](https://github.com/faviann/skills/issues/48) — a reversal, not a re-key; see **Case 4's key, and how it moved twice**. |
 | 5 | 1 | no | One subscription-state determination; expiry is derived on read and introduces no persistence lifecycle. Tests that several outcomes and derived behavior do not become plural models. |
 | 6 | 2 | yes | A hiring-stage determination and an independent new persistence lifecycle for the immutable audit trail. Tests append-only state with its own retention invariant. |
 | 7 | 2 | yes | A redaction authorization/content-policy model and a backward-compatibility protocol. Tests the single clause that distinguishes it from Case 3: consumers on the previous release must still parse the representation. |
@@ -145,6 +151,57 @@ table, and nothing expires, converges, or advances on its own schedule.
 | 9 | 2 | yes | Two orthogonal determinations, neither introducing a named risk shape. Tests whether a discriminator can still count a second model when the taxonomy has no shape to place it under. |
 | 10 | 2 | yes | A capability-authorization model and an independent deduplication protocol. **Both halves instantiate a named shape** — the dedup half concurrency, the authorization half backward compatibility, because two credential forms coexist. Green-baseline guard, not a reproduction. Abstracted from production; see **Reality check**. |
 | 11 | 2 | yes | Case 10 with the coexisting credential form removed, so the authorization half instantiates no named shape. Tests whether a reader still counts an authorization model when the taxonomy offers it no home. Keyed by argument from the deciding sentence: two determinations, neither's correctness following from the other's. |
+
+## Case 4's key, and how it moved twice
+
+Case 4 is a constructed case. `.agents/risk-shapes-provenance.md` maps cases 7, 8, and 10 to
+production slices and maps no others, so nothing here rests on a real verdict.
+
+Its key has moved twice, and the first move is the reason the second was needed.
+
+**Set at `2 / fires`, by argument.** The case was written as the resource-governance slot in
+a set built to vary the second model's shape, so that a worked example could not be passed by
+matching one flavour of risk. Its author keyed it two before any evaluator saw it.
+
+**Changed to `1 / no`, from observed output.** Five of six reconstruction runs returned one
+model. The key was changed to match them. The file recorded that plainly at `e92a6a6`:
+
+> One sensitivity/authorization model; refusal directly applies that determination. The
+> original key said two models, but five of six blind judges converged on one: the export
+> threshold introduces no separately owned question or lifecycle.
+
+**Then the record of the change was removed.** `1d58cb8` deleted that sentence and moved the
+case into a **Blocked reproduction** section. `4ffade8` — the commit that began the isolated
+baseline — introduced the wording that stood until #48: *"The pre-registered key treats
+refusal as the direct application of one sensitivity/authorization determination."* The key
+was called pre-registered at the moment it started being used as one.
+
+Those six runs are also the earlier population this file already sets apart; they read a
+reconstructed reference, not one that shipped. Every run against a reference that shipped —
+nine pre-#39 and three post-#39 — returned `2 / yes`.
+
+**Restored to `2 / yes` by [#48](https://github.com/faviann/skills/issues/48), by argument.**
+The argument comes from three keys set independently and earlier, not from the runs.
+
+- **Case 3** (`1`) — a response body per outcome. It carries the determination's answer. It
+  holds nothing, refuses nothing, and no party outside the slice constrains it; the case's
+  release clause says so.
+- **Case 5** (`1`) — an expiry implied by each state, derived on read. Nothing stores it and
+  nothing acts on it.
+- **Case 7** (`2`, corroborated in production) — a serialization that follows from the
+  redaction rule and is a second model anyway, because it answers to what the previous
+  release expects.
+
+Entailment cannot be the test: case 7's serialization is entailed and still counts. What
+separates case 4 from cases 3 and 5 is that its export path **acts**. The threshold is a
+decision the three-valued determination does not contain — `above internal` and
+`above public` were equally available — and a caller that previously received a document now
+receives an error. That failure mode is not the classification's.
+
+**Read this key with its history in mind.** It is argued, not corroborated, and it has been
+wrong once. What #48 establishes is narrower than the key itself: the `1 / no` key was
+adopted from evaluator output, which this file forbids everywhere else, and the record of
+that was overwritten rather than kept.
 
 ## Case 9's key, and how it was set
 
@@ -225,15 +282,13 @@ sounds while seven of nine keys are argued.
 - Across roughly 50 reference-audit complaints, no evaluator requested an external
   link, pull request, or source artifact.
 
-## Reproduction — document sensitivity
+## Case 4 — document sensitivity
 
-Case 4 is scored. Its key is fixed at one model / does not fire, and the observed result
-against the post-#39 reference is a stable `2 / yes` mismatch; see
-**Post-#39 re-baseline** below. #39 has landed, so nothing about this case is blocked any
-more. The open question is [issue #37](https://github.com/faviann/skills/issues/37)'s:
-whether an export path refusing above a threshold is a distinct model or the direct
-application of the sensitivity determination. Re-keying this case would decide #37 inside
-the eval rather than in the skill.
+Case 4 is scored and passes. Its key is `2 / yes`, restored by
+[issue #48](https://github.com/faviann/skills/issues/48) once the provenance of the earlier
+`1 / no` key was traced; see **Case 4's key, and how it moved twice** below. The observed
+result against the post-#39 reference is `2 / yes` unanimously, so the case matches its key
+on candidate identity as well as count and verdict.
 
 > The slice determines a document's sensitivity — exactly one of public, internal,
 > or secret. The same slice adds an export path that refuses to emit any document
@@ -535,6 +590,12 @@ today, so a later edit that drops it to `1 / does not fire` is a detectable regr
 
 ### The pattern across every configuration tested
 
+> **Pre-#39 argument, and one superseded fact.** This section was written before #39 landed
+> and before [issue #48](https://github.com/faviann/skills/issues/48) restored case 4's key.
+> "Case 4 over-counts against its key" below was true against the `1 / no` key of the time;
+> against the restored `2 / yes` key those six runs are a pass. The run counts and the
+> shape-material reading are unaffected, and the reasoning is retained unedited.
+
 | Configuration | Shape-material | Reading taken | Result |
 | --- | ---: | --- | --- |
 | Case 9 — two bare classifications | none | shapes-first | `0 / no` ×3 |
@@ -688,7 +749,7 @@ and no key changed.
 | --- | --- | --- | --- | --- | --- |
 | 2 | 2 / yes | 2 / yes | 1 / no | 2 / yes | **unstable** |
 | 3 | 1 / no | 1 / no | 1 / no | 1 / no | **pass** |
-| 4 | 2 / yes | 2 / yes | 2 / yes | 1 / no | **stable mismatch** |
+| 4 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | **pass** |
 | 5 | 1 / no | 1 / no | 1 / no | 1 / no | **pass** |
 | 9 | 0 / no | 0 / no | 0 / no | 2 / yes | **stable mismatch** |
 
@@ -750,7 +811,10 @@ is now a stable pass, and the `0` reading did not recur.
 
 ### Case 4 — scored against its fixed key
 
-The key is `1 / no`: refusal as the direct application of one sensitivity determination.
+The key at the time of this measurement was `1 / no`: refusal as the direct application of
+one sensitivity determination. [Issue #48](https://github.com/faviann/skills/issues/48) has
+since restored it to `2 / yes`, so the runs recorded here are a pass. The paragraphs below
+are the measurement as written, and describe the runs, not the standing.
 
 All three runs returned `2 / yes`, naming a sensitivity determination and an independently
 falsifiable export refusal authority. Each gave the same two-directional independence
@@ -768,13 +832,13 @@ not whether it is counted.
 
 **Delta from the superseded recording.** No delta in count or verdict — nine pre-#39 runs
 and three post-#39 runs all return `2 / yes`. The nine are those recorded in
-**Reproduction — document sensitivity**: three multi-case runs, three isolated runs against
+**Case 4 — document sensitivity**: three multi-case runs, three isolated runs against
 `e92a6a6`, and three isolated controls against `d21bd3f`. The six reconstruction runs
 recorded in that same section are a separate, earlier population — five of them returned
 `1 / no` — and are not included in the nine. The delta is in the reasoning route and in
 the case's standing: the case was scored in this re-baseline and is no longer excluded, and
-the exclusion condition recorded in **Reproduction — document sensitivity** is void. The key
-stays `1 / no`.
+the exclusion condition recorded in **Case 4 — document sensitivity** is void. The key stood
+at `1 / no` when this was written; #48 has since restored it to `2 / yes`.
 
 Two of three runs still report a residual contradiction: the fail-closed shape's refusal
 clause reads onto a content-policy refusal while its own headword lists only quantitative
@@ -815,6 +879,11 @@ measurement neither confirms nor supersedes.
 - Reproductions: **case 2** (unstable), **case 4** (stable mismatch), **case 9** (stable
   mismatch). All three are #37's, and none is blocked on #39 any more.
 
+> **Case 4's standing superseded.** [Issue #48](https://github.com/faviann/skills/issues/48)
+> restored case 4's key to `2 / yes`, so the `2 / yes` runs above are a pass and case 4
+> joins the green baseline. The reproductions are **case 2** and **case 9**. The list is
+> retained as written for the record of what this measurement concluded.
+
 ### Method caveat
 
 As with the Case 9 baseline and the reality check, these evaluators were subagents
@@ -823,3 +892,57 @@ sandboxed without tool access. "Told not to look" is weaker than "could not look
 the fifteen reported using a tool, and none cited a key or an expected answer.
 
 No run was discarded and no run errored. All three inputs within each case were identical.
+
+## Case 2 probe — nine runs on one case
+
+A targeted single-case probe under **Protocol**. Case 2 only. Nine fresh blind evaluators,
+run on 2026-08-09 against the live `RISK-SHAPES.md` at repo commit `ae7cad8`, whose content
+for that file was last changed by `fdc5cc5` — identical to the content the **Post-#39
+re-baseline** measured, so the two populations pool. Model: `claude-opus-5`.
+
+The probe exists because case 2's three-run result was `2 / yes`, `2 / yes`, `1 / no`, and
+three runs cannot separate a real defect from noise. The decision rule was fixed before the
+runs started: three or more of nine at one model meant a reproducible defect.
+
+| Population | `1 / no` | `2 / yes` |
+| --- | ---: | ---: |
+| This probe | 6 | 3 |
+| Post-#39 re-baseline | 1 | 2 |
+| **Pooled, twelve runs** | **7** | **5** |
+
+**Candidate identity matched the key on all nine runs.** Every run named a tier
+determination and one lease model, and every run fused lease exclusivity with lease expiry
+and reassignment — the key's own decomposition. No run split the lease. So this is a count
+divergence only, the same shape as case 9's.
+
+**Case 2 is not unstable. The majority reading is the under-split.** The superseded
+`e92a6a6` recording was a semantic mismatch, and the post-#39 recording was instability with
+the correct reading in the majority. Against twelve pooled runs the correct reading is in the
+minority.
+
+**Three routes lead evaluators to drop the tier determination**, all quoted from the
+reference, and runs used them interchangeably:
+
+1. The shape gate — *"the rule counts the independent models instantiating them"*, softened
+   by *"these shapes are where independent models usually live"*.
+2. The ordinary-work line — *"Ordinary work does not count toward the split"*, read as a rule
+   about determinations rather than about work.
+3. The persistence discriminator — *"Traversing persistence is ordinary"*, applied to the
+   tier determination because it reads the account's plan.
+
+Route 3 was not predicted. The discriminators sort work; evaluators applied them to a
+determination, which is neither traversal nor introduction of persistence, so it fell to
+*ordinary* by default.
+
+Every run named the fork explicitly, including the three that counted correctly. The
+clearest statement of it:
+
+> Read literally, A counts and the rule fires at 2. Read through the shapes, A does not count
+> and the rule stays silent.
+
+### Method caveat
+
+As with every baseline above, these evaluators were subagents *instructed* not to use tools,
+with the reference pasted inline, rather than evaluators sandboxed without tool access. None
+of the nine reported using a tool, and none cited a key or an expected answer. All nine
+inputs were identical. No run was discarded and no run errored.
