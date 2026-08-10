@@ -13,7 +13,9 @@ A model is **independent** when it can be got wrong on its own — its correctne
 - **Authorization boundaries** — identity or capability checks that decide who or what may act.
 - **Fail-closed resource-governance authority** — a deadline, budget, quota, or size bound whose breach makes the system refuse, truncate, or degrade rather than continue.
 
-More than one **independent model** in a single slice is what the risk rule fires on — not more than one shape. The taxonomy works in both directions: the shapes say what to inspect, and the rule counts the independent models instantiating them. Two independent concurrency protocols are one shape and two models; a slice reaching across two shapes carries one model when neither half can be got wrong without the other.
+More than one **independent model** in a single slice is what the risk rule fires on — not more than one shape. The taxonomy works in both directions: the shapes say what to inspect, and the rule counts the independent models. Two independent concurrency protocols are one shape and two models; a slice reaching across two shapes carries one model when neither half can be got wrong without the other.
+
+Count the determinations the slice introduces, whether or not they instantiate a listed shape. The discriminators sort work; they do not decide whether a determination counts.
 
 What decides is the qualitative identification of more than one independent state, lifecycle, or authorization model. Counts of files, boundaries, taxonomy categories, estimated diff size, or models merely *touched* are advisory. Three readings follow from that:
 
