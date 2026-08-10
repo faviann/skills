@@ -147,7 +147,7 @@ table, and nothing expires, converges, or advances on its own schedule.
 
 | Case | Models | Fires | Shapes and purpose |
 | --- | ---: | --- | --- |
-| 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. **Instrument version 2** — the case text gained a reconciliation-scope clause on 2026-08-10; the key did not move. Measurements before that clause are not comparable to later ones. See **Case 1's instrument repair**. |
+| 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. **Retired from the scored suite on 2026-08-10 — unscored boundary probe.** The key is unchanged and was never re-keyed; instrument version 2 returned `7 × 2, 2 × 3` over nine runs. Case 6 carries this coverage. See **Disposition — case 1 retired from the scored suite**. |
 | 2 | 2 | yes | A priority determination and an independent concurrency protocol with a lease lifecycle. Tests a consumer whose coordination can be wrong while classification is right. |
 | 3 | 1 | no | One outcome determination; response fields are its current canonical representation, with no backward-compatibility protocol. This is the no-compatibility half of the Case 7 pair. |
 | 4 | 2 | yes | A sensitivity determination and an independent export-refusal authority. The threshold is a decision the three-valued determination does not contain, and the export path acts: a caller that previously received a document now receives an error. Restored to `2 / yes` by [issue #48](https://github.com/faviann/skills/issues/48) — a reversal, not a re-key; see **Case 4's key, and how it moved twice**. |
@@ -1268,6 +1268,123 @@ none cited a key or an expected answer. All three inputs within each case were i
 and the control's three inputs differed from the suite's case-1 inputs only in the reference
 commit under test. No run was discarded and no run errored.
 
+## Two targeted probes — 2026-08-10
+
+Run under **Protocol**'s targeted single-case probe clause. Cases 1 and 8, nine fresh isolated
+evaluators each, `claude-opus-5`, against `RISK-SHAPES.md` at `6002224` — byte-identical to
+`f03d80e`, so the reference is unchanged from the arm measured earlier that day. Eighteen
+evaluators, none reused within or across probes. Criteria, run counts, and invalid-run handling
+were fixed in writing before any run.
+
+**Pre-registered criteria.** Case 1 passes only at `2 / yes` ×9 with candidate identity
+*classification plus one ledger lifecycle*. Case 8 passes only at `1 / no` ×9 with *one
+billing-state determination* and no compatibility or authorization model. Any differing valid
+run means that case is not green. No case wording changes in response to a result. A run is
+**invalid** — not red — on tool use, key exposure, malformed input, or execution failure; an
+invalid run is preserved with its reason and replaced by a fresh evaluator until nine valid
+runs exist, and a valid run is never replaced because its answer differs from the key.
+
+**No run was invalid.** No evaluator reported tool use, none cited a key or expected answer,
+none errored, and all nine inputs within each probe were identical. No replacements were made.
+
+### Case 1 version 2 — not green
+
+| Runs | Result |
+| --- | --- |
+| 9 | `2, 2, 3, 2, 2, 2, 2, 3, 2` — **seven at 2, two at 3**, against a key of `2 / yes` |
+
+**The seven folded the reconciliation into the ledger**, and five cited the version-2 clause
+explicitly as what did it. One stated the counterfactual precisely: *"Had reconciliation kept
+its own state, or acted on entries the ledger did not create, this would be a third candidate
+and probably a third model."* The clause transmits, for most readers.
+
+**The two did not, by two routes.** Run 3 filed the reconciliation under the migration shape,
+reading *"what was already out there"* as reaching entries *"written under possibly older
+rules"* and the carrier's external records. Run 8 did the same and then overrode the clause
+outright:
+
+> The slice's own mitigation — "Reconciliation corrects only entries the ledger created and
+> keeps no separate state" — narrows blast radius but does not merge B and C. Shared storage is
+> not the test; the test is whether one's correctness follows from the other's.
+
+That is this eval record's own position, stated in its case-1 record before this probe ran: the
+shape names are downstream of the independence judgement, not the source of it. A clause strong
+enough to reach the independence test would have to assert the grouping the evaluator is meant
+to derive — which is what the withdrawn first draft did, and why it was withdrawn.
+
+**Not compared to version 1.** Under **Protocol** a version-2 measurement can neither
+corroborate nor refute what version 1 measured. The `7 / 2` split is version 2's own result.
+
+### Case 8 — green
+
+| Runs | Result |
+| --- | --- |
+| 9 | `1, 1, 1, 1, 1, 1, 1, 1, 1` — unanimous, against a key of `1 / no` |
+
+All nine named one billing-state determination, folded the four outcomes as alternatives within
+it, and folded the three consumers as code paths rather than models. None found a
+compatibility or authorization model.
+
+Case 8 had never been measured since `e92a6a6`, before #39 added the authorization shape, and
+it carries no disambiguating clause of the kind cases 3, 5, 9, 10, and 11 have. It was cleared
+by argument before the probe — the backward-compatibility shape requires two coexisting forms
+and case 8 describes one — and the probe corroborates that clearance. **Several runs raised the
+public API serializer as a conditional and dismissed it on the text**, one writing that if the
+serializer *"must negotiate old and new forms, that is a backward-compatibility protocol, a
+second independent model, and the rule fires. On the slice as written, it does not."*
+
+### An incidental finding, recorded and not acted on
+
+**All eighteen counted a determination that instantiates no listed shape.** All nine case-1
+runs counted the classification, and all nine case-8 runs counted the billing-state predicate,
+while reporting no shape for either. Six case-1 runs explicitly raised the tension between
+*"the rule counts the independent models instantiating them"* and the deciding sentence; the
+others applied the count without naming that ambiguity.
+
+That is the largest single population yet measured on the question
+[#50](https://github.com/faviann/skills/issues/50) exists to settle, and it points the opposite
+way from case 9's stable `0 / no`. **It is not used to modify #50.** Case 1 is not one of the
+cases #50 must move — cases 2 and 9 are — and a finding harvested from a probe run for another
+purpose is not a substitute for #50's own pre-registered gate.
+
+### Disposition — case 1 retired from the scored suite
+
+**The pre-registered outcome happened.** Version 2 is not green;
+[#37](https://github.com/faviann/skills/issues/37) remains open and #50 remains parked. That
+much follows from the criteria fixed before the runs.
+
+**Retirement does not.** It was not the pre-registered consequence of a failed probe. The
+review-failure fallback that would have triggered it expired when the clause review returned
+*sound instrument*. **Retiring case 1 is a new instrument decision, taken after seeing the
+`7 / 2` result, by a party who knew what that result implied.** That degree of freedom is
+recorded here rather than smoothed over, and a reader should weigh the decision accordingly.
+
+**The argument for it.** The mechanism clause transmitted to most readers without stating the
+answer — which is what a case clause is supposed to do. Two coherent readers still separated
+the reconciliation, through migration and through independence. The one permitted revision is
+spent, and the withdrawn draft shows the shape the alternative takes: a clause that reaches the
+independence test encodes the grouping the case is supposed to make an evaluator infer. So case
+1 cannot reliably test its argued key without becoming a case that cannot fail.
+
+**What retirement does and does not change.**
+
+- Case 1 is **preserved in full** — its text at both instrument versions, its key of `2 / yes`
+  unchanged, and every version-1 and version-2 measurement with its reasoning. Nothing is
+  rescored, reworded, or deleted.
+- It becomes an **unscored boundary probe**. It may be run and cited; it does not gate a suite.
+- **Case 6 preserves the retired coverage** — a hiring-stage determination plus an independent
+  new persistence lifecycle for the audit trail is the same downstream-lifecycle shape case 1's
+  purpose line names.
+- The consequences for **Protocol** and for #50's gate — ten scored cases, thirty runs for a
+  full suite, an all-ten pass condition — are recorded as owed, and are made in their own
+  change after this record lands.
+
+### Method caveat
+
+As with every baseline in this file, these evaluators were subagents *instructed* not to use
+tools, with the complete reference pasted inline, rather than evaluators sandboxed without tool
+access. "Told not to look" is weaker than "could not look".
+
 ## Current standing — 2026-08-10
 
 This section supersedes **every** earlier enumeration of the green baseline, the
@@ -1282,22 +1399,22 @@ parked** above.
 
 | Case | Standing against the live reference | Most recent measurement |
 | --- | --- | --- |
-| 1 | **Unmeasured — new instrument version** | Version 1 only: `3 / 2 / 2` at `e61006f`, `2 / 3 / 2` at `f03d80e`, 2026-08-10. Version 2 has never been run |
+| 1 | **Retired from the scored suite — unscored boundary probe** | Version 2: `7 × 2, 2 × 3` against a key of `2`, nine runs at `6002224`, 2026-08-10. Version 1: `3 / 2 / 2` at `e61006f`, `2 / 3 / 2` at `f03d80e` |
 | 2 | **Reproduction — under-split** | `1 / no` in 7 of 12 pooled runs to 2026-08-09; moved to key only at the parked reference |
 | 3 | Green baseline | Post-#39 re-baseline, 2026-08-09 |
 | 4 | Green baseline | Post-#39 re-baseline, 2026-08-09; key restored by #48 |
 | 5 | Green baseline | Post-#39 re-baseline, 2026-08-09 |
 | 6 | Green baseline | Isolated baseline, `e92a6a6` |
 | 7 | Green baseline | Isolated baseline, `e92a6a6` |
-| 8 | Green baseline | Isolated baseline, `e92a6a6` |
+| 8 | Green baseline | Nine-run probe at `6002224`, `1 / no` ×9, 2026-08-10 |
 | 9 | **Reproduction — stable mismatch** | `0 / no` ×3 at two references; moved to key only at the parked reference |
 | 10 | Green baseline | Case 10 baseline |
 | 11 | Green baseline | Case 11 baseline |
 
-**Green baseline: cases 3, 4, 5, 6, 7, 8, 10, 11. Reproductions: cases 2, 9. Unmeasured:
-case 1.**
+**Scored suite: ten cases — 2, 3, 4, 5, 6, 7, 8, 9, 10, 11. Green baseline: 3, 4, 5, 6, 7, 8,
+10, 11. Reproductions: 2, 9. Retired and unscored: case 1.**
 
-Four things this list is careful about.
+Five things this list is careful about.
 
 **Cases 2 and 9 do not join the green baseline**, even though both returned three unanimous
 key-matching results on 2026-08-10. That suite measured `e61006f`, the parked reference. The
@@ -1314,24 +1431,39 @@ recorded at the time was that the key rested on an unstated lifecycle-grouping r
 paragraph is version 1**, and version 1 is no longer the instrument; the paragraph is history,
 not current standing.
 
-**Case 1 is now unmeasured rather than a reproduction.** Its text gained a
-reconciliation-scope clause on 2026-08-10; see **Case 1's instrument repair**. Those six runs measured instrument
-version 1 and are not comparable to anything measured afterward, so case 1 has no standing
-against the live reference until version 2 is run. It is not a green-baseline case: nothing
-has been measured that would put it there. The instrument repair supplies a fact the case was
-missing; it does not repair the reference ambiguity the runs reported, which stays open on
+**Case 1 is retired from the scored suite, and that decision was taken after seeing its
+result.** Version 2 returned `7 × 2, 2 × 3` against a key of `2` over nine runs. Retirement was
+not the pre-registered consequence of that failure; it is a new instrument decision made with
+the result in hand. Both the argument and the degree of freedom are recorded in **Disposition —
+case 1 retired from the scored suite**. The case, its key, and every measurement at both
+instrument versions are preserved; it may be run and cited but does not gate a suite, and case
+6 carries the downstream-lifecycle coverage it held.
+
+**Case 8's green standing is current, not inherited.** Its earlier membership rested on the
+`e92a6a6` isolated baseline, taken before #39. Nine runs at `6002224` returned `1 / no`
+unanimously with correct candidate identity, so it now stands on a measurement of the live
+reference. Cases 6 and 7 have **not** been re-measured since `e92a6a6`, and their standing is
+still inherited.
+
+Neither probe repairs the reference ambiguity the version-1 runs reported. That stays open on
 [#37](https://github.com/faviann/skills/issues/37).
 
-**The suite still cannot return a coherent eleven-case verdict, for a simpler reason than
-before.** **Protocol** requires all eleven cases to return three unanimous key-matching
-results. Case 1 cannot, because **instrument version 2 has never been run** — not because its
-scoring is undecided. The earlier blocker was that scoring an unstable case meant settling the
-lifecycle-grouping boundary, which is #37's open question; the instrument repair supplies the
-fact the case was missing, so that question no longer stands between case 1 and a score. No
-scoring rule for an already-unstable case was invented, then or now. What remains is a
-measurement that has not been taken.
+**A coherent verdict is now available, over ten cases rather than eleven.** Every scored case
+has a current, scoreable standing: eight green, two reproductions that only #50's change is
+expected to move. **That is what "coherent" means here — not that all ten are green.** Cases 2
+and 9 are expected to fail against the live reference and to move at the parked one; a suite in
+which they do so is working, not broken.
 
-**Consequence for further work.** Changes to the independent-model rules, the discriminators,
-or the worked examples are blocked until #37 restores a coherent eleven-case baseline. Changes
-that do not touch those three things — this record, Protocol wording, provenance, prose
-corrections — are unaffected and require no run.
+The earlier blocker is discharged, and not by inventing a scoring rule for an unstable case.
+Case 1 was retired instead, by an argument recorded with its degrees of freedom. **Protocol
+and #50's gate still say eleven cases and 33 runs.** Bringing them to ten and thirty is owed
+work, made in its own change after this record lands; until it does, the two documents disagree
+with this section, and this section governs.
+
+**Consequence for further work.** The baseline block is lifted. Changes to the
+independent-model rules, the discriminators, or the worked examples can be adjudicated again
+once **Protocol** and #50's gate are brought to ten scored cases and thirty runs — the owed
+change named above. Until that change lands, no rule change should be gated, because the gate's
+own terms still name a case that no longer scores. Changes that touch none of those three
+things — this record, Protocol wording, provenance, prose corrections — are unaffected and
+require no run, as before.
