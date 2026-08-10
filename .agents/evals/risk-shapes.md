@@ -140,7 +140,7 @@ table, and nothing expires, converges, or advances on its own schedule.
 
 | Case | Models | Fires | Shapes and purpose |
 | --- | ---: | --- | --- |
-| 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. |
+| 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. **Measured unstable at two references on 2026-08-10** — the key is unchanged and is not re-keyed from those runs; see **Current standing** and **Full-suite regression for the shapes-do-not-gate-count change**. |
 | 2 | 2 | yes | A priority determination and an independent concurrency protocol with a lease lifecycle. Tests a consumer whose coordination can be wrong while classification is right. |
 | 3 | 1 | no | One outcome determination; response fields are its current canonical representation, with no backward-compatibility protocol. This is the no-compatibility half of the Case 7 pair. |
 | 4 | 2 | yes | A sensitivity determination and an independent export-refusal authority. The threshold is a decision the three-valued determination does not contain, and the export path acts: a caller that previously received a document now receives an error. Restored to `2 / yes` by [issue #48](https://github.com/faviann/skills/issues/48) — a reversal, not a re-key; see **Case 4's key, and how it moved twice**. |
@@ -240,7 +240,7 @@ merits rather than infer it from results.
 
 No case here is a real slice. Every case is written in a neutral domain, and
 `.agents/risk-shapes-provenance.md` maps the worked examples in `RISK-SHAPES.md` to
-their sources without mapping any case in this file. But two cases are deliberate
+their sources without mapping any case in this file. But three cases are deliberate
 structural abstractions of real Overmind slices, and they borrow those slices' actual
 verdicts. That makes their keys corroborated rather than argued.
 
@@ -253,17 +253,28 @@ verdicts. That makes their keys corroborated rather than argued.
 Evaluators recognised Case 7's lineage unprompted, one naming it "the *Omit binary
 capture bytes* trap."
 
-Cases 1–6 and 9 have no such anchor. They were built from the five shapes' categories,
-and their keys follow from the counting sentence alone.
+Cases 1–6, 9, and 11 have no such anchor. They were built from the shapes' categories,
+and their keys follow from the counting sentence alone. Case 11 is case 10 with its
+coexisting credential form removed, so it does not inherit case 10's corroboration.
 
-So the split is not grounded against invented — it is **two keys corroborated by a
-production verdict that was actually made and reviewed, and seven keys resting on
-reasoning**. That matters twice. Two of the four cases in the green baseline are 7 and
+So the split is not grounded against invented — it is **three keys corroborated by a
+production verdict that was actually made and reviewed, and eight keys resting on
+reasoning**. That matters twice. Two of the cases in the green baseline are 7 and
 8, so the baseline is not merely self-consistent with the rule it tests; it agrees with
 two decisions taken in production. And it prices what an anchor for Case 9 would be
 worth: a real orthogonal-determination slice would make Case 9 the only case keyed
 against a real outcome rather than against argument, which is a larger upgrade than it
-sounds while seven of nine keys are argued.
+sounds while eight of eleven keys are argued.
+
+> **Counts corrected, 2026-08-10.** This section said "two cases", "two keys
+> corroborated", "seven keys resting on reasoning", "seven of nine keys are argued", and
+> listed the unanchored cases as "1–6 and 9". Those counts were written when the suite had
+> nine cases and the table listed two rows; they went stale when case 10 was added with a
+> production anchor and case 11 was added without one, and the prose was never brought
+> forward. The table itself has listed three rows since case 10 landed, so the section
+> contradicted itself. Corrected in place rather than superseded by a dated block: these
+> are arithmetic over the case set, not a measurement record. No key changed, and no case's
+> standing as corroborated or argued changed — only the counting of them.
 
 ## Prior experiments and null results
 
@@ -732,6 +743,13 @@ currently fails on it. Two criteria are available instead:
    meets it. That rate is the measurable signal: if the amended reference still draws the
    same complaint, the wording did not land.
 
+> **Criterion 1 partly superseded, 2026-08-10.** Case 1 is no longer available as a
+> green-baseline member for this purpose: it returned `3 / 2 / 2` against the parked
+> `e61006f` reference and `2 / 3 / 2` against `f03d80e`, so it is unstable at both and
+> cannot hold. Anyone validating an authorization fix should read criterion 1 against the
+> membership in **Current standing** below, not against the list written here. Criterion 2
+> is unaffected. Retained as written for the record of what this section concluded.
+
 ## Post-#39 re-baseline
 
 Run on 2026-08-09 against the live `RISK-SHAPES.md` at repo commit `d73dd98`, whose content
@@ -884,6 +902,12 @@ measurement neither confirms nor supersedes.
 > joins the green baseline. The reproductions are **case 2** and **case 9**. The list is
 > retained as written for the record of what this measurement concluded.
 
+> **Superseded again, 2026-08-10.** "The reproductions are case 2 and case 9" no longer
+> holds: **case 1 joins them**, measured unstable against both `e61006f` and `f03d80e`.
+> Cases 2 and 9 also do not become passes against the live reference on the strength of the
+> 2026-08-10 suite — that suite measured the parked `e61006f`, which `main` does not carry.
+> See **Current standing** at the end of this file, which governs.
+
 ### Method caveat
 
 As with the Case 9 baseline and the reality check, these evaluators were subagents
@@ -946,3 +970,277 @@ As with every baseline above, these evaluators were subagents *instructed* not t
 with the reference pasted inline, rather than evaluators sandboxed without tool access. None
 of the nine reported using a tool, and none cited a key or an expected answer. All nine
 inputs were identical. No run was discarded and no run errored.
+
+## Full-suite regression for the shapes-do-not-gate-count change
+
+Run on 2026-08-10 against `RISK-SHAPES.md` as it stands on branch
+`issue-50-shapes-do-not-gate-count` at `e61006f` — `main` at `f03d80e` plus the
+[#50](https://github.com/faviann/skills/issues/50) rule change: two words deleted from the
+deciding paragraph and one paragraph added after it. Model: `claude-opus-5`. Thirty-three
+runs: eleven cases, three fresh blind evaluators each, one case per evaluator, each
+receiving the **Isolated prompt** from this file, no key and no other case visible.
+
+This is the full-suite regression the **Protocol** requires after a change to the
+independent-model rules, and the gate [PR #51](https://github.com/faviann/skills/pull/51)
+set for itself: the change survives only if every case returns three unanimous key-matching
+results, scored on candidate identity as well as count and verdict.
+
+| Case | Run 1 | Run 2 | Run 3 | Fixed key | Classification |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 3 / yes | 2 / yes | 2 / yes | 2 / yes | **unstable — over-split** |
+| 2 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 3 | 1 / no | 1 / no | 1 / no | 1 / no | pass |
+| 4 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 5 | 1 / no | 1 / no | 1 / no | 1 / no | pass |
+| 6 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 7 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 8 | 1 / no | 1 / no | 1 / no | 1 / no | pass |
+| 9 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 10 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+| 11 | 2 / yes | 2 / yes | 2 / yes | 2 / yes | pass |
+
+**The gate fails on case 1, and on nothing else.** Ten of eleven cases returned three
+unanimous key-matching results on candidate identity as well as count and verdict.
+
+### Both cases the change had to move, moved
+
+**Case 2** returned `2 / yes` ×3 against a key of `2 / yes`, on the key's decomposition:
+tier determination plus one lease model, with the concurrency protocol and the lease
+record's persistence lifecycle explicitly fused as one model in all three runs. No run split
+the lease, and no run discarded the tier determination. This supersedes both the pooled
+twelve-run population recorded in **Case 2 probe — nine runs on one case** and the
+`d73dd98` row in **Post-#39 re-baseline**, where seven of twelve runs had returned `1 / no`
+by ruling the tier determination *ordinary work instantiating no shape*. All three new runs
+cited the added paragraph by name.
+
+**Case 9** returned `2 / yes` ×3 against a key of `2 / yes`, naming exactly the two
+determinations the case was built from — sensitivity from contents, retention class from
+record type — and counting both. Every prior measurement of this case, at `b49a753` and
+again post-#39, returned `0 / no` unanimously by applying the shape gate. The gate is gone
+and the case moved to its key on the first measurement. All three runs quoted the added
+paragraph as the sentence that decided it, and all three noted the shape list is now
+inspection surface rather than a filter.
+
+### The over-split guard held; the green baseline did not
+
+**Cases 3, 5, and 8** — the guard against a reader promoting a response body, a derived
+expiry, or a consumer to a countable determination — returned their `1 / no` keys
+unanimously, with candidate identity matching. Nothing in the added paragraph pushed a
+projection, a derivation, or a consumer over the line. Cases 4, 6, 7, 10, and 11 held at
+`2 / yes` on the key's candidate sets.
+
+**Case 1 did not hold.** Run 1 counted three models: the customs classification, the duty
+ledger's accrual lifecycle, and the monthly reconciliation against the carrier statement
+promoted to a separate **migration and convergence model**. Runs 2 and 3 returned the key's
+`2 / yes` on the key's candidate set — classification plus one ledger model with accrual and
+reconciliation fused — but *both* recorded the three-model reading as live on the same text
+and said which phrases produce it:
+
+> a reader stopping at the headline phrases would plausibly count 3
+
+The fork is between the persistence shape's *"reconcile on its own schedule"*, which absorbs
+the monthly reconciliation into the ledger's own lifecycle, and the migration shape's
+*"existing data … must arrive at a new form"*, which pulls it out. Runs 2 and 3 broke the
+tie on the migration shape's qualifier *"correctness depends on what was already out there"*,
+scoping it to data predating the change; run 1 did not reach that qualifier.
+
+### What this result does and does not establish
+
+The defect is that **case 1's key rests on an unstated lifecycle-grouping rule**. The key
+holds duty accrual and monthly reconciliation to be phases of one ledger model, and the
+reference nowhere says what makes phases of a lifecycle one model. It supplies the opposite
+material: the persistence shape admits state that reconciles *"on its own schedule"*, the
+migration shape claims correctness that *"depends on what was already out there"*, and the
+independence test counts anything that can be got wrong on its own. Evaluators reaching
+three did not misfile a label — they applied the independence test to two phases of one
+lifecycle and found it satisfied:
+
+> Accrual can be correct while reconciliation strands entries, corrects the wrong ones, or
+> is non-idempotent across re-runs; reconciliation can be correct while the accrual rule it
+> converges over was wrong from the start.
+
+That run then cited *Discover stable child rollout streams* as licence, which the reference
+does count as three models on exactly that reasoning. The shape names are downstream of the
+independence judgement, not the source of it.
+
+This is not the determination-counting question #50 changed. All three runs counted the
+classification determination — the thing the added paragraph exists to secure — and agreed
+on it. They diverged one layer downstream, over a grouping the deleted words never governed.
+It belongs to the unresolved correctness-contract boundary family already tracked in
+[issue #37](https://github.com/faviann/skills/issues/37).
+
+**Case 1 had no pre-change control at this reference, so one was run.** Its only recorded
+baseline was the `e92a6a6` **Isolated baseline**, three runs of `2 / yes` taken before #39
+landed. It was not re-run in [#46](https://github.com/faviann/skills/issues/46)'s post-#39
+re-baseline, which covered only cases 2, 3, 5, 9, and 4, and it was not re-run for #48. On
+this suite alone, nothing separates an instability the #50 change introduced from one that
+#39 introduced, or one latent at `e92a6a6` that three runs did not surface. The control in
+the next section bears on that, within limits stated there.
+
+**The gate does not turn on attribution, and it fails.** Its terms are *"any mismatch,
+instability, over-split, under-split, or green-baseline drop rejects and reverts the
+change"*, and case 1 is a member of the green baseline that dropped. **The full-suite result
+is a failed gate, and the control that follows does not change that.** A control decided on
+after seeing the failure cannot convert a failed pre-registered gate into a pass; it can
+only characterise the defect the gate caught.
+
+### Case 1 control — the instability predates the change
+
+Run on 2026-08-10 immediately after the suite above, as a targeted single-case probe under
+the **Protocol**. Case 1 only, three fresh blind evaluators, `claude-opus-5`, against
+`RISK-SHAPES.md` at `main`'s `f03d80e` — the same reference minus the #50 change, with
+*"instantiating them"* restored and the added paragraph absent. Same **Isolated prompt**,
+same case text, no key visible.
+
+| Reference | Run 1 | Run 2 | Run 3 | Fixed key | Classification |
+| --- | --- | --- | --- | --- | --- |
+| `f03d80e` — without the change | 2 / yes | 3 / yes | 2 / yes | 2 / yes | **unstable — over-split** |
+| `e61006f` — with the change | 3 / yes | 2 / yes | 2 / yes | 2 / yes | **unstable — over-split** |
+
+**The same defect, at the same fork.** The control's over-split is the identical one: the
+monthly reconciliation promoted out of the ledger's lifecycle and into a separate **migration
+and convergence model**. And in the control, as in the suite, the two runs that reached the
+key recorded the three-model reading as live on the same text — one of them naming it as
+"the single ambiguity a reviewer is most likely to trip on here".
+
+One run in each three-run population reached three. **That is not a rate comparison.** Three
+runs per arm cannot establish that the two references produce this reading at the same
+frequency, and nothing here should be read as claiming they do.
+
+Every run in both populations counted the classification determination. That is the only
+thing the #50 change governs, and it never varied.
+
+**What the control establishes.** The three-model reading of case 1 occurs against a
+reference that does not contain the #50 change, so **the reading predates #51 and #51 is not
+necessary to produce this instability.** The fork is between the persistence shape's
+*"reconcile on its own schedule"* and the migration shape's headword; both sentences are
+untouched by #50, whose diff is confined to the deciding paragraph. Case 1's
+lifecycle-grouping defect exists at the post-#39 reference and was surfaced by the first
+re-measurement of this case since `e92a6a6`.
+
+**What the control does not establish.** Whether #51 changed the *frequency* of that reading
+is **unmeasured**. One three-model run in each three-run arm cannot distinguish equal rates
+from different ones, and no claim in either direction is supported by these populations. A
+rate question would need a substantially larger population against both references.
+
+**Degrees of freedom, stated so a reader can discount them.** This control was not
+pre-registered. The decision to run it was taken after the suite failed, by a party who knew
+which result would favour the change. The probe mechanism itself predates the run — targeted
+single-case probes were added to **Protocol** by
+[issue #48](https://github.com/faviann/skills/issues/48) — but the choice to invoke it here
+was post-hoc, and the result should be weighed accordingly.
+**Pre-reorganisation control** above is not a precedent for reading a control as exoneration:
+that measurement was diagnostic and ran under no pre-registered accept/reject rule.
+
+**Disposition: not taken here.** The gate failed, and this record takes neither of the two
+available courses. Reverting #50 follows the pre-registered rule as written. Retaining #50 is
+available only as an **explicit owner override** — resting on cases 2 and 9 moving to their
+keys, the over-split guards and the rest of the green baseline holding, and case 1's
+instability being shown to predate the change — and would have to be recorded as an override,
+never as the gate being satisfied. The case-1 lifecycle-grouping finding stays with
+[issue #37](https://github.com/faviann/skills/issues/37) as another instance of the same
+unresolved correctness-contract boundary family; it may warrant its own issue later if it
+proves independently actionable.
+
+### Disposition — not merged and parked, 2026-08-10
+
+Recorded after the paragraph above, which is left as written. That paragraph was committed
+before any disposition was chosen, and its standing as a record of that sequence is the reason
+it is not edited here.
+
+**The gate failed and the change was not merged.** Nothing was reverted, because nothing had
+landed: `main` never carried the change, so parking it is the whole of the action taken. The
+implementation is preserved on branch `issue-50-shapes-do-not-gate-count` at `cd97ec0`, with
+[PR #51](https://github.com/faviann/skills/pull/51) left as a draft recording `Progresses #50`.
+The remote branch tip it replaced, `7d5978a`, is preserved at
+`archive/pr51-pre-rebase-7d5978a`.
+
+What the suite established, restated so the disposition is not read as a verdict on the
+change's merits:
+
+- **Cases 2 and 9 moved to their keys**, on the keys' candidate sets. The change did what it
+  was proposed to do.
+- **The over-split guards — cases 3, 5, and 8 — held**, as did cases 4, 6, 7, 10, and 11.
+- **Case 1 went unstable at `3 / 2 / 2` against a key of `2`**, and the gate's terms name
+  instability and a green-baseline drop as rejecting conditions. The control shows the reading
+  predates the change, within the limits stated above — non-necessity only, no rate comparison,
+  three runs per arm, and a post-hoc decision to run it.
+
+[Issue #50](https://github.com/faviann/skills/issues/50) stays open. The change remains
+desired; it is blocked by [#37](https://github.com/faviann/skills/issues/37) through a native
+`blocked_by` dependency.
+
+**Further changes to the independent-model rules, the discriminators, or the worked examples
+are blocked on #37.** **Protocol** requires all eleven cases to return three unanimous
+key-matching results, and case 1 does not do so against either reference measured here. No
+scoring rule for an already-unstable case is invented to work around that: deciding how case 1
+scores means deciding the lifecycle-grouping boundary, which is exactly #37's open question,
+and settling it here by administrative convenience is the failure mode this file's own rule
+against re-keying from observed outputs exists to prevent. #37 must restore a coherent
+eleven-case baseline before this eval can adjudicate another rule change.
+
+### Method caveat
+
+As with every baseline above, these evaluators were subagents *instructed* not to use tools,
+with the complete reference pasted inline, rather than evaluators sandboxed without tool
+access. "Told not to look" is weaker than "could not look". None of the thirty-six — the
+thirty-three of the suite plus the three of the case-1 control — reported using a tool, and
+none cited a key or an expected answer. All three inputs within each case were identical,
+and the control's three inputs differed from the suite's case-1 inputs only in the reference
+commit under test. No run was discarded and no run errored.
+
+## Current standing — 2026-08-10
+
+This section supersedes **every** earlier enumeration of the green baseline, the
+reproductions, and case standing in this file. Those earlier statements are left unedited as
+the record of what each measurement concluded at the time. Where an earlier section and this
+one disagree, this one governs.
+
+The live reference is `RISK-SHAPES.md` on `main`, which **still carries the counting gate**.
+The [#50](https://github.com/faviann/skills/issues/50) change that removes it is not merged
+and parked on branch `issue-50-shapes-do-not-gate-count`; see **Disposition — not merged and
+parked** above.
+
+| Case | Standing against the live reference | Most recent measurement |
+| --- | --- | --- |
+| 1 | **Reproduction — unstable** | `3 / 2 / 2` at `e61006f`, `2 / 3 / 2` at `f03d80e`, 2026-08-10 |
+| 2 | **Reproduction — under-split** | `1 / no` in 7 of 12 pooled runs to 2026-08-09; moved to key only at the parked reference |
+| 3 | Green baseline | Post-#39 re-baseline, 2026-08-09 |
+| 4 | Green baseline | Post-#39 re-baseline, 2026-08-09; key restored by #48 |
+| 5 | Green baseline | Post-#39 re-baseline, 2026-08-09 |
+| 6 | Green baseline | Isolated baseline, `e92a6a6` |
+| 7 | Green baseline | Isolated baseline, `e92a6a6` |
+| 8 | Green baseline | Isolated baseline, `e92a6a6` |
+| 9 | **Reproduction — stable mismatch** | `0 / no` ×3 at two references; moved to key only at the parked reference |
+| 10 | Green baseline | Case 10 baseline |
+| 11 | Green baseline | Case 11 baseline |
+
+**Green baseline: cases 3, 4, 5, 6, 7, 8, 10, 11. Reproductions: cases 1, 2, 9.**
+
+Three things this list is careful about.
+
+**Cases 2 and 9 do not join the green baseline**, even though both returned three unanimous
+key-matching results on 2026-08-10. That suite measured `e61006f`, the parked reference. The
+live reference still carries the gate, and against it the last measurements of these cases are
+the ones that put them here. Promoting them would credit `main` with a fix `main` does not
+have.
+
+**Case 1 leaves the green baseline.** Its `e92a6a6` membership was measured before #39 changed
+`RISK-SHAPES.md`, and it was not re-run in #46 or #48. The 2026-08-10 pair is its first
+re-measurement since, and it is unstable at both references. The key is unchanged: it is not
+re-keyed from these outputs, and the defect is that the key rests on an unstated
+lifecycle-grouping rule, recorded on
+[issue #37](https://github.com/faviann/skills/issues/37).
+
+**No scoring rule for an already-unstable case is stated here.** **Protocol** requires all
+eleven cases to return three unanimous key-matching results, and case 1 cannot currently do
+so, which means the suite cannot presently return a coherent eleven-case verdict. That is
+recorded as a blocking condition rather than patched: deciding how case 1 scores means deciding
+the lifecycle-grouping boundary, which is #37's open question, and answering it here for the
+convenience of the next gate is the failure mode the rule against re-keying from observed
+outputs exists to prevent.
+
+**Consequence for further work.** Changes to the independent-model rules, the discriminators,
+or the worked examples are blocked until #37 restores a coherent eleven-case baseline. Changes
+that do not touch those three things — this record, Protocol wording, provenance, prose
+corrections — are unaffected and require no run.
