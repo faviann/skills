@@ -6,8 +6,10 @@ diagnostic; it enforces nothing automatically.
 
 ## Protocol
 
-Run every case in isolation three times: 33 fresh blind evaluations in total. Never
-reuse an evaluator across cases. Each evaluator receives, in this order:
+Run every scored case in isolation three times: 30 fresh blind evaluations in total.
+The scored suite is cases 2–11. Case 1 remains available as an optional unscored boundary
+probe; it never contributes to a full-suite verdict. Case 6 preserves its downstream-lifecycle
+coverage. Never reuse an evaluator across cases. Each evaluator receives, in this order:
 
 1. The complete live contents of `RISK-SHAPES.md`, assembled at run time. Never
    paste or snapshot that reference here.
@@ -17,7 +19,7 @@ reuse an evaluator across cases. Each evaluator receives, in this order:
 
 Evaluators get no repository or web access and no expected answers. They must identify
 candidate models before testing independence, then give the model count and verdict.
-For each case, three unanimous answers matching its fixed key pass; three unanimous
+For each scored case, three unanimous answers matching its fixed key pass; three unanimous
 answers that differ from the key are a stable mismatch; disagreement is instability.
 A match requires the same candidate models, not merely the same count and verdict. A
 right number reached from the wrong candidate set is a semantic mismatch. Never re-key
@@ -1455,15 +1457,14 @@ and 9 are expected to fail against the live reference and to move at the parked 
 which they do so is working, not broken.
 
 The earlier blocker is discharged, and not by inventing a scoring rule for an unstable case.
-Case 1 was retired instead, by an argument recorded with its degrees of freedom. **Protocol
-and #50's gate still say eleven cases and 33 runs.** Bringing them to ten and thirty is owed
-work, made in its own change after this record lands; until it does, the two documents disagree
-with this section, and this section governs.
+Case 1 was retired instead, by an argument recorded with its degrees of freedom. **Protocol now
+agrees with that disposition: ten scored cases and thirty runs.** #50's parked, branch-local
+gate still says eleven cases and 33 runs. It must be replaced after that branch is rebased and
+before #50 is run again; it does not block other changes from using this Protocol.
 
 **Consequence for further work.** The baseline block is lifted. Changes to the
-independent-model rules, the discriminators, or the worked examples can be adjudicated again
-once **Protocol** and #50's gate are brought to ten scored cases and thirty runs — the owed
-change named above. Until that change lands, no rule change should be gated, because the gate's
-own terms still name a case that no longer scores. Changes that touch none of those three
-things — this record, Protocol wording, provenance, prose corrections — are unaffected and
-require no run, as before.
+independent-model rules, the discriminators, or the worked examples can be adjudicated under
+this **Protocol** again. #50 remains parked until its branch is rebased and its own gate is
+brought to ten scored cases and thirty runs. Changes that touch none of those three things —
+this record, Protocol wording, provenance, prose corrections — are unaffected and require no
+run, as before.
