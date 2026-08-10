@@ -29,6 +29,12 @@ date, reference commit, and model. A probe never substitutes for the full-suite 
 required after a change to the independent-model rules, the discriminators, or the worked
 examples.
 
+Changing a case's text creates a **new instrument version**. Earlier measurements of that
+case are not comparable to later ones; they are preserved with their rationale rather than
+rewritten or discarded. A case's key does not move with its text — only a separate argument
+moves a key. The first measurement after the change is a new baseline, not a regression
+check, and it can neither corroborate nor refute what the earlier version measured.
+
 ## Isolated prompt
 
 The proposed slice fits one fresh context window and closes as one reviewable pull
@@ -54,7 +60,8 @@ The slice determines a shipment's customs classification — exactly one of thre
 tariff codes — from its declared contents. The same slice adds a duty ledger: each
 classified shipment accrues the duty owed under its code, and the ledger is
 reconciled monthly against the carrier's customs statement, correcting entries that
-disagree.
+disagree. Reconciliation corrects only entries the ledger created and keeps no separate
+state.
 
 ### Case 2 — priority and leases
 
@@ -140,7 +147,7 @@ table, and nothing expires, converges, or advances on its own schedule.
 
 | Case | Models | Fires | Shapes and purpose |
 | --- | ---: | --- | --- |
-| 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. **Measured unstable at two references on 2026-08-10** — the key is unchanged and is not re-keyed from those runs; see **Current standing** and **Full-suite regression for the shapes-do-not-gate-count change**. |
+| 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. **Instrument version 2** — the case text gained a reconciliation-scope clause on 2026-08-10; the key did not move. Measurements before that clause are not comparable to later ones. See **Case 1's instrument repair**. |
 | 2 | 2 | yes | A priority determination and an independent concurrency protocol with a lease lifecycle. Tests a consumer whose coordination can be wrong while classification is right. |
 | 3 | 1 | no | One outcome determination; response fields are its current canonical representation, with no backward-compatibility protocol. This is the no-compatibility half of the Case 7 pair. |
 | 4 | 2 | yes | A sensitivity determination and an independent export-refusal authority. The threshold is a decision the three-valued determination does not contain, and the export path acts: a caller that previously received a document now receives an error. Restored to `2 / yes` by [issue #48](https://github.com/faviann/skills/issues/48) — a reversal, not a re-key; see **Case 4's key, and how it moved twice**. |
@@ -151,6 +158,53 @@ table, and nothing expires, converges, or advances on its own schedule.
 | 9 | 2 | yes | Two orthogonal determinations, neither introducing a named risk shape. Tests whether a discriminator can still count a second model when the taxonomy has no shape to place it under. |
 | 10 | 2 | yes | A capability-authorization model and an independent deduplication protocol. **Both halves instantiate a named shape** — the dedup half concurrency, the authorization half backward compatibility, because two credential forms coexist. Green-baseline guard, not a reproduction. Abstracted from production; see **Reality check**. |
 | 11 | 2 | yes | Case 10 with the coexisting credential form removed, so the authorization half instantiates no named shape. Tests whether a reader still counts an authorization model when the taxonomy offers it no home. Keyed by argument from the deciding sentence: two determinations, neither's correctness following from the other's. |
+
+## Case 1's instrument repair
+
+Case 1's text changed on 2026-08-10. Under **Protocol** that makes the case a new instrument
+version. The key did not move.
+
+**What was added.** The case previously ended at *"correcting entries that disagree."* It now
+also states that reconciliation corrects only entries the ledger created and keeps no
+separate state.
+
+**A first draft of the clause was withdrawn under cold review**, before any measurement, so
+this is one instrument-version bump rather than two. That draft opened with a sentence naming
+the ledger's invariant as a single condition spanning accrual and reconciliation. The review
+found it restated facts the case already carried, leaving as its only novel content the
+singular grouping the evaluator is meant to derive — a correctness contract being, in
+`CONTEXT.md`'s words, outcomes and invariants that must hold *as one unit*. It also observed
+that naming the carrier's records in the ledger's correctness condition read *toward* the
+migration bullet's *"correctness depends on what was already out there"*, which is the route
+the clause existed to close. Every sibling disambiguating clause states mechanism, not
+correctness. The sentence was deleted and the mechanism sentence kept.
+
+**Why.** Six runs on 2026-08-10 split `3 / 2 / 2` and `2 / 3 / 2` against a key of two. The
+evaluator transcripts — primary evidence, recovered from the run subagents of session
+`3cab64dc`, not from this file's summary of them — show every run identifying the same fork,
+and three of the six reporting it unprompted as an ambiguity in the reference. Both runs
+reaching three built their third candidate out of the migration shape: one filed the
+reconciliation as *"a **migration/convergence model**"*, the other quoted *"correctness
+depends on what was already out there"* as fitting it *"directly"*. The case supplied no fact
+that decides the question, while cases 3, 5, 9, 10, and 11 each carry a clause that does.
+Case 1 and case 8 were the two cases without one.
+
+**What the clause does and does not do.** It supplies facts the reference's own discriminators
+act on. It states no count and names no shape. It does not repair the reference ambiguity the
+runs reported — that is a separate change, sequenced after this one so that the instrument
+repair stays visibly separate from the behaviour change it will be used to evaluate.
+
+**Degrees of freedom, stated so a reader can discount them.** The clause was written after the
+instability was observed, by a party who knew which result would favour it. Its wording was
+fixed by the maintainer by argument, from the case's own purpose line — *"an independent new
+persistence/reconciliation lifecycle"* — which has read that way, fused, since the case was
+created at `8261a74`. The reconciliation boundary was never what case 1 was built to measure.
+
+**Consequences.** Case 1's `2 / 2 / 2` at the isolated baseline, its pre-reorganisation
+control, and the six runs of 2026-08-10 all measured instrument version 1. They are preserved
+above with their rationale and are not comparable to any later measurement. Case 1's next
+measurement is a new baseline: it can neither corroborate nor refute the instability recorded
+on 2026-08-10.
 
 ## Case 4's key, and how it moved twice
 
@@ -1033,16 +1087,18 @@ projection, a derivation, or a consumer over the line. Cases 4, 6, 7, 10, and 11
 ledger's accrual lifecycle, and the monthly reconciliation against the carrier statement
 promoted to a separate **migration and convergence model**. Runs 2 and 3 returned the key's
 `2 / yes` on the key's candidate set — classification plus one ledger model with accrual and
-reconciliation fused — but *both* recorded the three-model reading as live on the same text
-and said which phrases produce it:
+reconciliation fused — and both recorded the three-model reading as live on the same text.
+Run 3 named the phrases that produce it:
 
 > a reader stopping at the headline phrases would plausibly count 3
 
 The fork is between the persistence shape's *"reconcile on its own schedule"*, which absorbs
 the monthly reconciliation into the ledger's own lifecycle, and the migration shape's
-*"existing data … must arrive at a new form"*, which pulls it out. Runs 2 and 3 broke the
-tie on the migration shape's qualifier *"correctness depends on what was already out there"*,
-scoping it to data predating the change; run 1 did not reach that qualifier.
+*"existing data … must arrive at a new form"*, which pulls it out. Run 3 broke the tie on the
+migration shape's qualifier *"correctness depends on what was already out there"*, scoping it
+to data predating the change. Run 2 broke it elsewhere, on *"a slice reaching across two
+shapes carries one model"*, and named *Discover stable child rollout streams* as the reading
+that would have given three. Run 1 reached neither tiebreak.
 
 ### What this result does and does not establish
 
@@ -1053,15 +1109,25 @@ material: the persistence shape admits state that reconciles *"on its own schedu
 migration shape claims correctness that *"depends on what was already out there"*, and the
 independence test counts anything that can be got wrong on its own. Evaluators reaching
 three did not misfile a label — they applied the independence test to two phases of one
-lifecycle and found it satisfied:
+lifecycle and found it satisfied. This suite's run 1 filed the reconciliation as *"a
+**migration/convergence model**"* and separated it from accrual on schedule and authority:
+accrual per shipment against our own classification, reconciliation per month against the
+carrier's statement. The shape names are downstream of the independence judgement, not the
+source of it.
 
-> Accrual can be correct while reconciliation strands entries, corrects the wrong ones, or
-> is non-idempotent across re-runs; reconciliation can be correct while the accrual rule it
-> converges over was wrong from the start.
+**Two corrections to what this section previously said, from the run transcripts.** An
+earlier version of this paragraph quoted *"Accrual can be correct while reconciliation
+strands entries…"* and reported that *"that run then cited* Discover stable child rollout
+streams *as licence"*. Both belong to the `f03d80e` **Case 1 control** run 2, not to this
+suite's run 1, which contains neither the sentence nor any mention of that example. They are
+recorded in **Case 1 control** below.
 
-That run then cited *Discover stable child rollout streams* as licence, which the reference
-does count as three models on exactly that reasoning. The shape names are downstream of the
-independence judgement, not the source of it.
+**Run 1 also contradicts its own headline count**, which this section did not previously
+record. Having reported three, its closing paragraph writes: *"I resolve it toward two
+models, on the independence test rather than the bullet boundaries."* **It is scored at
+three, on the count it reported.** The contradiction is recorded as a fact about the run and
+is not used to rescore it — rescoring a run from its prose after seeing the gate fail is the
+move **Protocol** forbids.
 
 This is not the determination-counting question #50 changed. All three runs counted the
 classification determination — the thing the added paragraph exists to secure — and agreed
@@ -1099,9 +1165,22 @@ same case text, no key visible.
 
 **The same defect, at the same fork.** The control's over-split is the identical one: the
 monthly reconciliation promoted out of the ledger's lifecycle and into a separate **migration
-and convergence model**. And in the control, as in the suite, the two runs that reached the
-key recorded the three-model reading as live on the same text — one of them naming it as
-"the single ambiguity a reviewer is most likely to trip on here".
+and convergence model**. And in the control, as in the suite, the runs that reached the key
+recorded the three-model reading as live on the same text.
+
+Run 2 — the run that reached three — is the source of two passages this file previously
+attributed to the suite arm. It applied the independence test directly:
+
+> Accrual can be correct while reconciliation strands entries, corrects the wrong ones, or
+> is non-idempotent across re-runs; reconciliation can be correct while the accrual rule it
+> converges over was wrong from the start.
+
+It then cited *Discover stable child rollout streams* as licence, which the reference does
+count as three models on exactly that reasoning, and closed by calling the fork *"the single
+ambiguity a reviewer is most likely to trip on here"*, adding that *"the sentence bears
+tightening"*. That last phrase was previously attributed to one of the runs that reached the
+key; it belongs to this one. **It is the only run in either arm that cited the rollout-streams
+example affirmatively.**
 
 One run in each three-run population reached three. **That is not a rate comparison.** Three
 runs per arm cannot establish that the two references produce this reading at the same
@@ -1203,7 +1282,7 @@ parked** above.
 
 | Case | Standing against the live reference | Most recent measurement |
 | --- | --- | --- |
-| 1 | **Reproduction — unstable** | `3 / 2 / 2` at `e61006f`, `2 / 3 / 2` at `f03d80e`, 2026-08-10 |
+| 1 | **Unmeasured — new instrument version** | Version 1 only: `3 / 2 / 2` at `e61006f`, `2 / 3 / 2` at `f03d80e`, 2026-08-10. Version 2 has never been run |
 | 2 | **Reproduction — under-split** | `1 / no` in 7 of 12 pooled runs to 2026-08-09; moved to key only at the parked reference |
 | 3 | Green baseline | Post-#39 re-baseline, 2026-08-09 |
 | 4 | Green baseline | Post-#39 re-baseline, 2026-08-09; key restored by #48 |
@@ -1215,9 +1294,10 @@ parked** above.
 | 10 | Green baseline | Case 10 baseline |
 | 11 | Green baseline | Case 11 baseline |
 
-**Green baseline: cases 3, 4, 5, 6, 7, 8, 10, 11. Reproductions: cases 1, 2, 9.**
+**Green baseline: cases 3, 4, 5, 6, 7, 8, 10, 11. Reproductions: cases 2, 9. Unmeasured:
+case 1.**
 
-Three things this list is careful about.
+Four things this list is careful about.
 
 **Cases 2 and 9 do not join the green baseline**, even though both returned three unanimous
 key-matching results on 2026-08-10. That suite measured `e61006f`, the parked reference. The
@@ -1225,20 +1305,31 @@ live reference still carries the gate, and against it the last measurements of t
 the ones that put them here. Promoting them would credit `main` with a fix `main` does not
 have.
 
-**Case 1 leaves the green baseline.** Its `e92a6a6` membership was measured before #39 changed
-`RISK-SHAPES.md`, and it was not re-run in #46 or #48. The 2026-08-10 pair is its first
-re-measurement since, and it is unstable at both references. The key is unchanged: it is not
-re-keyed from these outputs, and the defect is that the key rests on an unstated
-lifecycle-grouping rule, recorded on
-[issue #37](https://github.com/faviann/skills/issues/37).
+**Case 1 left the green baseline — the history, all of it instrument version 1.** Its
+`e92a6a6` membership was measured before #39 changed `RISK-SHAPES.md`, and it was not re-run
+in #46 or #48. The 2026-08-10 pair was its first re-measurement since, and it was unstable at
+both references. The key was unchanged: it was not re-keyed from those outputs, and the defect
+recorded at the time was that the key rested on an unstated lifecycle-grouping rule, on
+[issue #37](https://github.com/faviann/skills/issues/37). **Every measurement named in this
+paragraph is version 1**, and version 1 is no longer the instrument; the paragraph is history,
+not current standing.
 
-**No scoring rule for an already-unstable case is stated here.** **Protocol** requires all
-eleven cases to return three unanimous key-matching results, and case 1 cannot currently do
-so, which means the suite cannot presently return a coherent eleven-case verdict. That is
-recorded as a blocking condition rather than patched: deciding how case 1 scores means deciding
-the lifecycle-grouping boundary, which is #37's open question, and answering it here for the
-convenience of the next gate is the failure mode the rule against re-keying from observed
-outputs exists to prevent.
+**Case 1 is now unmeasured rather than a reproduction.** Its text gained a
+reconciliation-scope clause on 2026-08-10; see **Case 1's instrument repair**. Those six runs measured instrument
+version 1 and are not comparable to anything measured afterward, so case 1 has no standing
+against the live reference until version 2 is run. It is not a green-baseline case: nothing
+has been measured that would put it there. The instrument repair supplies a fact the case was
+missing; it does not repair the reference ambiguity the runs reported, which stays open on
+[#37](https://github.com/faviann/skills/issues/37).
+
+**The suite still cannot return a coherent eleven-case verdict, for a simpler reason than
+before.** **Protocol** requires all eleven cases to return three unanimous key-matching
+results. Case 1 cannot, because **instrument version 2 has never been run** — not because its
+scoring is undecided. The earlier blocker was that scoring an unstable case meant settling the
+lifecycle-grouping boundary, which is #37's open question; the instrument repair supplies the
+fact the case was missing, so that question no longer stands between case 1 and a score. No
+scoring rule for an already-unstable case was invented, then or now. What remains is a
+measurement that has not been taken.
 
 **Consequence for further work.** Changes to the independent-model rules, the discriminators,
 or the worked examples are blocked until #37 restores a coherent eleven-case baseline. Changes
