@@ -1033,16 +1033,18 @@ projection, a derivation, or a consumer over the line. Cases 4, 6, 7, 10, and 11
 ledger's accrual lifecycle, and the monthly reconciliation against the carrier statement
 promoted to a separate **migration and convergence model**. Runs 2 and 3 returned the key's
 `2 / yes` on the key's candidate set — classification plus one ledger model with accrual and
-reconciliation fused — but *both* recorded the three-model reading as live on the same text
-and said which phrases produce it:
+reconciliation fused — and both recorded the three-model reading as live on the same text.
+Run 3 named the phrases that produce it:
 
 > a reader stopping at the headline phrases would plausibly count 3
 
 The fork is between the persistence shape's *"reconcile on its own schedule"*, which absorbs
 the monthly reconciliation into the ledger's own lifecycle, and the migration shape's
-*"existing data … must arrive at a new form"*, which pulls it out. Runs 2 and 3 broke the
-tie on the migration shape's qualifier *"correctness depends on what was already out there"*,
-scoping it to data predating the change; run 1 did not reach that qualifier.
+*"existing data … must arrive at a new form"*, which pulls it out. Run 3 broke the tie on the
+migration shape's qualifier *"correctness depends on what was already out there"*, scoping it
+to data predating the change. Run 2 broke it elsewhere, on *"a slice reaching across two
+shapes carries one model"*, and named *Discover stable child rollout streams* as the reading
+that would have given three. Run 1 reached neither tiebreak.
 
 ### What this result does and does not establish
 
@@ -1053,15 +1055,25 @@ material: the persistence shape admits state that reconciles *"on its own schedu
 migration shape claims correctness that *"depends on what was already out there"*, and the
 independence test counts anything that can be got wrong on its own. Evaluators reaching
 three did not misfile a label — they applied the independence test to two phases of one
-lifecycle and found it satisfied:
+lifecycle and found it satisfied. This suite's run 1 filed the reconciliation as *"a
+**migration/convergence model**"* and separated it from accrual on schedule and authority:
+accrual per shipment against our own classification, reconciliation per month against the
+carrier's statement. The shape names are downstream of the independence judgement, not the
+source of it.
 
-> Accrual can be correct while reconciliation strands entries, corrects the wrong ones, or
-> is non-idempotent across re-runs; reconciliation can be correct while the accrual rule it
-> converges over was wrong from the start.
+**Two corrections to what this section previously said, from the run transcripts.** An
+earlier version of this paragraph quoted *"Accrual can be correct while reconciliation
+strands entries…"* and reported that *"that run then cited* Discover stable child rollout
+streams *as licence"*. Both belong to the `f03d80e` **Case 1 control** run 2, not to this
+suite's run 1, which contains neither the sentence nor any mention of that example. They are
+recorded in **Case 1 control** below.
 
-That run then cited *Discover stable child rollout streams* as licence, which the reference
-does count as three models on exactly that reasoning. The shape names are downstream of the
-independence judgement, not the source of it.
+**Run 1 also contradicts its own headline count**, which this section did not previously
+record. Having reported three, its closing paragraph writes: *"I resolve it toward two
+models, on the independence test rather than the bullet boundaries."* **It is scored at
+three, on the count it reported.** The contradiction is recorded as a fact about the run and
+is not used to rescore it — rescoring a run from its prose after seeing the gate fail is the
+move **Protocol** forbids.
 
 This is not the determination-counting question #50 changed. All three runs counted the
 classification determination — the thing the added paragraph exists to secure — and agreed
@@ -1099,9 +1111,22 @@ same case text, no key visible.
 
 **The same defect, at the same fork.** The control's over-split is the identical one: the
 monthly reconciliation promoted out of the ledger's lifecycle and into a separate **migration
-and convergence model**. And in the control, as in the suite, the two runs that reached the
-key recorded the three-model reading as live on the same text — one of them naming it as
-"the single ambiguity a reviewer is most likely to trip on here".
+and convergence model**. And in the control, as in the suite, the runs that reached the key
+recorded the three-model reading as live on the same text.
+
+Run 2 — the run that reached three — is the source of two passages this file previously
+attributed to the suite arm. It applied the independence test directly:
+
+> Accrual can be correct while reconciliation strands entries, corrects the wrong ones, or
+> is non-idempotent across re-runs; reconciliation can be correct while the accrual rule it
+> converges over was wrong from the start.
+
+It then cited *Discover stable child rollout streams* as licence, which the reference does
+count as three models on exactly that reasoning, and closed by calling the fork *"the single
+ambiguity a reviewer is most likely to trip on here"*, adding that *"the sentence bears
+tightening"*. That last phrase was previously attributed to one of the runs that reached the
+key; it belongs to this one. **It is the only run in either arm that cited the rollout-streams
+example affirmatively.**
 
 One run in each three-run population reached three. **That is not a rate comparison.** Three
 runs per arm cannot establish that the two references produce this reading at the same
