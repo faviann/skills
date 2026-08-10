@@ -1391,6 +1391,30 @@ As with every baseline in this file, these evaluators were subagents *instructed
 tools, with the complete reference pasted inline, rather than evaluators sandboxed without tool
 access. "Told not to look" is weaker than "could not look".
 
+## #50 replacement gate — pre-registered 2026-08-10
+
+The original #50 gate above remains a failed 33-run, eleven-case measurement and is not
+reinterpreted. Case 1 has since been retired from scoring, the live **Protocol** now defines ten
+scored cases, and [ADR 0005](../adr/0005-do-not-add-a-short-boundary-rule.md) records #37's
+negative boundary result. #50 is reactivated under this replacement gate.
+
+Seek **thirty valid runs from thirty fresh blind evaluators**, three per scored case,
+`claude-opus-5`, with no evaluator reused within or across cases. Each receives the complete
+proposed `RISK-SHAPES.md`, the **Isolated prompt**, and exactly one case.
+
+- **Cases 2 and 9 must move to their fixed keys**, with correct candidate identity.
+- **Cases 3, 4, 5, 6, 7, 8, 10, and 11 must hold** their fixed keys, with correct candidate
+  identity.
+- Every scored case must return three unanimous key-matching results. Any mismatch, instability,
+  over-split, under-split, or green-baseline drop rejects the change.
+- **Case 1 is unscored and does not participate.** No evaluator from an earlier suite or probe
+  is reused, and no earlier result is rescored.
+
+Invalid-run handling is fixed for this gate before the run: tool use, key exposure, malformed
+input, or execution failure invalidates an attempt. Preserve it with its reason and replace it
+with a fresh evaluator until thirty valid runs exist. A valid run is never replaced because its
+answer differs from the key.
+
 ## Current standing — 2026-08-10
 
 This section supersedes **every** earlier enumeration of the green baseline, the
@@ -1400,8 +1424,8 @@ one disagree, this one governs.
 
 The live reference is `RISK-SHAPES.md` on `main`, which **still carries the counting gate**.
 The [#50](https://github.com/faviann/skills/issues/50) change that removes it is not merged
-and parked on branch `issue-50-shapes-do-not-gate-count`; see **Disposition — not merged and
-parked** above.
+and is reactivated on branch `issue-50-shapes-do-not-gate-count` under the replacement gate
+pre-registered above. No replacement-gate result has been recorded yet.
 
 | Case | Standing against the live reference | Most recent measurement |
 | --- | --- | --- |
@@ -1451,24 +1475,23 @@ unanimously with correct candidate identity, so it now stands on a measurement o
 reference. Cases 6 and 7 have **not** been re-measured since `e92a6a6`, and their standing is
 still inherited.
 
-Neither probe repairs the reference ambiguity the version-1 runs reported. That stays open on
-[#37](https://github.com/faviann/skills/issues/37).
+Neither probe repairs the reference ambiguity the version-1 runs reported. #37 closed with a
+negative boundary result rather than a wording repair; [ADR 0005](../adr/0005-do-not-add-a-short-boundary-rule.md)
+records the surviving ambiguity and the bars for reopening it.
 
 **A coherent verdict is now available, over ten cases rather than eleven.** Every scored case
 has a current, scoreable standing: eight green, two reproductions that only #50's change is
 expected to move. **That is what "coherent" means here — not that all ten are green.** Cases 2
-and 9 are expected to fail against the live reference and to move at the parked one; a suite in
-which they do so is working, not broken.
+and 9 are expected to fail against the live reference and to move at the proposed reference; a
+suite in which they do so is working, not broken.
 
 The earlier blocker is discharged, and not by inventing a scoring rule for an unstable case.
 Case 1 was retired instead, by an argument recorded with its degrees of freedom. **Protocol now
-agrees with that disposition: ten scored cases and thirty runs.** #50's parked, branch-local
-gate still says eleven cases and 33 runs. It must be replaced after that branch is rebased and
-before #50 is run again; it does not block other changes from using this Protocol.
+agrees with that disposition: ten scored cases and thirty runs.** #50's replacement gate is
+pre-registered above and awaits measurement.
 
 **Consequence for further work.** The baseline block is lifted. Changes to the
 independent-model rules, the discriminators, or the worked examples can be adjudicated under
-this **Protocol** again. #50 remains parked until its branch is rebased and its own gate is
-brought to ten scored cases and thirty runs. Changes that touch none of those three things —
-this record, Protocol wording, provenance, prose corrections — are unaffected and require no
-run, as before.
+this **Protocol** again. #50 is the first such change and is reactivated under the replacement
+gate above. Changes that touch none of those three things — this record, Protocol wording,
+provenance, prose corrections — are unaffected and require no run, as before.
