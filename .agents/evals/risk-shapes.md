@@ -60,9 +60,8 @@ The slice determines a shipment's customs classification — exactly one of thre
 tariff codes — from its declared contents. The same slice adds a duty ledger: each
 classified shipment accrues the duty owed under its code, and the ledger is
 reconciled monthly against the carrier's customs statement, correcting entries that
-disagree. The ledger's invariant is that its entries agree with the duty owed under each
-selected code and, after each monthly statement, with the carrier's records. Reconciliation
-corrects only entries the ledger created and keeps no separate state.
+disagree. Reconciliation corrects only entries the ledger created and keeps no separate
+state.
 
 ### Case 2 — priority and leases
 
@@ -148,7 +147,7 @@ table, and nothing expires, converges, or advances on its own schedule.
 
 | Case | Models | Fires | Shapes and purpose |
 | --- | ---: | --- | --- |
-| 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. **Instrument version 2** — the case text gained a ledger-invariant clause on 2026-08-10; the key did not move. Measurements before that clause are not comparable to later ones. See **Case 1's instrument repair**. |
+| 1 | 2 | yes | A customs determination and an independent new persistence/reconciliation lifecycle. Tests a downstream lifecycle whose correctness does not follow from its input classification. **Instrument version 2** — the case text gained a reconciliation-scope clause on 2026-08-10; the key did not move. Measurements before that clause are not comparable to later ones. See **Case 1's instrument repair**. |
 | 2 | 2 | yes | A priority determination and an independent concurrency protocol with a lease lifecycle. Tests a consumer whose coordination can be wrong while classification is right. |
 | 3 | 1 | no | One outcome determination; response fields are its current canonical representation, with no backward-compatibility protocol. This is the no-compatibility half of the Case 7 pair. |
 | 4 | 2 | yes | A sensitivity determination and an independent export-refusal authority. The threshold is a decision the three-valued determination does not contain, and the export path acts: a caller that previously received a document now receives an error. Restored to `2 / yes` by [issue #48](https://github.com/faviann/skills/issues/48) — a reversal, not a re-key; see **Case 4's key, and how it moved twice**. |
@@ -166,8 +165,19 @@ Case 1's text changed on 2026-08-10. Under **Protocol** that makes the case a ne
 version. The key did not move.
 
 **What was added.** The case previously ended at *"correcting entries that disagree."* It now
-also states the ledger's invariant, that reconciliation corrects only entries the ledger
-created, and that it keeps no separate state.
+also states that reconciliation corrects only entries the ledger created and keeps no
+separate state.
+
+**A first draft of the clause was withdrawn under cold review**, before any measurement, so
+this is one instrument-version bump rather than two. That draft opened with a sentence naming
+the ledger's invariant as a single condition spanning accrual and reconciliation. The review
+found it restated facts the case already carried, leaving as its only novel content the
+singular grouping the evaluator is meant to derive — a correctness contract being, in
+`CONTEXT.md`'s words, outcomes and invariants that must hold *as one unit*. It also observed
+that naming the carrier's records in the ledger's correctness condition read *toward* the
+migration bullet's *"correctness depends on what was already out there"*, which is the route
+the clause existed to close. Every sibling disambiguating clause states mechanism, not
+correctness. The sentence was deleted and the mechanism sentence kept.
 
 **Why.** Six runs on 2026-08-10 split `3 / 2 / 2` and `2 / 3 / 2` against a key of two. The
 evaluator transcripts — primary evidence, recovered from the run subagents of session
@@ -1304,8 +1314,8 @@ recorded at the time was that the key rested on an unstated lifecycle-grouping r
 paragraph is version 1**, and version 1 is no longer the instrument; the paragraph is history,
 not current standing.
 
-**Case 1 is now unmeasured rather than a reproduction.** Its text gained a ledger-invariant
-clause on 2026-08-10; see **Case 1's instrument repair**. Those six runs measured instrument
+**Case 1 is now unmeasured rather than a reproduction.** Its text gained a
+reconciliation-scope clause on 2026-08-10; see **Case 1's instrument repair**. Those six runs measured instrument
 version 1 and are not comparable to anything measured afterward, so case 1 has no standing
 against the live reference until version 2 is run. It is not a green-baseline case: nothing
 has been measured that would put it there. The instrument repair supplies a fact the case was
