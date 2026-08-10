@@ -1,17 +1,18 @@
 # Risk shapes do not gate the count
 
-**Status: proposed — reactivated, replacement gate pending**, 2026-08-10. The original
-pre-registered gate failed and the change was parked; [#37](https://github.com/faviann/skills/issues/37)
-has since closed with a negative boundary result and a coherent ten-case baseline. See
-[**Outcome of the original gate**](#outcome-of-the-original-gate) and
-[**Replacement gate**](#replacement-gate--pre-registered-2026-08-10). Narrow in scope, and
+**Status: accepted**, 2026-08-10. The original pre-registered gate failed and the change was
+parked. After [#37](https://github.com/faviann/skills/issues/37) closed with a negative boundary
+result and a coherent ten-case baseline, the replacement gate passed. See
+[**Outcome of the original gate**](#outcome-of-the-original-gate),
+[**Replacement gate**](#replacement-gate--pre-registered-2026-08-10), and
+[**Outcome of the replacement gate**](#outcome-of-the-replacement-gate). Narrow in scope, and
 deliberately narrower than [ADR 0003](./0003-risk-shapes-are-diagnostic-not-the-counting-gate.md),
 which stays rejected.
 
 `to-tickets` splits a slice that introduces more than one independently failure-prone unit. `RISK-SHAPES.md` lists six **risk shapes** and, until this decision, also told the reader to count only the models instantiating them. That gate is removed. The shapes say where to look. They do not decide what is counted.
 
-> This document describes the proposed change. The gate remains in force on `main` until the
-> replacement gate passes and the change merges.
+> The original gate failed and remains historical evidence. The replacement gate passed; this
+> decision, the reference change, and its result record land together.
 
 ## What changes
 
@@ -146,3 +147,19 @@ complete proposed `RISK-SHAPES.md`, the eval's **Isolated prompt**, and exactly 
 - Tool use, key exposure, malformed input, or execution failure makes an attempt invalid. An
   invalid attempt is preserved with its reason and replaced by a fresh evaluator until thirty
   valid runs exist. A valid run is never replaced because its answer differs from the key.
+
+## Outcome of the replacement gate
+
+The replacement gate ran on 2026-08-10 against the proposed `RISK-SHAPES.md` at `3744410`,
+`claude-opus-5`. Thirty valid runs from thirty fresh evaluators, three per scored case, none
+reused within or across cases.
+
+- **Cases 2 and 9 moved to their fixed keys** with correct candidate identity.
+- **Cases 3, 4, 5, 6, 7, 8, 10, and 11 held** their fixed keys with correct candidate identity.
+- Every scored case returned three unanimous key-matching results.
+
+**The replacement gate passes and this decision is accepted.** Two earlier setup attempts were
+invalid because a prompt extractor selected historical eval material; they were preserved,
+excluded, and replaced under the pre-registered invalid-run rule. No valid run was replaced.
+The eval holds the per-case results, isolation details, and the residual case-9 transmission
+concern.

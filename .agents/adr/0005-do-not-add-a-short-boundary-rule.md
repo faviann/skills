@@ -186,3 +186,10 @@ Another draft would be tuned rather than argued.
 - This decision is reversible on new production evidence, a measured failure
   traceable to the missing boundary, or a proposal satisfying the applicable bars
   above without another case-tuned limb.
+
+## Subsequent outcome — 2026-08-10
+
+#37 closed when this ADR and its eval pointer landed. [ADR 0004](./0004-risk-shapes-do-not-gate-the-count.md)
+was then reactivated: its replacement ten-case gate passed, cases 2 and 9 moved to their fixed
+keys, and all eight regression guards held. The boundary remains open conceptually under the
+reopening bars above; the scored suite is green without a positive boundary rule.
