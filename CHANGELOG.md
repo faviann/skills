@@ -1,5 +1,45 @@
 # mattpocock-skills
 
+## 1.2.4
+
+### Patch Changes
+
+- [#38](https://github.com/faviann/skills/pull/38) [`8261a74`](https://github.com/faviann/skills/commit/8261a74d1672294d3745dbb78d28c3155c658db7) Thanks [@faviann](https://github.com/faviann)! - Clarify `/to-tickets` slice sizing and organise its conditional references around the decisions they serve.
+
+  Slice sizing now names the context and review budgets separately, keeps the no-seam outcomes outside the seam rule, and explains the risk test through corrected, repository-independent examples. Staged-calibration evidence now lives with its checkpoint procedure, while the risk-shapes reference remains focused on independent-model discrimination and ownership collisions. The docs page reflects those boundaries.
+
+- [#5](https://github.com/faviann/skills/pull/5) [`fd1743c`](https://github.com/faviann/skills/commit/fd1743c9a3ae64615fe083e22f2c70a6aac00424) Thanks [@faviann](https://github.com/faviann)! - Filter AFK issue selection through GitHub's native dependency relationships before model reasoning.
+
+  The `select-issue` digest now excludes candidates with open blockers or unreadable dependency data, reports those exclusions separately, and keeps eligible work selectable in mixed queues. Manual selection remains unchanged.
+
+- [#29](https://github.com/faviann/skills/pull/29) [`ec0ae56`](https://github.com/faviann/skills/commit/ec0ae56a24f986a4a64c4a63bf5ec291eb518ae6) Thanks [@faviann](https://github.com/faviann)! - Add staged calibration to `/to-tickets` using durable Parent checkpoints, with production-evidence guidance and routing for fresh-session resumption.
+
+- [#33](https://github.com/faviann/skills/pull/33) [`ef394af`](https://github.com/faviann/skills/commit/ef394af1602c7eba2bc3c195235581c58125cc84) Thanks [@faviann](https://github.com/faviann)! - Fire `/to-tickets`' staged-calibration trigger on a literal heading match, and name the right form in the wide-refactor exception.
+
+  Step 1 asked the agent to judge whether a Parent had staged-calibration checkpoints; it now looks for `## Staged calibration checkpoint` on the Parent's comment surface, which is the heading `CHECKPOINTS.md` writes. A text match cannot be reasoned away by an agent that decides the Parent probably has none.
+
+  The wide-refactor exception called the surviving form the _compatibility form_, when the form kept alive for compatibility is the old one that unmigrated call sites still need. The rename is reverted to upstream's _new form_, and the sentence that protected the wrong form now names the old one: both forms stand until every named batch has landed, and it is the old form that is never withdrawn before then.
+
+  Staged calibration also spoke of a _pilot Frontier_ in `ask-matt` and the docs pages while `CHECKPOINTS.md` called the same thing the _immediate frontier_, and capitalised `frontier` mid-sentence where every other skill leaves it lowercase. One name now, in the lowercase the rest of the vocabulary already uses; `Published Frontier` keeps its capital because it is a checkpoint field key rather than prose.
+
+- [#2](https://github.com/faviann/skills/pull/2) [`241c9dd`](https://github.com/faviann/skills/commit/241c9dddcc7822cb0dd3a79caf29a223a096288d) Thanks [@faviann](https://github.com/faviann)! - Give `/to-tickets` an **Out of scope** slot for the prohibitions a ticket inherits.
+
+  Both ticket templates had four sections — Parent, What to build, Acceptance criteria, Blocked by — and none of them accepted a prohibition. So when a decomposition carried a fence down from the parent ("no message broker is introduced", "no mutable `latest` tag"), the only section that took a normative statement was Acceptance criteria, and fences landed there as criteria nothing could falsify. Both templates now carry an Out of scope section, and the skill states the rule directly: a fence asserts some code does not exist, so no input could make it fail, and as a criterion it can only ever be ticked on faith.
+
+- [#2](https://github.com/faviann/skills/pull/2) [`241c9dd`](https://github.com/faviann/skills/commit/241c9dddcc7822cb0dd3a79caf29a223a096288d) Thanks [@faviann](https://github.com/faviann)! - Size a `/to-tickets` slice by its review budget as well as its context budget.
+
+  `<vertical-slice-rules>` sized a slice only as "fits in a single fresh context window" — a capacity limit on the agent building the ticket, with nothing said about the human reviewing it. Tickets that fit context comfortably still landed as pull requests too large to review in one sitting, and had to be split by hand after the fact. Slices are now bounded by two constraints that both have to hold: one fresh context window, and one reviewable pull request. The docs page names both budgets and why they differ.
+
+- [#18](https://github.com/faviann/skills/pull/18) [`9f3515c`](https://github.com/faviann/skills/commit/9f3515cd3960dafc9c41f649e237e65a534f5e85) Thanks [@faviann](https://github.com/faviann)! - Size a `/to-tickets` slice by the risk it carries, not only by the two capacity budgets.
+
+  `<vertical-slice-rules>` bounded a slice only by capacity — one fresh context window and one reviewable pull request. Slices that cleared both still introduced several independent production models at once, and two tickets could quietly claim the same mechanism, so the overlap surfaced as integration work only after both had been published. Three positive rules now apply: risk decides **whether** a slice splits, a safe and useful seam decides **where** it can land, and each semantic case and production mechanism gets exactly one owning ticket. A conditionally-loaded `RISK-SHAPES.md` carries the risk taxonomy and worked examples. A risk verdict is never cancelled: a settled design may get a prefactor ticket that creates the seam, while an unresolved design question stops publication and returns to grilling, prototyping, or Wayfinder. Wide refactors stay the one exception, sequenced as expand–contract: name the batches that consume the new form, and retire the old form in the contract ticket. The docs page names all three rules and the wide-refactor exception.
+
+- [#15](https://github.com/faviann/skills/pull/15) [`efff1fa`](https://github.com/faviann/skills/commit/efff1fa2c4e92868c67dc09a2d13924185c9b403) Thanks [@faviann](https://github.com/faviann)! - Name the triage-label mapping's left column for what it means, not for the repo that ships it.
+
+  The seed template `/setup-matt-pocock-skills` writes headed its left column `Label in faviann/skills`, inherited from upstream's `Label in mattpocock/skills` via the fork rebrand. That identifies a vocabulary by naming the repo that distributes it, which reads oddly anywhere and collapses when the skill is run against the distribution repo itself — both columns then denote the same tracker, and the table maps nothing. The columns are now `Canonical role` and `Label in this repo`, which is what they have always meant and stays true wherever the file lands. The separator and body rows are re-padded to the new widths (cosmetic; the old padding was sized for the pre-rebrand header).
+
+  The template's example of a skill naming a role also referred to a `ready-for-afk` role that no longer exists, as did the **Triage role** entry in `CONTEXT.md`. Both now say `ready-for-agent`, matching the table and the wording `/to-tickets` and `/triage` actually use.
+
 ## 1.2.3
 
 ### Patch Changes
