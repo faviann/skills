@@ -2,6 +2,13 @@
 
 **Status: rejected.** Drafted from the [#39](https://github.com/faviann/skills/issues/39) grilling, then rejected on 2026-08-09 when the eval was first tested against a production umbrella. Kept as a record of the reasoning and of why it did not survive contact with real work. Nothing in `RISK-SHAPES.md`, `SKILL.md`, the docs page, or the eval was changed to match it.
 
+> **Partly superseded.** [ADR 0004](./0004-risk-shapes-do-not-gate-the-count.md) removes the
+> counting gate on new evidence — an ordinary slice, eval case 2, under-split by a majority of
+> twelve runs. Its original gate failed on case 1; after #37 closed and case 1 retired from
+> scoring, its replacement ten-case gate passed. It takes only that half. This ADR's larger
+> proposal — renaming the counted unit to **correctness contract** across the prose — stays
+> rejected, and so does the reasoning that rested on case 9.
+
 ## Why this was rejected
 
 This ADR rejected extending the taxonomy on the grounds that the shapes would remain the gate, so the next uncovered kind would under-count exactly as authorization does. Its evidence for that was eval case 9 — two orthogonal determinations instantiating no shape, keyed `2 / fires`, measured at `0 / does not fire` across three blind runs.

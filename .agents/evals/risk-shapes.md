@@ -1391,6 +1391,77 @@ As with every baseline in this file, these evaluators were subagents *instructed
 tools, with the complete reference pasted inline, rather than evaluators sandboxed without tool
 access. "Told not to look" is weaker than "could not look".
 
+## #50 replacement gate — pre-registered 2026-08-10
+
+The original #50 gate above remains a failed 33-run, eleven-case measurement and is not
+reinterpreted. Case 1 has since been retired from scoring, the live **Protocol** now defines ten
+scored cases, and [ADR 0005](../adr/0005-do-not-add-a-short-boundary-rule.md) records #37's
+negative boundary result. #50 is reactivated under this replacement gate.
+
+Seek **thirty valid runs from thirty fresh blind evaluators**, three per scored case,
+`claude-opus-5`, with no evaluator reused within or across cases. Each receives the complete
+proposed `RISK-SHAPES.md`, the **Isolated prompt**, and exactly one case.
+
+- **Cases 2 and 9 must move to their fixed keys**, with correct candidate identity.
+- **Cases 3, 4, 5, 6, 7, 8, 10, and 11 must hold** their fixed keys, with correct candidate
+  identity.
+- Every scored case must return three unanimous key-matching results. Any mismatch, instability,
+  over-split, under-split, or green-baseline drop rejects the change.
+- **Case 1 is unscored and does not participate.** No evaluator from an earlier suite or probe
+  is reused, and no earlier result is rescored.
+
+Invalid-run handling is fixed for this gate before the run: tool use, key exposure, malformed
+input, or execution failure invalidates an attempt. Preserve it with its reason and replace it
+with a fresh evaluator until thirty valid runs exist. A valid run is never replaced because its
+answer differs from the key.
+
+## #50 replacement gate — passed, 2026-08-10
+
+Thirty valid runs against the proposed `RISK-SHAPES.md` at `3744410`, whose production
+reference has SHA-256 `f930989770af96c544abdedb68d148945747572fc66970bc887f60ec9c2b723c`.
+Model `claude-opus-5`, three fresh evaluators per scored case, none reused within or across
+cases. Each case's three valid inputs were byte-identical.
+
+| Case | Runs | Candidate identity | Result |
+| --- | --- | --- | --- |
+| 2 | `2 / yes` ×3 | Priority-tier determination plus one fused lease ownership lifecycle | **Moved to key** |
+| 3 | `1 / no` ×3 | One payment-outcome determination; response body folded into it | Held |
+| 4 | `2 / yes` ×3 | Sensitivity determination plus export-refusal authority | Held |
+| 5 | `1 / no` ×3 | One subscription-state determination; read-time expiry folded into it | Held |
+| 6 | `2 / yes` ×3 | Hiring-stage determination plus audit-record lifecycle | Held |
+| 7 | `2 / yes` ×3 | Egress determination plus backward-compatibility protocol | Held |
+| 8 | `1 / no` ×3 | One billing-state determination; all three consumers folded into it | Held |
+| 9 | `2 / yes` ×3 | Sensitivity and retention-class determinations; neither has a listed shape | **Moved to key** |
+| 10 | `2 / yes` ×3 | Credential-class authorization plus locator idempotency | Held |
+| 11 | `2 / yes` ×3 | Access-check model plus repeat-submission model | Held |
+
+**The replacement gate passes.** Cases 2 and 9 moved on the fixed candidate sets, every other
+scored case held, and all ten cases returned three unanimous key-matching results. No valid run
+reported tool use or key exposure, no valid run errored, all used `claude-opus-5`, and the
+machine-readable results report zero permission denials and zero web requests.
+
+The evaluators ran from `/dev/shm` with safe mode, no session persistence, and the built-in tool
+set explicitly empty. That is stronger isolation than the earlier subagent method caveat:
+these evaluators could not inspect the repository through a tool. The complete proposed
+reference, isolated prompt, and one case were supplied on standard input.
+
+**Two attempts were invalid and are excluded.** Both were fresh case-2 evaluators launched
+while validating the prompt assembler. The extractor matched a historical `Case 2` heading
+rather than the case under **Cases**, so both received malformed input containing historical
+eval material and key-adjacent text. They are preserved here with that shared invalid reason;
+their raw evaluator session IDs are `8a8b2730-e92c-4208-91a7-aa48ea943a13` and
+`536fd987-666f-43c5-b791-1be0f6cff7bd`, the second surviving in the parent run log rather than
+the probe directory. The extractor was anchored to **Cases**, and its output was mechanically
+checked for all ten cases before two fresh replacements ran. Neither invalid answer was used,
+and no valid answer was replaced.
+
+**One transmission concern survives without changing the result.** All three case-9 evaluators
+quoted the tension between *"Count the determinations the slice introduces"* and *"What decides
+is the qualitative identification of more than one independent state, lifecycle, or
+authorization model."* All three resolved toward the new, specific counting instruction and
+returned the key. The gate measures that the proposed wording transmits the intended count; it
+does not make those two sentences synonymous. No wording changed in response to the runs.
+
 ## Current standing — 2026-08-10
 
 This section supersedes **every** earlier enumeration of the green baseline, the
@@ -1400,8 +1471,8 @@ one disagree, this one governs.
 
 The live reference is `RISK-SHAPES.md` on `main`, which **still carries the counting gate**.
 The [#50](https://github.com/faviann/skills/issues/50) change that removes it is not merged
-and parked on branch `issue-50-shapes-do-not-gate-count`; see **Disposition — not merged and
-parked** above.
+and is reactivated on branch `issue-50-shapes-do-not-gate-count` under the replacement gate
+pre-registered above. No replacement-gate result has been recorded yet.
 
 | Case | Standing against the live reference | Most recent measurement |
 | --- | --- | --- |
@@ -1451,24 +1522,58 @@ unanimously with correct candidate identity, so it now stands on a measurement o
 reference. Cases 6 and 7 have **not** been re-measured since `e92a6a6`, and their standing is
 still inherited.
 
-Neither probe repairs the reference ambiguity the version-1 runs reported. That stays open on
-[#37](https://github.com/faviann/skills/issues/37).
+Neither probe repairs the reference ambiguity the version-1 runs reported. #37 closed with a
+negative boundary result rather than a wording repair; [ADR 0005](../adr/0005-do-not-add-a-short-boundary-rule.md)
+records the surviving ambiguity and the bars for reopening it.
 
 **A coherent verdict is now available, over ten cases rather than eleven.** Every scored case
 has a current, scoreable standing: eight green, two reproductions that only #50's change is
 expected to move. **That is what "coherent" means here — not that all ten are green.** Cases 2
-and 9 are expected to fail against the live reference and to move at the parked one; a suite in
-which they do so is working, not broken.
+and 9 are expected to fail against the live reference and to move at the proposed reference; a
+suite in which they do so is working, not broken.
 
 The earlier blocker is discharged, and not by inventing a scoring rule for an unstable case.
 Case 1 was retired instead, by an argument recorded with its degrees of freedom. **Protocol now
-agrees with that disposition: ten scored cases and thirty runs.** #50's parked, branch-local
-gate still says eleven cases and 33 runs. It must be replaced after that branch is rebased and
-before #50 is run again; it does not block other changes from using this Protocol.
+agrees with that disposition: ten scored cases and thirty runs.** #50's replacement gate is
+pre-registered above and awaits measurement.
 
 **Consequence for further work.** The baseline block is lifted. Changes to the
 independent-model rules, the discriminators, or the worked examples can be adjudicated under
-this **Protocol** again. #50 remains parked until its branch is rebased and its own gate is
-brought to ten scored cases and thirty runs. Changes that touch none of those three things —
-this record, Protocol wording, provenance, prose corrections — are unaffected and require no
-run, as before.
+this **Protocol** again. #50 is the first such change and is reactivated under the replacement
+gate above. Changes that touch none of those three things — this record, Protocol wording,
+provenance, prose corrections — are unaffected and require no run, as before.
+
+## Current standing — after #50's replacement gate, 2026-08-10
+
+This section supersedes every earlier **Current standing** section. The reference change and
+this result record land together. The proposed reference at `3744410` passed the replacement
+gate above; once merged, it is the live reference and the counting gate is no longer in force.
+
+| Case | Standing after #50 | Most recent measurement |
+| --- | --- | --- |
+| 1 | **Retired and unscored boundary probe** | Version 2: `7 × 2, 2 × 3` against key 2, nine runs at `6002224` |
+| 2 | Green baseline | `2 / yes` ×3 at `3744410`; moved from the live-reference under-split |
+| 3 | Green baseline | `1 / no` ×3 at `3744410` |
+| 4 | Green baseline | `2 / yes` ×3 at `3744410` |
+| 5 | Green baseline | `1 / no` ×3 at `3744410` |
+| 6 | Green baseline | `2 / yes` ×3 at `3744410` |
+| 7 | Green baseline | `2 / yes` ×3 at `3744410` |
+| 8 | Green baseline | `1 / no` ×3 at `3744410` |
+| 9 | Green baseline | `2 / yes` ×3 at `3744410`; moved from the live-reference stable mismatch |
+| 10 | Green baseline | `2 / yes` ×3 at `3744410` |
+| 11 | Green baseline | `2 / yes` ×3 at `3744410` |
+
+**All ten scored cases are green. Case 1 remains retired and unscored.** Its key, both
+instrument versions, all measurements, and the post-result degree of freedom in its retirement
+remain preserved; #50 neither reruns nor reinterprets them. Case 6 continues to carry its
+downstream-lifecycle coverage.
+
+Cases 2 and 9 are the affirmative result: both count determinations that instantiate no listed
+shape, and both moved from the live-reference failure to three unanimous key-matching results
+with correct candidate identity. The other eight scored cases are the regression guard and all
+held. The residual case-9 wording tension is recorded in the result section above; it is not a
+failed gate condition and was not used to tune the candidate after measurement.
+
+**Consequence.** #50's pre-registered replacement gate passed and the reference change is
+eligible to merge. This result-record change does not alter `RISK-SHAPES.md`, its independent-
+model rules, its discriminators, or its worked examples, so it requires no further suite.
