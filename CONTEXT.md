@@ -47,7 +47,7 @@ A diagnostic pattern showing where independently failure-prone **Correctness con
 _Avoid_: taxonomy gate, counted shape
 
 **Workflow provenance**:
-The `work-on` telemetry fingerprint of the exact `work-on`, selected workflow, `tdd`, and `code-review` instruction bytes that governed a run. This is runtime attribution, not the risk-shapes provenance record that maps production examples to their sources.
+The `work-on` telemetry fingerprint hashes the complete `work-on`, `tdd`, and `code-review` skill directories plus the selected workflow file that governed a run. This is runtime attribution, not the risk-shapes provenance record that maps production examples to their sources.
 _Avoid_: instruction version, risk-shapes provenance
 
 **Correctness contract**:
