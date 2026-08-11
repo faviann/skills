@@ -18,18 +18,17 @@ hash_directory() {
       relative_path="${relative_path#./}"
       if [[ -L "$relative_path" ]]; then
         mode=120000
+        payload_digest="$(
+          readlink -n -- "$relative_path" | sha256sum | awk '{ print $1 }'
+        )"
       elif [[ -x "$relative_path" ]]; then
         mode=100755
+        payload_digest="$(sha256sum -- "$relative_path" | awk '{ print $1 }')"
       else
         mode=100644
+        payload_digest="$(sha256sum -- "$relative_path" | awk '{ print $1 }')"
       fi
-      printf '%s\0%s\0' "$relative_path" "$mode"
-      if [[ -L "$relative_path" ]]; then
-        readlink -n -- "$relative_path"
-      else
-        cat "$relative_path"
-      fi
-      printf '\0'
+      printf '%s\0%s\0%s\0' "$relative_path" "$mode" "$payload_digest"
     done < <(
       LC_ALL=C find . \( -type f -o -type l \) -print0 | LC_ALL=C sort -z
     )
@@ -52,9 +51,12 @@ hash_head_directory() {
         [[ "$mode" == 100644 || "$mode" == 100755 \
           || "$mode" == 120000 ]] || continue
         component_path="${repo_path#"$relative"/}"
-        printf '%s\0%s\0' "$component_path" "$mode"
-        git -C "$repo" cat-file blob "HEAD:$repo_path"
-        printf '\0'
+        payload_digest="$(
+          git -C "$repo" cat-file blob "HEAD:$repo_path" \
+            | sha256sum | awk '{ print $1 }'
+        )"
+        printf '%s\0%s\0%s\0' \
+          "$component_path" "$mode" "$payload_digest"
       done
   ) | sha256sum | awk '{ print $1 }'
 }

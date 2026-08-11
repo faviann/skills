@@ -73,6 +73,34 @@ clean_workflow="$(component_value "$clean_canonical" workflow)"
 clean_tdd="$(component_value "$clean_canonical" tdd)"
 clean_review="$(component_value "$clean_canonical" review)"
 [[ "$clean_tdd" =~ ^[0-9a-f]{12}$ ]]
+
+collision_fixture="$skills_checkout/skills/engineering/tdd/binary-collision"
+mkdir "$collision_fixture"
+printf 'X' >"$collision_fixture/a"
+printf 'Y' >"$collision_fixture/b"
+(
+  cd "$skills_checkout"
+  "$command_under_test" >"$fixture/binary-collision-two-files.json"
+)
+binary_collision_two_files="$(
+  canonical_from "$fixture/binary-collision-two-files.json"
+)"
+
+rm "$collision_fixture/b"
+printf 'X\0%s\0%s\0Y' 'binary-collision/b' '100644' \
+  >"$collision_fixture/a"
+(
+  cd "$skills_checkout"
+  "$command_under_test" >"$fixture/binary-collision-one-file.json"
+)
+binary_collision_one_file="$(
+  canonical_from "$fixture/binary-collision-one-file.json"
+)"
+
+[[ "$(component_value "$binary_collision_two_files" tdd)" != \
+  "$(component_value "$binary_collision_one_file" tdd)" ]]
+rm -r "$collision_fixture"
+
 ln -sfn 'changed-target' \
   "$skills_checkout/skills/engineering/tdd/provenance-link"
 (
