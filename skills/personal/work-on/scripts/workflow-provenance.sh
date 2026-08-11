@@ -116,16 +116,12 @@ repo_commit_is_fetchable() {
     | grep -Ev '/HEAD$' | grep -q .
 }
 
-git_available=true
-
 target_root="$PWD"
 capture_context_valid=false
-if [[ "$git_available" == true ]]; then
-  resolved_target_root="$(repo_root_for "$PWD" || true)"
-  if [[ -n "$resolved_target_root" ]]; then
-    target_root="$resolved_target_root"
-    capture_context_valid=true
-  fi
+resolved_target_root="$(repo_root_for "$PWD" || true)"
+if [[ -n "$resolved_target_root" ]]; then
+  target_root="$resolved_target_root"
+  capture_context_valid=true
 fi
 
 workflow_path="$work_on_root/references/default-workflow.md"
@@ -134,13 +130,11 @@ workflow_suffix=""
 if [[ -f "$target_root/docs/workflow.md" ]]; then
   workflow_path="$target_root/docs/workflow.md"
   workflow_repo="$target_root"
-  if [[ "$git_available" == true ]]; then
-    target_slug="$(origin_slug "$target_root" || true)"
-    skills_origin_slug="$(origin_slug "$skills_checkout" || true)"
-    if [[ -n "$target_slug" && -n "$skills_origin_slug" \
-        && "$target_slug" != "$skills_origin_slug" ]]; then
-      workflow_suffix="@$target_slug"
-    fi
+  target_slug="$(origin_slug "$target_root" || true)"
+  skills_origin_slug="$(origin_slug "$skills_checkout" || true)"
+  if [[ -n "$target_slug" \
+      && "$target_slug" != "$skills_origin_slug" ]]; then
+    workflow_suffix="@$target_slug"
   fi
 fi
 

@@ -273,6 +273,19 @@ jq -e '
   | test(" workflow:[0-9a-f]{12}@example/target ")
 ' "$fixture/target.json" >/dev/null
 
+git -C "$skills_checkout" config remote.origin.url \
+  "$fixture/skills-origin.git"
+(
+  cd "$target_checkout"
+  "$command_under_test" >"$fixture/unidentifiable-skills-origin.json"
+)
+jq -e '
+  .canonical
+  | test(" workflow:[0-9a-f]{12}@example/target tdd:[0-9a-f]{12}\\* review:[0-9a-f]{12}\\* \\(unknown\\)$")
+' "$fixture/unidentifiable-skills-origin.json" >/dev/null
+git -C "$skills_checkout" config remote.origin.url \
+  'https://github.com/example/skills.git'
+
 no_git_bin="$fixture/no-git-bin"
 mkdir "$no_git_bin"
 for dependency in awk bash cat dirname find grep mktemp pwd readlink rm sha256sum sort; do
