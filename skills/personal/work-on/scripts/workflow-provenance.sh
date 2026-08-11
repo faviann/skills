@@ -5,21 +5,11 @@ set -euo pipefail
 # suitable for the target repository's git-dir ledger; `canonical` is the
 # human-readable value rendered into pull-request telemetry.
 
-script_path="${BASH_SOURCE[0]}"
-while [[ -L "$script_path" ]]; do
-  script_dir="$(cd "$(dirname "$script_path")" && pwd)"
-  link_target="$(readlink "$script_path")"
-  if [[ "$link_target" == /* ]]; then
-    script_path="$link_target"
-  else
-    script_path="$script_dir/$link_target"
-  fi
-done
-script_root="$(cd "$(dirname "$script_path")" && pwd)"
-work_on_root="$(cd "$script_root/.." && pwd)"
-skills_checkout="$(cd "$work_on_root/../../.." && pwd)"
+script_root="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+work_on_root="$(cd -P -- "$script_root/.." && pwd -P)"
+skills_checkout="$(cd -P -- "$work_on_root/../../.." && pwd -P)"
 
-digest_directory() {
+hash_directory() {
   local root="$1"
   (
     cd "$root"
@@ -29,11 +19,45 @@ digest_directory() {
       cat "$relative_path"
       printf '\0'
     done < <(LC_ALL=C find . -type f -print0 | LC_ALL=C sort -z)
-  ) | sha256sum | awk '{ print substr($1, 1, 12) }'
+  ) | sha256sum | awk '{ print $1 }'
 }
 
-digest_file() {
-  sha256sum "$1" | awk '{ print substr($1, 1, 12) }'
+hash_file() {
+  sha256sum "$1" | awk '{ print $1 }'
+}
+
+hash_head_directory() {
+  local repo="$1" root="$2" relative
+  relative="${root#"$repo"/}"
+  (
+    git -C "$repo" ls-tree -r -z HEAD -- "$relative" |
+      while IFS= read -r -d '' record; do
+        metadata="${record%%$'\t'*}"
+        repo_path="${record#*$'\t'}"
+        mode="${metadata%% *}"
+        [[ "$mode" == 100644 || "$mode" == 100755 ]] || continue
+        component_path="${repo_path#"$relative"/}"
+        printf '%s\0' "$component_path"
+        git -C "$repo" cat-file blob "HEAD:$repo_path"
+        printf '\0'
+      done
+  ) | sha256sum | awk '{ print $1 }'
+}
+
+path_matches_head() {
+  local repo="$1" path="$2" relative current_hash head_hash
+  relative="${path#"$repo"/}"
+  if [[ -d "$path" ]]; then
+    current_hash="$(hash_directory "$path")"
+    head_hash="$(hash_head_directory "$repo" "$path")" || return 1
+  elif [[ -f "$path" ]]; then
+    current_hash="$(hash_file "$path")"
+    head_hash="$(git -C "$repo" cat-file blob "HEAD:$relative" \
+      | sha256sum | awk '{ print $1 }')" || return 1
+  else
+    return 1
+  fi
+  [[ "$current_hash" == "$head_hash" ]]
 }
 
 origin_slug() {
@@ -61,12 +85,6 @@ repo_commit_is_fetchable() {
     | grep -Ev '/HEAD$' | grep -q .
 }
 
-path_is_dirty() {
-  local repo="$1" path="$2" relative
-  relative="${path#"$repo"/}"
-  [[ -n "$(git -C "$repo" status --porcelain --untracked-files=all -- "$relative" 2>/dev/null)" ]]
-}
-
 git_available=false
 command -v git >/dev/null 2>&1 && git_available=true
 
@@ -88,17 +106,22 @@ if [[ -f "$target_root/docs/workflow.md" ]]; then
   workflow_repo="$target_root"
   if [[ "$git_available" == true ]]; then
     target_slug="$(origin_slug "$target_root" || true)"
-    skills_root="$(repo_root_for "$skills_checkout" || true)"
-    if [[ -n "$target_slug" && "$target_root" != "$skills_root" ]]; then
+    skills_origin_slug="$(origin_slug "$skills_checkout" || true)"
+    if [[ -n "$target_slug" && -n "$skills_origin_slug" \
+        && "$target_slug" != "$skills_origin_slug" ]]; then
       workflow_suffix="@$target_slug"
     fi
   fi
 fi
 
-work_on_digest="$(digest_directory "$work_on_root")"
-workflow_digest="$(digest_file "$workflow_path")"
-tdd_digest="$(digest_directory "$skills_checkout/skills/engineering/tdd")"
-review_digest="$(digest_directory "$skills_checkout/skills/engineering/code-review")"
+work_on_digest="$(hash_directory "$work_on_root")"
+work_on_digest="${work_on_digest:0:12}"
+workflow_digest="$(hash_file "$workflow_path")"
+workflow_digest="${workflow_digest:0:12}"
+tdd_digest="$(hash_directory "$skills_checkout/skills/engineering/tdd")"
+tdd_digest="${tdd_digest:0:12}"
+review_digest="$(hash_directory "$skills_checkout/skills/engineering/code-review")"
+review_digest="${review_digest:0:12}"
 
 work_on_star=true
 workflow_star=true
@@ -112,11 +135,11 @@ if [[ "$capture_context_valid" == true ]]; then
   if [[ -n "$skills_repo" && -n "$skills_slug" ]]; then
     commit="$skills_slug@$(git -C "$skills_repo" rev-parse --short=12 HEAD)"
     if repo_commit_is_fetchable "$skills_repo"; then
-      path_is_dirty "$skills_repo" "$work_on_root" || work_on_star=false
-      path_is_dirty "$skills_repo" "$skills_checkout/skills/engineering/tdd" \
-        || tdd_star=false
-      path_is_dirty "$skills_repo" "$skills_checkout/skills/engineering/code-review" \
-        || review_star=false
+      path_matches_head "$skills_repo" "$work_on_root" && work_on_star=false
+      path_matches_head "$skills_repo" "$skills_checkout/skills/engineering/tdd" \
+        && tdd_star=false
+      path_matches_head "$skills_repo" "$skills_checkout/skills/engineering/code-review" \
+        && review_star=false
     fi
   fi
 
@@ -124,7 +147,7 @@ if [[ "$capture_context_valid" == true ]]; then
   workflow_slug="$(origin_slug "$workflow_repo" || true)"
   if [[ -n "$workflow_git_root" && -n "$workflow_slug" ]] \
       && repo_commit_is_fetchable "$workflow_git_root" \
-      && ! path_is_dirty "$workflow_git_root" "$workflow_path"; then
+      && path_matches_head "$workflow_git_root" "$workflow_path"; then
     workflow_star=false
   fi
 fi
@@ -139,14 +162,4 @@ tdd_value="$tdd_digest$(star_suffix "$tdd_star")"
 review_value="$review_digest$(star_suffix "$review_star")"
 canonical="work-on:$work_on_value workflow:$workflow_value tdd:$tdd_value review:$review_value ($commit)"
 
-printf '{\n'
-printf '  "version": 1,\n'
-printf '  "canonical": "%s",\n' "$canonical"
-printf '  "components": {\n'
-printf '    "work-on": {"digest": "%s", "starred": %s},\n' "$work_on_digest" "$work_on_star"
-printf '    "workflow": {"digest": "%s", "starred": %s},\n' "$workflow_digest" "$workflow_star"
-printf '    "tdd": {"digest": "%s", "starred": %s},\n' "$tdd_digest" "$tdd_star"
-printf '    "review": {"digest": "%s", "starred": %s}\n' "$review_digest" "$review_star"
-printf '  },\n'
-printf '  "commit": "%s"\n' "$commit"
-printf '}\n'
+printf '{"canonical":"%s"}\n' "$canonical"

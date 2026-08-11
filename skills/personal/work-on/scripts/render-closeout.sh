@@ -162,6 +162,14 @@ telemetry_count_fields=(
   blocking_findings_resolved
   findings_rejected_at_adjudication
 )
+telemetry_count_labels=(
+  'Implementation rounds'
+  'Independent-review rounds'
+  'Remediation rounds'
+  'Validation executions'
+  'Blocking findings resolved'
+  'Findings rejected at adjudication'
+)
 for field in "${telemetry_count_fields[@]}"; do
   jq -e --arg field "$field" \
     '.telemetry[$field] |
@@ -210,6 +218,30 @@ if [[ "$closeout_mode" == previous ]]; then
   normalized_previous_body="$fixture/previous-body.md"
   sed 's/\r$//' "$previous_body" >"$normalized_previous_body"
   "$script_root/validate-closeout-body.sh" "$issue_number" "$normalized_previous_body"
+  for ((index = 0; index < ${#telemetry_count_fields[@]}; index++)); do
+    field="${telemetry_count_fields[$index]}"
+    label="${telemetry_count_labels[$index]}"
+    previous_count="$(awk -F'|' -v wanted="$label" '
+      $0 == "## Workflow telemetry" { in_telemetry = 1; next }
+      in_telemetry && /^## / { exit }
+      in_telemetry {
+        field = $2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", field)
+        if (field == wanted) {
+          value = $3
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+          print value
+          exit
+        }
+      }
+    ' "$normalized_previous_body")"
+    current_count="$(jq -r --arg field "$field" \
+      '.telemetry[$field] | tostring' "$facts")"
+    if [[ "$previous_count" =~ ^[0-9]+$ && "$current_count" =~ ^[0-9]+$ ]] \
+        && (( 10#$current_count < 10#$previous_count )); then
+      fail "telemetry $field decreased from $previous_count to $current_count"
+    fi
+  done
   previous_value="$(awk -F'|' '
     $0 == "## Workflow telemetry" { in_telemetry = 1; next }
     in_telemetry && /^## / { exit }

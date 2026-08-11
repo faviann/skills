@@ -20,6 +20,8 @@ cp -R "$source_skill_root/../../engineering/tdd" \
   "$skills_checkout/skills/engineering/tdd"
 cp -R "$source_skill_root/../../engineering/code-review" \
   "$skills_checkout/skills/engineering/code-review"
+printf 'skills/engineering/tdd/ignored-provenance-fixture\n' \
+  >"$skills_checkout/.gitignore"
 
 git -C "$skills_checkout" init -q -b main
 git -C "$skills_checkout" config user.name 'Provenance Test'
@@ -39,40 +41,91 @@ git -C "$skills_checkout" config remote.origin.url \
 
 command_under_test="$skills_checkout/skills/personal/work-on/scripts/workflow-provenance.sh"
 
+canonical_from() {
+  jq -er '
+    if (keys == ["canonical"] and (.canonical | type == "string"))
+    then .canonical
+    else error("provenance ledger must contain only canonical")
+    end
+  ' "$1"
+}
+
+component_value() {
+  local canonical="$1" component="$2"
+  sed -n "s/.*${component}:\\([^ ]*\\).*/\\1/p" <<<"$canonical"
+}
+
 (
   cd "$skills_checkout"
   "$command_under_test" >"$fixture/clean.json"
 )
 jq -e '
-  .canonical
-  | test("^work-on:[0-9a-f]{12} workflow:[0-9a-f]{12} tdd:[0-9a-f]{12} review:[0-9a-f]{12} \\(example/skills@[0-9a-f]{12}\\)$")
+  keys == ["canonical"]
+  and (.canonical
+    | test("^work-on:[0-9a-f]{12} workflow:[0-9a-f]{12} tdd:[0-9a-f]{12} review:[0-9a-f]{12} \\(example/skills@[0-9a-f]{12}\\)$"))
 ' "$fixture/clean.json" >/dev/null
 
-clean_tdd="$(jq -r '.components.tdd.digest' "$fixture/clean.json")"
+clean_canonical="$(canonical_from "$fixture/clean.json")"
+clean_tdd="$(component_value "$clean_canonical" tdd)"
 printf 'non-SKILL fixture change\n' \
   >>"$skills_checkout/skills/engineering/tdd/tests.md"
 (
   cd "$skills_checkout"
   "$command_under_test" >"$fixture/dirty.json"
 )
-jq -e '
-  (.components["work-on"].starred == false)
-  and (.components.workflow.starred == false)
-  and (.components.tdd.starred == true)
-  and (.components.review.starred == false)
-' "$fixture/dirty.json" >/dev/null
-[[ "$(jq -r '.components.tdd.digest' "$fixture/dirty.json")" != "$clean_tdd" ]]
+dirty_canonical="$(canonical_from "$fixture/dirty.json")"
+[[ "$dirty_canonical" =~ ^work-on:[0-9a-f]{12}[[:space:]]workflow:[0-9a-f]{12}[[:space:]]tdd:[0-9a-f]{12}\*[[:space:]]review:[0-9a-f]{12}[[:space:]]\(example/skills@[0-9a-f]{12}\)$ ]]
+[[ "$(component_value "$dirty_canonical" tdd)" != "$clean_tdd" ]]
 
+git -C "$skills_checkout" restore skills/engineering/tdd/tests.md
+printf 'ignored but instruction-affecting\n' \
+  >"$skills_checkout/skills/engineering/tdd/ignored-provenance-fixture"
+(
+  cd "$skills_checkout"
+  "$command_under_test" >"$fixture/ignored.json"
+)
+ignored_canonical="$(canonical_from "$fixture/ignored.json")"
+[[ "$ignored_canonical" =~ ^work-on:[0-9a-f]{12}[[:space:]]workflow:[0-9a-f]{12}[[:space:]]tdd:[0-9a-f]{12}\*[[:space:]]review:[0-9a-f]{12}[[:space:]]\(example/skills@[0-9a-f]{12}\)$ ]]
+[[ "$(component_value "$ignored_canonical" tdd)" != "$clean_tdd" ]]
+rm "$skills_checkout/skills/engineering/tdd/ignored-provenance-fixture"
+
+git -C "$skills_checkout" update-index --assume-unchanged \
+  skills/engineering/tdd/tests.md
+printf 'hidden tracked change\n' \
+  >>"$skills_checkout/skills/engineering/tdd/tests.md"
+(
+  cd "$skills_checkout"
+  "$command_under_test" >"$fixture/assume-unchanged.json"
+)
+assume_unchanged_canonical="$(canonical_from "$fixture/assume-unchanged.json")"
+[[ "$assume_unchanged_canonical" =~ ^work-on:[0-9a-f]{12}[[:space:]]workflow:[0-9a-f]{12}[[:space:]]tdd:[0-9a-f]{12}\*[[:space:]]review:[0-9a-f]{12}[[:space:]]\(example/skills@[0-9a-f]{12}\)$ ]]
+[[ "$(component_value "$assume_unchanged_canonical" tdd)" != "$clean_tdd" ]]
+git -C "$skills_checkout" update-index --no-assume-unchanged \
+  skills/engineering/tdd/tests.md
+git -C "$skills_checkout" restore skills/engineering/tdd/tests.md
+
+printf 'unpushed instruction change\n' \
+  >>"$skills_checkout/skills/engineering/tdd/tests.md"
 git -C "$skills_checkout" add .
 git -C "$skills_checkout" commit -qm 'unpushed fixture change'
 (
   cd "$skills_checkout"
   "$command_under_test" >"$fixture/unpushed.json"
 )
-jq -e '
-  [.components[].starred] == [true, true, true, true]
-  and (.commit | test("^example/skills@[0-9a-f]{12}$"))
-' "$fixture/unpushed.json" >/dev/null
+unpushed_canonical="$(canonical_from "$fixture/unpushed.json")"
+[[ "$unpushed_canonical" =~ ^work-on:[0-9a-f]{12}\*[[:space:]]workflow:[0-9a-f]{12}\*[[:space:]]tdd:[0-9a-f]{12}\*[[:space:]]review:[0-9a-f]{12}\*[[:space:]]\(example/skills@[0-9a-f]{12}\)$ ]]
+
+# The installed harness links the whole skill directory, not each script.
+mkdir -p "$fixture/installed-skills"
+ln -s "$skills_checkout/skills/personal/work-on" \
+  "$fixture/installed-skills/work-on"
+(
+  cd "$skills_checkout"
+  timeout 5 "$fixture/installed-skills/work-on/scripts/workflow-provenance.sh" \
+    >"$fixture/symlinked-parent.json"
+)
+[[ "$(canonical_from "$fixture/symlinked-parent.json")" == \
+  "$unpushed_canonical" ]]
 
 mkdir -p "$skills_checkout/docs"
 printf '# Same-repository workflow\n' >"$skills_checkout/docs/workflow.md"
@@ -84,6 +137,29 @@ jq -e '
   .canonical
   | test(" workflow:[0-9a-f]{12}\\*? tdd:")
 ' "$fixture/same-repository.json" >/dev/null
+
+same_identity_checkout="$fixture/same-identity-checkout"
+git init -q -b main "$same_identity_checkout"
+git -C "$same_identity_checkout" config user.name 'Provenance Test'
+git -C "$same_identity_checkout" config user.email provenance@example.invalid
+mkdir -p "$same_identity_checkout/docs"
+printf '# Same-origin workflow\n' >"$same_identity_checkout/docs/workflow.md"
+git -C "$same_identity_checkout" add .
+git -C "$same_identity_checkout" commit -qm 'same-origin target fixture'
+git init -q --bare "$fixture/same-identity-origin.git"
+git -C "$same_identity_checkout" remote add origin \
+  "$fixture/same-identity-origin.git"
+git -C "$same_identity_checkout" push -q -u origin main
+git -C "$same_identity_checkout" config remote.origin.url \
+  'https://github.com/example/skills.git'
+(
+  cd "$same_identity_checkout"
+  "$command_under_test" >"$fixture/same-identity.json"
+)
+jq -e '
+  .canonical
+  | test(" workflow:[0-9a-f]{12} tdd:")
+' "$fixture/same-identity.json" >/dev/null
 
 target_checkout="$fixture/target-checkout"
 git init -q -b main "$target_checkout"
@@ -120,10 +196,9 @@ done
     >"$fixture/no-git.json"
 )
 jq -e '
-  (.canonical
+  keys == ["canonical"]
+  and (.canonical
     | test("^work-on:[0-9a-f]{12}\\* workflow:[0-9a-f]{12}\\* tdd:[0-9a-f]{12}\\* review:[0-9a-f]{12}\\* \\(unknown\\)$"))
-  and ([.components[].starred] == [true, true, true, true])
-  and (.commit == "unknown")
 ' "$fixture/no-git.json" >/dev/null
 
 mkdir "$fixture/not-a-repo"
@@ -132,8 +207,9 @@ mkdir "$fixture/not-a-repo"
   "$command_under_test" >"$fixture/not-a-repo.json"
 )
 jq -e '
-  ([.components[].starred] == [true, true, true, true])
-  and (.commit == "unknown")
+  keys == ["canonical"]
+  and (.canonical
+    | test("^work-on:[0-9a-f]{12}\\* workflow:[0-9a-f]{12}\\* tdd:[0-9a-f]{12}\\* review:[0-9a-f]{12}\\* \\(unknown\\)$"))
 ' "$fixture/not-a-repo.json" >/dev/null
 
 printf 'work-on workflow provenance black-box scenarios passed\n'

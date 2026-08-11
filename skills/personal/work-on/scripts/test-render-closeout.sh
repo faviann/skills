@@ -346,6 +346,43 @@ run_new "$fixture/unknown-counts.json" "$fixture/narrative.md" \
   >"$fixture/unknown-counts.md"
 [[ "$(grep -Fc '| unknown |' "$fixture/unknown-counts.md")" -eq 6 ]]
 
+# A resumed closeout keeps numeric telemetry cumulative. Equal values and
+# increases are both valid handoffs.
+jq '
+  .telemetry.implementation_rounds = 2
+  | .telemetry.independent_review_rounds = 1
+  | .telemetry.remediation_rounds = 1
+  | .telemetry.validation_executions = 4
+  | .telemetry.blocking_findings_resolved = 1
+  | .telemetry.findings_rejected_at_adjudication = 0
+' "$fixture/facts.json" >"$fixture/cumulative-counts.json"
+(
+  cd "$target_checkout"
+  "$command_under_test" \
+    "$fixture/cumulative-counts.json" "$fixture/narrative.md" \
+    --previous-body "$fixture/actual.md" \
+    >"$fixture/cumulative-counts.md"
+)
+grep -Fqx '| Implementation rounds | 2 |' "$fixture/cumulative-counts.md"
+grep -Fqx '| Independent-review rounds | 1 |' \
+  "$fixture/cumulative-counts.md"
+
+jq '.telemetry.implementation_rounds = 0' \
+  "$fixture/facts.json" >"$fixture/decreased-count.json"
+if (
+  cd "$target_checkout"
+  "$command_under_test" \
+    "$fixture/decreased-count.json" "$fixture/narrative.md" \
+    --previous-body "$fixture/actual.md"
+) >"$fixture/decreased-count.out" 2>"$fixture/decreased-count.err"; then
+  printf 'FAIL[decreased-count]: renderer accepted decreasing telemetry\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/decreased-count.out" ]]
+grep -Fqx \
+  'closeout invalid: telemetry implementation_rounds decreased from 1 to 0' \
+  "$fixture/decreased-count.err"
+
 # Resuming an existing pull request appends the current run as a phase even
 # when its governing fingerprint matches the previous run.
 (
