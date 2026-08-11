@@ -11,7 +11,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
 
-Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
+Infer the repo from `git remote -v`, preferring `origin` when it exists unless the user explicitly selected another repository. Before any GitHub mutation, set that target with `gh repo set-default origin` (or pass the selected repository instead), verify it with `gh repo set-default --view`, and use the verified output wherever a command requires `<owner>/<repo>`.
 
 ## Pull requests as a triage surface
 
