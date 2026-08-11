@@ -200,6 +200,29 @@ for phase_number in {1..10}; do
 done
 "$command_under_test" 164 "$fixture/ten-phases.md"
 
+if "$command_under_test" --previous "$fixture/canonical.md" \
+    164 "$fixture/canonical.md" >"$fixture/unchanged.out" 2>"$fixture/unchanged.err"; then
+  printf 'FAIL[unchanged-body]: validator accepted a body with no appended phase\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/unchanged.out" ]]
+grep -Fqx \
+  'closeout body invalid: workflow provenance must append at least one phase' \
+  "$fixture/unchanged.err"
+
+sed 's/| Validation executions | 3 |/| Validation executions | 2 |/' \
+  "$fixture/mixed.md" >"$fixture/decreased-count.md"
+if "$command_under_test" --previous "$fixture/canonical.md" \
+    164 "$fixture/decreased-count.md" \
+    >"$fixture/decreased-count.out" 2>"$fixture/decreased-count.err"; then
+  printf 'FAIL[decreased-count]: validator accepted decreased telemetry\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/decreased-count.out" ]]
+grep -Fqx \
+  'closeout body invalid: workflow telemetry Validation executions decreased from 3 to 2' \
+  "$fixture/decreased-count.err"
+
 if "$command_under_test" --previous "$fixture/mixed.md" \
     164 "$fixture/canonical.md" >"$fixture/dropped.out" 2>"$fixture/dropped.err"; then
   printf 'FAIL[dropped-phases]: validator accepted dropped provenance phases\n' >&2

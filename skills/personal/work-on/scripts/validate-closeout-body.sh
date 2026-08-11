@@ -35,6 +35,21 @@ fail() {
   exit 1
 }
 
+decimal_is_less_than() {
+  local left="$1" right="$2" LC_ALL=C
+  while [[ "${#left}" -gt 1 && "${left:0:1}" == 0 ]]; do
+    left="${left:1}"
+  done
+  while [[ "${#right}" -gt 1 && "${right:0:1}" == 0 ]]; do
+    right="${right:1}"
+  done
+  if [[ "${#left}" -ne "${#right}" ]]; then
+    [[ "${#left}" -lt "${#right}" ]]
+  else
+    [[ "$left" < "$right" ]]
+  fi
+}
+
 [[ "$issue_number" =~ ^[1-9][0-9]*$ ]] \
   || fail "issue number must be a positive integer"
 
@@ -144,6 +159,7 @@ telemetry_fields=(
   "Final workflow outcome"
   "Workflow provenance"
 )
+telemetry_count_values=()
 [[ "${#telemetry_lines[@]}" -ge 12 ]] \
   || fail "workflow telemetry must contain ten canonical rows"
 
@@ -169,6 +185,7 @@ for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
     "Implementation rounds"|"Independent-review rounds"|"Remediation rounds"|"Validation executions"|"Blocking findings resolved"|"Findings rejected at adjudication")
       [[ "$value" == unknown || "$value" =~ ^[0-9]+$ ]] \
         || fail "workflow telemetry $field must be a nonnegative integer or unknown"
+      telemetry_count_values+=("$value")
       ;;
   esac
   if [[ "$field" == "Final workflow outcome" ]]; then
@@ -237,5 +254,30 @@ if [[ -n "$previous_source" ]]; then
   for ((index = 0; index < ${#previous_phases[@]}; index++)); do
     [[ "${provenance_phases[$index]}" == "${previous_phases[$index]}" ]] \
       || fail "workflow provenance rewrote previous phase $((index + 1))"
+  done
+  [[ "${#provenance_phases[@]}" -gt "${#previous_phases[@]}" ]] \
+    || fail "workflow provenance must append at least one phase"
+
+  mapfile -t previous_count_values < <(awk -F'|' '
+    function trim(value) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      return value
+    }
+    $0 == "## Workflow telemetry" { in_telemetry = 1; next }
+    in_telemetry && /^## / { exit }
+    in_telemetry {
+      field = trim($2)
+      if (field ~ /^(Implementation rounds|Independent-review rounds|Remediation rounds|Validation executions|Blocking findings resolved|Findings rejected at adjudication)$/) {
+        print trim($3)
+      }
+    }
+  ' "$previous_body")
+  for ((index = 0; index < ${#telemetry_count_values[@]}; index++)); do
+    previous_count="${previous_count_values[$index]}"
+    current_count="${telemetry_count_values[$index]}"
+    if [[ "$previous_count" =~ ^[0-9]+$ && "$current_count" =~ ^[0-9]+$ ]] \
+        && decimal_is_less_than "$current_count" "$previous_count"; then
+      fail "workflow telemetry ${telemetry_fields[$((index + 2))]} decreased from $previous_count to $current_count"
+    fi
   done
 fi

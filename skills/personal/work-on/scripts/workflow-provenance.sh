@@ -16,7 +16,14 @@ hash_directory() {
     cd "$root"
     while IFS= read -r -d '' relative_path; do
       relative_path="${relative_path#./}"
-      printf '%s\0' "$relative_path"
+      if [[ -L "$relative_path" ]]; then
+        mode=120000
+      elif [[ -x "$relative_path" ]]; then
+        mode=100755
+      else
+        mode=100644
+      fi
+      printf '%s\0%s\0' "$relative_path" "$mode"
       if [[ -L "$relative_path" ]]; then
         readlink -n -- "$relative_path"
       else
@@ -45,7 +52,7 @@ hash_head_directory() {
         [[ "$mode" == 100644 || "$mode" == 100755 \
           || "$mode" == 120000 ]] || continue
         component_path="${repo_path#"$relative"/}"
-        printf '%s\0' "$component_path"
+        printf '%s\0%s\0' "$component_path" "$mode"
         git -C "$repo" cat-file blob "HEAD:$repo_path"
         printf '\0'
       done

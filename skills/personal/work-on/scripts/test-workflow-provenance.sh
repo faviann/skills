@@ -87,6 +87,34 @@ symlink_target_canonical="$(canonical_from "$fixture/symlink-target.json")"
 [[ "$(component_value "$symlink_target_canonical" review)" == "$clean_review" ]]
 git -C "$skills_checkout" restore skills/engineering/tdd/provenance-link
 
+rm "$skills_checkout/skills/engineering/tdd/provenance-link"
+printf 'initial-target' \
+  >"$skills_checkout/skills/engineering/tdd/provenance-link"
+(
+  cd "$skills_checkout"
+  "$command_under_test" >"$fixture/symlink-replaced-by-file.json"
+)
+symlink_replaced_canonical="$(canonical_from "$fixture/symlink-replaced-by-file.json")"
+[[ "$(component_value "$symlink_replaced_canonical" work-on)" == "$clean_work_on" ]]
+[[ "$(component_value "$symlink_replaced_canonical" workflow)" == "$clean_workflow" ]]
+[[ "$(component_value "$symlink_replaced_canonical" tdd)" =~ ^[0-9a-f]{12}\*$ ]]
+[[ "$(component_value "$symlink_replaced_canonical" tdd)" != "$clean_tdd" ]]
+[[ "$(component_value "$symlink_replaced_canonical" review)" == "$clean_review" ]]
+git -C "$skills_checkout" restore skills/engineering/tdd/provenance-link
+
+chmod +x "$skills_checkout/skills/engineering/tdd/tests.md"
+(
+  cd "$skills_checkout"
+  "$command_under_test" >"$fixture/executable-bit.json"
+)
+executable_bit_canonical="$(canonical_from "$fixture/executable-bit.json")"
+[[ "$(component_value "$executable_bit_canonical" work-on)" == "$clean_work_on" ]]
+[[ "$(component_value "$executable_bit_canonical" workflow)" == "$clean_workflow" ]]
+[[ "$(component_value "$executable_bit_canonical" tdd)" =~ ^[0-9a-f]{12}\*$ ]]
+[[ "$(component_value "$executable_bit_canonical" tdd)" != "$clean_tdd" ]]
+[[ "$(component_value "$executable_bit_canonical" review)" == "$clean_review" ]]
+git -C "$skills_checkout" restore skills/engineering/tdd/tests.md
+
 printf 'non-SKILL fixture change\n' \
   >>"$skills_checkout/skills/engineering/tdd/tests.md"
 (
