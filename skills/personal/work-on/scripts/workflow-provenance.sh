@@ -21,12 +21,13 @@ hash_directory() {
         payload_digest="$(
           readlink -n -- "$relative_path" | sha256sum | awk '{ print $1 }'
         )"
-      elif [[ -x "$relative_path" ]]; then
-        mode=100755
-        payload_digest="$(sha256sum -- "$relative_path" | awk '{ print $1 }')"
       else
-        mode=100644
-        payload_digest="$(sha256sum -- "$relative_path" | awk '{ print $1 }')"
+        if [[ -x "$relative_path" ]]; then
+          mode=100755
+        else
+          mode=100644
+        fi
+        payload_digest="$(sha256sum <"$relative_path" | awk '{ print $1 }')"
       fi
       printf '%s\0%s\0%s\0' "$relative_path" "$mode" "$payload_digest"
     done < <(

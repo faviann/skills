@@ -22,6 +22,10 @@ cp -R "$source_skill_root/../../engineering/code-review" \
   "$skills_checkout/skills/engineering/code-review"
 ln -s 'initial-target' \
   "$skills_checkout/skills/engineering/tdd/provenance-link"
+printf 'backslash payload\n' \
+  >"$skills_checkout/skills/engineering/tdd/backslash\\name"
+printf 'newline payload\n' \
+  >"$skills_checkout/skills/engineering/tdd/"$'newline\nname'
 printf 'skills/engineering/tdd/ignored-provenance-fixture\n' \
   >"$skills_checkout/.gitignore"
 
