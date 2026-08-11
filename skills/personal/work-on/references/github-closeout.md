@@ -144,7 +144,7 @@ Render the complete human-readable pull-request body:
 For an existing pull request, first save its live body, then render with
 `--previous-body <old-body.md>` in place of `--new-pr`. Exactly one mode is
 required. The renderer accepts `-` instead of the facts path to read facts from
-stdin. It fails before writing any body when the run-start provenance ledger is
+stdin. It fails before writing any body when the frozen-run provenance ledger is
 missing, the facts are malformed, the authoritative criteria and closure rows
 do not match exactly once, a required acceptance row or telemetry value is
 absent, a status is outside
@@ -154,9 +154,13 @@ rejects the rendered candidate. Inspect the rendered Markdown as the actual PR
 body; manual `work-on` does not depend on the AFK watcher or on a human reading
 JSON.
 
-The renderer captures provenance again at closeout and compares it with the
-run-start ledger. For an update, prior phases come only from the saved live
-pull-request body. Facts never supply provenance or prior phases.
+The renderer captures provenance again at closeout. Its canonical value must
+equal the frozen run ledger; a mismatch is a hard failure that writes no body
+and never creates a mid-run phase. In `--new-pr` mode the ledger is the sole
+provenance value. In `--previous-body` mode, prior phases come only from the
+saved live pull-request body and the renderer appends exactly one phase from
+the current ledger, even when it equals the prior phase. Facts never supply
+provenance or prior phases.
 
 The renderer generates this issue mapping:
 
@@ -216,10 +220,11 @@ SHA-256 identity over a complete skill directory or the selected workflow
 file. A `*` after a digest marks bytes that were not fetchable at capture time.
 A target repository's
 `docs/workflow.md` adds `@owner/repo` to the workflow digest when that repository
-differs from the skills repository. When more than one set governed the work,
-the row reads `mixed (N phases)` and ordered
+differs from the skills repository. When the pull request records more than one
+root run, the row reads `mixed (N phases)` and ordered
 `Phase N: <canonical provenance>` lines follow the table; telemetry counts stay
-cumulative. The repository pointer is `(unknown)` when git cannot identify it.
+cumulative. The repository pointer is `(unknown)` when the Git-backed skills
+checkout has no identifiable GitHub origin.
 Closeout provenance recapture is local and offline; it performs no GitHub or
 network lookup.
 

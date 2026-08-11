@@ -225,6 +225,11 @@ printf 'closeout body invalid: scripted renderer-validator contract drift\n' >&2
 exit 1
 EOF
 chmod +x "$drifted_script_root/"*.sh
+cp "$ledger" "$fixture/original-ledger.json"
+(
+  cd "$target_checkout"
+  "$drifted_script_root/workflow-provenance.sh" >"$ledger"
+)
 if (cd "$target_checkout" && \
     "$drifted_script_root/render-closeout.sh" \
       "$fixture/facts.json" "$fixture/narrative.md" --new-pr) \
@@ -236,6 +241,7 @@ fi
 grep -Fqx \
   'closeout body invalid: scripted renderer-validator contract drift' \
   "$fixture/drifted.err"
+cp "$fixture/original-ledger.json" "$ledger"
 
 # Table delimiters in free-form facts survive as readable content without
 # changing the canonical five-column shape.
@@ -407,32 +413,34 @@ for phase_number in 1 2 3; do
   grep -Fqx "Phase $phase_number: $provenance" "$fixture/resumed-again.md"
 done
 
-# A resumed closeout preserves the live PR body's provenance, appends the
-# run-start ledger as a new phase, then appends a changed current fingerprint.
+# A closeout recapture that differs from the run ledger fails without emitting
+# a body in either renderer mode. A mid-run change never becomes a phase.
 printf 'mid-run change\n' \
   >>"$(dirname "$command_under_test")/../references/github-closeout.md"
-(
+if (
   cd "$target_checkout"
   "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" \
-    --previous-body "$fixture/actual.md" >"$fixture/mixed.md"
-)
-current_provenance="$(
-  (cd "$target_checkout" && \
-    "$(dirname "$command_under_test")/workflow-provenance.sh") \
-    | jq -r .canonical
-)"
-cat >"$fixture/mixed-phases.expected" <<EOF
-| Workflow provenance | mixed (3 phases) |
-Phase 1: $provenance
-Phase 2: $provenance
-Phase 3: $current_provenance
-EOF
-awk '
-  /\| Workflow provenance \|/ || /^Phase [1-9][0-9]*: / { print }
-' "$fixture/mixed.md" >"$fixture/mixed-phases.actual"
-diff -u "$fixture/mixed-phases.expected" "$fixture/mixed-phases.actual"
+    --previous-body "$fixture/actual.md"
+) >"$fixture/previous-mismatch.out" 2>"$fixture/previous-mismatch.err"; then
+  printf 'FAIL[previous-mismatch]: renderer accepted changed provenance\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/previous-mismatch.out" ]]
+grep -Fqx \
+  'closeout invalid: current workflow provenance does not match the run ledger' \
+  "$fixture/previous-mismatch.err"
 
-# A mode is mandatory, and the start-of-run ledger is mandatory at closeout.
+if run_new "$fixture/facts.json" "$fixture/narrative.md" \
+    >"$fixture/new-mismatch.out" 2>"$fixture/new-mismatch.err"; then
+  printf 'FAIL[new-mismatch]: renderer accepted changed provenance\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/new-mismatch.out" ]]
+grep -Fqx \
+  'closeout invalid: current workflow provenance does not match the run ledger' \
+  "$fixture/new-mismatch.err"
+
+# A mode is mandatory, and the frozen-run ledger is mandatory at closeout.
 if (cd "$target_checkout" && \
     "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md") \
     >"$fixture/no-mode.out" 2>"$fixture/no-mode.err"; then

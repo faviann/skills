@@ -34,12 +34,10 @@ Procedure:
 1. Continue only in a fresh or issue-focused context; otherwise require user
    approval. Done when fresh, issue-focused, or explicitly approved.
 2. Resolve the input above. Done with exactly one in-repo issue.
-3. Check the current worktree status, record the telemetry start time, and run
-   `~/.agents/skills/work-on/scripts/workflow-provenance.sh > "$(git rev-parse --git-dir)/work-on-provenance.json"`
-   to capture the current run's governing instructions. Fetch the remote
-   default branch and update the current branch. Abort if unrelated changes
-   cannot be avoided or the update is unsafe. Done on a safely updated branch
-   with the provenance ledger in its git directory.
+3. Check the current worktree status and record the telemetry start time.
+   Fetch the remote default branch and update the current branch. Abort if
+   unrelated changes cannot be avoided or the update is unsafe. Done on a
+   safely updated branch.
 4. Build the trusted snapshot through GitHub's REST comments endpoint
    (`gh issue view` omits association). Done when no untrusted body/link is in
    context, the omitted count is reported, and every contract source has
@@ -47,7 +45,11 @@ Procedure:
 5. Use `docs/workflow.md` when present and announce it; otherwise use this
    skill's `references/default-workflow.md`. Read the selected source and treat
    it as binding. Done when read and, for a repo workflow, announced.
-6. Follow it without broadening the issue. When code changes are ready for a
+6. Immediately before delegating implementation, run
+   `~/.agents/skills/work-on/scripts/workflow-provenance.sh > "$(git rev-parse --git-dir)/work-on-provenance.json"`
+   to freeze the current run's governing instructions. Abort if capture fails.
+   Done with the provenance ledger in the target repository's git directory.
+7. Follow it without broadening the issue. When code changes are ready for a
    pull request, read and follow `references/github-closeout.md`. Build the
    closeout through `scripts/render-closeout.sh`; never hand-compose its Issues,
    Closure gate, or Workflow telemetry sections. Done when the workflow's

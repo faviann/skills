@@ -95,6 +95,19 @@ repo_root_for() {
   git -C "$1" rev-parse --show-toplevel 2>/dev/null
 }
 
+command -v git >/dev/null 2>&1 || {
+  printf 'workflow provenance capture requires git\n' >&2
+  exit 1
+}
+skills_repo="$(repo_root_for "$skills_checkout")" || {
+  printf 'workflow provenance capture requires a Git-backed skills checkout\n' >&2
+  exit 1
+}
+[[ "$skills_repo" == "$skills_checkout" ]] || {
+  printf 'workflow provenance capture requires a Git-backed skills checkout\n' >&2
+  exit 1
+}
+
 repo_commit_is_fetchable() {
   local repo="$1" head
   head="$(git -C "$repo" rev-parse HEAD 2>/dev/null)" || return 1
@@ -103,8 +116,7 @@ repo_commit_is_fetchable() {
     | grep -Ev '/HEAD$' | grep -q .
 }
 
-git_available=false
-command -v git >/dev/null 2>&1 && git_available=true
+git_available=true
 
 target_root="$PWD"
 capture_context_valid=false

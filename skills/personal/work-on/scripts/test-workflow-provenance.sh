@@ -5,11 +5,21 @@ readonly source_skill_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 
-# The run-start command is loaded from the installed skill while work-on is
-# operating in an arbitrary target repository.
+# The telemetry clock starts during setup, but the provenance ledger freezes
+# only after update and workflow selection, immediately before delegation.
 grep -Fqx \
   '   `~/.agents/skills/work-on/scripts/workflow-provenance.sh > "$(git rev-parse --git-dir)/work-on-provenance.json"`' \
   "$source_skill_root/SKILL.md"
+telemetry_line="$(grep -Fn \
+  '3. Check the current worktree status and record the telemetry start time.' \
+  "$source_skill_root/SKILL.md" | cut -d: -f1)"
+workflow_line="$(grep -Fn \
+  '5. Use `docs/workflow.md` when present and announce it; otherwise use this' \
+  "$source_skill_root/SKILL.md" | cut -d: -f1)"
+capture_line="$(grep -Fn \
+  '6. Immediately before delegating implementation, run' \
+  "$source_skill_root/SKILL.md" | cut -d: -f1)"
+[[ "$telemetry_line" -lt "$workflow_line" && "$workflow_line" -lt "$capture_line" ]]
 
 skills_checkout="$fixture/skills-checkout"
 mkdir -p \
@@ -270,26 +280,26 @@ for dependency in awk bash cat dirname find grep mktemp pwd readlink rm sha256su
   [[ "$dependency_path" != "$(command -v git)" ]]
   ln -s "$dependency_path" "$no_git_bin/$dependency"
 done
-(
+if (
   cd "$target_checkout"
-  PATH="$no_git_bin" /bin/bash "$command_under_test" \
-    >"$fixture/no-git.json"
-)
-jq -e '
-  keys == ["canonical"]
-  and (.canonical
-    | test("^work-on:[0-9a-f]{12}\\* workflow:[0-9a-f]{12}\\* tdd:[0-9a-f]{12}\\* review:[0-9a-f]{12}\\* \\(unknown\\)$"))
-' "$fixture/no-git.json" >/dev/null
+  PATH="$no_git_bin" /bin/bash "$command_under_test"
+) >"$fixture/no-git.out" 2>"$fixture/no-git.err"; then
+  printf 'FAIL[no-git]: provenance capture succeeded without git\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/no-git.out" ]]
 
-mkdir "$fixture/not-a-repo"
-(
-  cd "$fixture/not-a-repo"
-  "$command_under_test" >"$fixture/not-a-repo.json"
-)
-jq -e '
-  keys == ["canonical"]
-  and (.canonical
-    | test("^work-on:[0-9a-f]{12}\\* workflow:[0-9a-f]{12}\\* tdd:[0-9a-f]{12}\\* review:[0-9a-f]{12}\\* \\(unknown\\)$"))
-' "$fixture/not-a-repo.json" >/dev/null
+non_git_skills_checkout="$fixture/non-git-skills-checkout"
+mkdir -p "$non_git_skills_checkout"
+cp -R "$skills_checkout/skills" "$non_git_skills_checkout/skills"
+non_git_command="$non_git_skills_checkout/skills/personal/work-on/scripts/workflow-provenance.sh"
+if (
+  cd "$target_checkout"
+  "$non_git_command"
+) >"$fixture/non-git-skills.out" 2>"$fixture/non-git-skills.err"; then
+  printf 'FAIL[non-git-skills]: provenance capture succeeded from a non-git skills checkout\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/non-git-skills.out" ]]
 
 printf 'work-on workflow provenance black-box scenarios passed\n'

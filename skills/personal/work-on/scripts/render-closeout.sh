@@ -201,19 +201,10 @@ current_provenance="$fixture/current-provenance.json"
 current_canonical="$(jq -er '.canonical | select(type == "string" and length > 0)' \
   "$current_provenance" 2>/dev/null)" \
   || fail "current workflow provenance is invalid"
+[[ "$current_canonical" == "$ledger_canonical" ]] \
+  || fail "current workflow provenance does not match the run ledger"
 
 phases=()
-append_phase() {
-  local candidate_phase="$1" last_index
-  if [[ "${#phases[@]}" -eq 0 ]]; then
-    phases+=("$candidate_phase")
-    return
-  fi
-  last_index=$((${#phases[@]} - 1))
-  [[ "${phases[$last_index]}" == "$candidate_phase" ]] \
-    || phases+=("$candidate_phase")
-}
-
 if [[ "$closeout_mode" == previous ]]; then
   normalized_previous_body="$fixture/previous-body.md"
   sed 's/\r$//' "$previous_body" >"$normalized_previous_body"
@@ -268,14 +259,10 @@ if [[ "$closeout_mode" == previous ]]; then
     phases+=("$previous_value")
   fi
 fi
-if [[ "$closeout_mode" == previous ]]; then
-  # A resumed run is a new phase even when it loaded the same fingerprint; the
-  # phase boundary itself is part of the pull-request history.
-  phases+=("$ledger_canonical")
-else
-  append_phase "$ledger_canonical"
-fi
-append_phase "$current_canonical"
+# Every render contributes exactly one frozen root-run phase. An update keeps
+# the previous pull-request phases as an immutable prefix, even when the new
+# phase has the same fingerprint as the one before it.
+phases+=("$ledger_canonical")
 
 if [[ "${#phases[@]}" -eq 1 ]]; then
   provenance_value="${phases[0]}"
