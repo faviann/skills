@@ -46,6 +46,10 @@ A canonical state-machine label applied to an **Issue** during triage (e.g. `nee
 A diagnostic pattern showing where independently failure-prone **Correctness contracts** commonly live. It guides inspection but is neither exhaustive nor the unit counted by `to-tickets`'s risk rule.
 _Avoid_: taxonomy gate, counted shape
 
+**Workflow provenance**:
+The `work-on` telemetry fingerprint of the exact `work-on`, selected workflow, `tdd`, and `code-review` instruction bytes that governed a run. This is runtime attribution, not the risk-shapes provenance record that maps production examples to their sources.
+_Avoid_: instruction version, risk-shapes provenance
+
 **Correctness contract**:
 A coherent set of outcomes and invariants that must remain correct as one unit. `to-tickets`'s risk rule counts independent correctness contracts.
 _Avoid_: production contract

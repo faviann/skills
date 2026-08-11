@@ -33,6 +33,7 @@ Readable narrative stays readable.
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
+| Workflow provenance | work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456) |
 EOF
 
 "$command_under_test" 164 "$fixture/canonical.md"
@@ -111,6 +112,7 @@ cat >>"$fixture/pr-162.md" <<'EOF'
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
+| Workflow provenance | work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456) |
 EOF
 expect_failure pr-162 "missing canonical closure gate table header"
 
@@ -154,5 +156,70 @@ for field in "${count_fields[@]}"; do
   mv "$fixture/unknown-counts.next" "$fixture/unknown-counts.md"
 done
 "$command_under_test" 164 "$fixture/unknown-counts.md"
+
+sed '/| Workflow provenance |/d' "$fixture/canonical.md" \
+  >"$fixture/nine-telemetry-rows.md"
+expect_failure nine-telemetry-rows \
+  "workflow telemetry must contain ten canonical rows"
+
+sed 's/work-on:111111111111/work-on:NOT-A-DIGEST/' \
+  "$fixture/canonical.md" >"$fixture/malformed-provenance.md"
+expect_failure malformed-provenance "workflow provenance is malformed"
+
+for phase_count in 0 1; do
+  sed "s/| Workflow provenance |.*|/| Workflow provenance | mixed ($phase_count phases) |/" \
+    "$fixture/canonical.md" >"$fixture/too-few-phases-$phase_count.md"
+  expect_failure "too-few-phases-$phase_count" \
+    "workflow provenance is malformed"
+done
+
+sed 's/| Workflow provenance |.*|/| Workflow provenance | mixed (2 phases) |/' \
+  "$fixture/canonical.md" >"$fixture/phase-count.md"
+cat >>"$fixture/phase-count.md" <<'EOF'
+
+Phase 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
+EOF
+expect_failure phase-count \
+  "workflow provenance phase count does not match phase lines"
+
+sed 's/| Workflow provenance |.*|/| Workflow provenance | mixed (2 phases) |/' \
+  "$fixture/canonical.md" >"$fixture/mixed.md"
+cat >>"$fixture/mixed.md" <<'EOF'
+
+Phase 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
+Phase 2: work-on:aaaaaaaaaaaa* workflow:bbbbbbbbbbbb*@example/target tdd:cccccccccccc* review:dddddddddddd* (example/skills@123456789abc)
+EOF
+"$command_under_test" --previous "$fixture/canonical.md" 164 "$fixture/mixed.md"
+
+sed 's/| Workflow provenance |.*|/| Workflow provenance | mixed (10 phases) |/' \
+  "$fixture/canonical.md" >"$fixture/ten-phases.md"
+printf '\n' >>"$fixture/ten-phases.md"
+for phase_number in {1..10}; do
+  printf 'Phase %s: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)\n' \
+    "$phase_number" >>"$fixture/ten-phases.md"
+done
+"$command_under_test" 164 "$fixture/ten-phases.md"
+
+if "$command_under_test" --previous "$fixture/mixed.md" \
+    164 "$fixture/canonical.md" >"$fixture/dropped.out" 2>"$fixture/dropped.err"; then
+  printf 'FAIL[dropped-phases]: validator accepted dropped provenance phases\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/dropped.out" ]]
+grep -Fqx \
+  'closeout body invalid: workflow provenance dropped previous phases' \
+  "$fixture/dropped.err"
+
+sed 's/^Phase 1: work-on:111111111111/Phase 1: work-on:999999999999/' \
+  "$fixture/mixed.md" >"$fixture/rewritten.md"
+if "$command_under_test" --previous "$fixture/mixed.md" \
+    164 "$fixture/rewritten.md" >"$fixture/rewritten.out" 2>"$fixture/rewritten.err"; then
+  printf 'FAIL[rewritten-phase]: validator accepted rewritten provenance\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/rewritten.out" ]]
+grep -Fqx \
+  'closeout body invalid: workflow provenance rewrote previous phase 1' \
+  "$fixture/rewritten.err"
 
 printf 'work-on closeout body validator black-box scenarios passed\n'

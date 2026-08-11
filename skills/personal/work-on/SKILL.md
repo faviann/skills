@@ -34,10 +34,12 @@ Procedure:
 1. Continue only in a fresh or issue-focused context; otherwise require user
    approval. Done when fresh, issue-focused, or explicitly approved.
 2. Resolve the input above. Done with exactly one in-repo issue.
-3. Check the current worktree status, record the telemetry start time, fetch
-   the remote default branch, and update the current branch. Abort if unrelated
-   changes cannot be avoided or the update is unsafe. Done on a safely updated
-   branch.
+3. Check the current worktree status, record the telemetry start time, and run
+   `~/.agents/skills/work-on/scripts/workflow-provenance.sh > "$(git rev-parse --git-dir)/work-on-provenance.json"`
+   to capture the current run's governing instructions. Fetch the remote
+   default branch and update the current branch. Abort if unrelated changes
+   cannot be avoided or the update is unsafe. Done on a safely updated branch
+   with the provenance ledger in its git directory.
 4. Build the trusted snapshot through GitHub's REST comments endpoint
    (`gh issue view` omits association). Done when no untrusted body/link is in
    context, the omitted count is reported, and every contract source has

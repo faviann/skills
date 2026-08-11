@@ -6,14 +6,26 @@ set -euo pipefail
 # copied under a renderer-owned narrative boundary between the issue mapping
 # and the mechanical evidence sections.
 
-facts_source="${1:--}"
-narrative_source="${2:-}"
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 fail() {
   printf 'closeout invalid: %s\n' "$1" >&2
   exit 1
 }
+
+if [[ "$#" -eq 3 && "$3" == --new-pr ]]; then
+  closeout_mode=new
+  previous_body=""
+elif [[ "$#" -eq 4 && "$3" == --previous-body ]]; then
+  closeout_mode=previous
+  previous_body="$4"
+  [[ -f "$previous_body" ]] || fail "previous body file does not exist: $previous_body"
+else
+  fail "usage: render-closeout.sh <facts.json|-> <narrative.md> (--new-pr | --previous-body <old-body.md>)"
+fi
+
+facts_source="$1"
+narrative_source="$2"
 
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
@@ -29,6 +41,9 @@ fi
 
 jq -e . "$facts" >/dev/null 2>&1 || fail "facts are not valid JSON"
 jq -e 'type == "object"' "$facts" >/dev/null || fail "facts must be a JSON object"
+jq -e '(has("provenance") or has("workflow_provenance") or has("phases")) | not' \
+  "$facts" >/dev/null \
+  || fail "workflow provenance comes from the run ledger and previous PR body"
 
 jq -e '.issue_number | type == "number" and . > 0 and floor == .' \
   "$facts" >/dev/null || fail "issue_number must be a positive integer"
@@ -165,6 +180,81 @@ if [[ -n "$narrative_source" && ! -f "$narrative_source" ]]; then
   fail "narrative file does not exist: $narrative_source"
 fi
 
+git_dir="$(git rev-parse --absolute-git-dir 2>/dev/null)" \
+  || fail "target repository git directory is unavailable"
+ledger="$git_dir/work-on-provenance.json"
+[[ -f "$ledger" ]] || fail "work-on provenance ledger is missing: $ledger"
+ledger_canonical="$(jq -er '.canonical | select(type == "string" and length > 0)' \
+  "$ledger" 2>/dev/null)" \
+  || fail "work-on provenance ledger is invalid"
+
+current_provenance="$fixture/current-provenance.json"
+"$script_root/workflow-provenance.sh" >"$current_provenance"
+current_canonical="$(jq -er '.canonical | select(type == "string" and length > 0)' \
+  "$current_provenance" 2>/dev/null)" \
+  || fail "current workflow provenance is invalid"
+
+phases=()
+append_phase() {
+  local candidate_phase="$1" last_index
+  if [[ "${#phases[@]}" -eq 0 ]]; then
+    phases+=("$candidate_phase")
+    return
+  fi
+  last_index=$((${#phases[@]} - 1))
+  [[ "${phases[$last_index]}" == "$candidate_phase" ]] \
+    || phases+=("$candidate_phase")
+}
+
+if [[ "$closeout_mode" == previous ]]; then
+  normalized_previous_body="$fixture/previous-body.md"
+  sed 's/\r$//' "$previous_body" >"$normalized_previous_body"
+  "$script_root/validate-closeout-body.sh" "$issue_number" "$normalized_previous_body"
+  previous_value="$(awk -F'|' '
+    $0 == "## Workflow telemetry" { in_telemetry = 1; next }
+    in_telemetry && /^## / { exit }
+    in_telemetry && $2 ~ /^[[:space:]]*Workflow provenance[[:space:]]*$/ {
+      value = $3
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      print value
+      exit
+    }
+  ' "$normalized_previous_body")"
+  if [[ "$previous_value" =~ ^mixed[[:space:]]\(([1-9][0-9]*)[[:space:]]phases\)$ ]]; then
+    mapfile -t previous_phases < <(awk '
+      $0 == "## Workflow telemetry" { in_telemetry = 1; next }
+      in_telemetry && /^## / { exit }
+      in_telemetry && /^Phase [1-9][0-9]*: / {
+        sub(/^Phase [1-9][0-9]*: /, "")
+        print
+      }
+    ' "$normalized_previous_body")
+    for phase in "${previous_phases[@]}"; do
+      phases+=("$phase")
+    done
+  else
+    phases+=("$previous_value")
+  fi
+fi
+if [[ "$closeout_mode" == previous ]]; then
+  # A resumed run is a new phase even when it loaded the same fingerprint; the
+  # phase boundary itself is part of the pull-request history.
+  last_index=$((${#phases[@]} - 1))
+  if [[ "${phases[$last_index]}" != "$ledger_canonical" \
+      || "$ledger_canonical" == "$current_canonical" ]]; then
+    phases+=("$ledger_canonical")
+  fi
+else
+  append_phase "$ledger_canonical"
+fi
+append_phase "$current_canonical"
+
+if [[ "${#phases[@]}" -eq 1 ]]; then
+  provenance_value="${phases[0]}"
+else
+  provenance_value="mixed (${#phases[@]} phases)"
+fi
+
 # Markdown table cells are kept single-line and escaped without changing the
 # facts themselves. Narrative Markdown is copied byte-for-byte (apart from
 # normalizing the final blank-line boundary).
@@ -214,7 +304,19 @@ candidate="$fixture/candidate.md"
   printf '| Blocking findings resolved | %s |\n' "$(telemetry_value blocking_findings_resolved)"
   printf '| Findings rejected at adjudication | %s |\n' "$(telemetry_value findings_rejected_at_adjudication)"
   printf '| Final workflow outcome | %s |\n' "$telemetry_outcome"
+  printf '| Workflow provenance | %s |\n' "$provenance_value"
+  if [[ "${#phases[@]}" -gt 1 ]]; then
+    printf '\n'
+    for ((index = 0; index < ${#phases[@]}; index++)); do
+      printf 'Phase %s: %s\n' "$((index + 1))" "${phases[$index]}"
+    done
+  fi
 } >"$candidate"
 
-"$script_root/validate-closeout-body.sh" "$issue_number" "$candidate"
+if [[ "$closeout_mode" == previous ]]; then
+  "$script_root/validate-closeout-body.sh" \
+    --previous "$previous_body" "$issue_number" "$candidate"
+else
+  "$script_root/validate-closeout-body.sh" "$issue_number" "$candidate"
+fi
 cat "$candidate"

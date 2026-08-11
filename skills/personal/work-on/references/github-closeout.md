@@ -137,18 +137,26 @@ Render the complete human-readable pull-request body:
 
 ```sh
 ~/.agents/skills/work-on/scripts/render-closeout.sh \
-  <untracked-facts.json> <untracked-narrative.md> > <untracked-pr-body.md>
+  <untracked-facts.json> <untracked-narrative.md> --new-pr \
+  > <untracked-pr-body.md>
 ```
 
-The renderer accepts `-` instead of the facts path to read facts from stdin. It
-fails before writing any body when the facts are malformed, the authoritative
-criteria and closure rows do not match exactly once, a required acceptance row
-or telemetry value is absent, a status is outside
+For an existing pull request, first save its live body, then render with
+`--previous-body <old-body.md>` in place of `--new-pr`. Exactly one mode is
+required. The renderer accepts `-` instead of the facts path to read facts from
+stdin. It fails before writing any body when the run-start provenance ledger is
+missing, the facts are malformed, the authoritative criteria and closure rows
+do not match exactly once, a required acceptance row or telemetry value is
+absent, a status is outside
 `tested`/`failing`/`inferred`/`unverified`, a `Closes` row is not `tested`, the
 two outcome fields contradict each other, or the shipped read-back validator
 rejects the rendered candidate. Inspect the rendered Markdown as the actual PR
 body; manual `work-on` does not depend on the AFK watcher or on a human reading
 JSON.
+
+The renderer captures provenance again at closeout and compares it with the
+run-start ledger. For an update, prior phases come only from the saved live
+pull-request body. Facts never supply provenance or prior phases.
 
 The renderer generates this issue mapping:
 
@@ -195,12 +203,24 @@ The renderer adds this section to every pull request created or updated by
 | Blocking findings resolved | <count or unknown> |
 | Findings rejected at adjudication | <count or unknown> |
 | Final workflow outcome | Closes or Progresses |
+| Workflow provenance | work-on:<digest> workflow:<digest> tdd:<digest> review:<digest> (owner/repo@shortsha) |
 ```
 
 Use observed values only; never estimate. Count each agent-launched top-level
 validation command once (not its child processes), including delegate and
 reviewer runs; reconcile handoffs or report `unknown`. For sharded suites,
 report every shard and the sum. The outcome must match the issue mapping.
+
+Each provenance digest is the first 12 lowercase hexadecimal characters of a
+SHA-256 identity over the loaded component bytes. A `*` after a digest marks
+bytes that were not fetchable at capture time. A target repository's
+`docs/workflow.md` adds `@owner/repo` to the workflow digest when that repository
+differs from the skills repository. When more than one set governed the work,
+the row reads `mixed (N phases)` and ordered
+`Phase N: <canonical provenance>` lines follow the table; telemetry counts stay
+cumulative. The repository pointer is `(unknown)` when git cannot identify it.
+Closeout provenance recapture is local and offline; it performs no GitHub or
+network lookup.
 
 Create or update the pull request, then read back its final body and validate
 the exact content returned by GitHub:
@@ -209,6 +229,9 @@ the exact content returned by GitHub:
 gh pr view <pr-number> --json body --jq .body \
   | ~/.agents/skills/work-on/scripts/validate-closeout-body.sh <issue-number> -
 ```
+
+For an updated pull request, also pass `--previous <old-body.md>` so validation
+proves that its prior provenance phase list was preserved as an exact prefix.
 
 The canonical issue mapping, acceptance rows and statuses, and telemetry
 outcome must survive read-back. Generic validation accepts canonical `Closes`

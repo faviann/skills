@@ -6,11 +6,28 @@ set -euo pipefail
 # independently deciding whether the evidence merits an unattended merge.
 
 require_closes=false
-if [[ "${1:-}" == --require-closes ]]; then
-  require_closes=true
-  shift
-fi
-issue_number="${1:?usage: validate-closeout-body.sh [--require-closes] <issue-number> [body-file|-]}"
+previous_source=""
+while [[ "${1:-}" == --* ]]; do
+  case "$1" in
+    --require-closes)
+      require_closes=true
+      shift
+      ;;
+    --previous)
+      [[ "$#" -ge 2 ]] || {
+        printf 'closeout body invalid: --previous requires a body file\n' >&2
+        exit 1
+      }
+      previous_source="$2"
+      shift 2
+      ;;
+    *)
+      printf 'closeout body invalid: unknown option: %s\n' "$1" >&2
+      exit 1
+      ;;
+  esac
+done
+issue_number="${1:?usage: validate-closeout-body.sh [--require-closes] [--previous <old-body.md>] <issue-number> [body-file|-]}"
 body_source="${2:--}"
 
 fail() {
@@ -125,9 +142,10 @@ telemetry_fields=(
   "Blocking findings resolved"
   "Findings rejected at adjudication"
   "Final workflow outcome"
+  "Workflow provenance"
 )
-[[ "${#telemetry_lines[@]}" -eq 11 ]] \
-  || fail "workflow telemetry must contain exactly nine canonical rows"
+[[ "${#telemetry_lines[@]}" -ge 12 ]] \
+  || fail "workflow telemetry must contain ten canonical rows"
 
 for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
   row="${telemetry_lines[$((index + 2))]}"
@@ -156,9 +174,68 @@ for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
   if [[ "$field" == "Final workflow outcome" ]]; then
     telemetry_outcome="$value"
   fi
+  if [[ "$field" == "Workflow provenance" ]]; then
+    provenance_value="$value"
+  fi
 done
 
 [[ "$telemetry_outcome" == Closes || "$telemetry_outcome" == Progresses ]] \
   || fail "workflow telemetry outcome must be Closes or Progresses"
 [[ "$telemetry_outcome" == "$issue_outcome" ]] \
   || fail "issue outcome $issue_outcome contradicts telemetry outcome $telemetry_outcome"
+
+canonical_provenance_pattern='^work-on:[0-9a-f]{12}\*?[[:space:]]workflow:[0-9a-f]{12}\*?(@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?[[:space:]]tdd:[0-9a-f]{12}\*?[[:space:]]review:[0-9a-f]{12}\*?[[:space:]]\(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{7,40}|unknown)\)$'
+
+provenance_phases=()
+if [[ "$provenance_value" =~ $canonical_provenance_pattern ]]; then
+  [[ "${#telemetry_lines[@]}" -eq 12 ]] \
+    || fail "single workflow provenance must not have phase lines"
+  provenance_phases+=("$provenance_value")
+elif [[ "$provenance_value" =~ ^mixed[[:space:]]\(([2-9]|[1-9][0-9]+)[[:space:]]phases\)$ ]]; then
+  phase_count="${BASH_REMATCH[1]}"
+  [[ "${#telemetry_lines[@]}" -eq $((12 + phase_count)) ]] \
+    || fail "workflow provenance phase count does not match phase lines"
+  for ((index = 1; index <= phase_count; index++)); do
+    phase_line="${telemetry_lines[$((11 + index))]}"
+    phase_prefix="Phase $index: "
+    [[ "$phase_line" == "$phase_prefix"* ]] \
+      || fail "workflow provenance phase $index is malformed or out of order"
+    phase="${phase_line#"$phase_prefix"}"
+    [[ "$phase" =~ $canonical_provenance_pattern ]] \
+      || fail "workflow provenance phase $index is malformed"
+    provenance_phases+=("$phase")
+  done
+else
+  fail "workflow provenance is malformed"
+fi
+
+if [[ -n "$previous_source" ]]; then
+  [[ -f "$previous_source" ]] \
+    || fail "previous body file does not exist: $previous_source"
+  previous_body="$fixture/previous.md"
+  sed 's/\r$//' "$previous_source" >"$previous_body"
+  "$0" "$issue_number" "$previous_body"
+  mapfile -t previous_phases < <(awk -F'|' '
+    function trim(value) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      return value
+    }
+    $0 == "## Workflow telemetry" { in_telemetry = 1; next }
+    in_telemetry && /^## / { exit }
+    in_telemetry && $2 ~ /^[[:space:]]*Workflow provenance[[:space:]]*$/ {
+      provenance = trim($3)
+      if (provenance !~ /^mixed /) print provenance
+      next
+    }
+    in_telemetry && /^Phase [1-9][0-9]*: / {
+      sub(/^Phase [1-9][0-9]*: /, "")
+      print
+    }
+  ' "$previous_body")
+  [[ "${#provenance_phases[@]}" -ge "${#previous_phases[@]}" ]] \
+    || fail "workflow provenance dropped previous phases"
+  for ((index = 0; index < ${#previous_phases[@]}; index++)); do
+    [[ "${provenance_phases[$index]}" == "${previous_phases[$index]}" ]] \
+      || fail "workflow provenance rewrote previous phase $((index + 1))"
+  done
+fi

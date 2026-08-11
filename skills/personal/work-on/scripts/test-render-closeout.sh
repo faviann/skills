@@ -1,9 +1,49 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly command_under_test="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/render-closeout.sh"
+readonly source_script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
+
+skills_checkout="$fixture/skills-checkout"
+mkdir -p "$skills_checkout/skills/personal" "$skills_checkout/skills/engineering"
+cp -R "$source_script_root/.." "$skills_checkout/skills/personal/work-on"
+cp -R "$source_script_root/../../../engineering/tdd" \
+  "$skills_checkout/skills/engineering/tdd"
+cp -R "$source_script_root/../../../engineering/code-review" \
+  "$skills_checkout/skills/engineering/code-review"
+git -C "$skills_checkout" init -q -b main
+git -C "$skills_checkout" config user.name 'Closeout Test'
+git -C "$skills_checkout" config user.email closeout@example.invalid
+git -C "$skills_checkout" add .
+git -C "$skills_checkout" commit -qm fixture
+git init -q --bare "$fixture/skills-origin.git"
+git -C "$skills_checkout" remote add origin "$fixture/skills-origin.git"
+git -C "$skills_checkout" push -q -u origin main
+git -C "$skills_checkout" config remote.origin.url \
+  'https://github.com/example/skills.git'
+
+readonly command_under_test="$skills_checkout/skills/personal/work-on/scripts/render-closeout.sh"
+target_checkout="$fixture/target-checkout"
+git init -q -b main "$target_checkout"
+git -C "$target_checkout" config user.name 'Closeout Test'
+git -C "$target_checkout" config user.email closeout@example.invalid
+touch "$target_checkout/.keep"
+git -C "$target_checkout" add .
+git -C "$target_checkout" commit -qm fixture
+ledger="$target_checkout/.git/work-on-provenance.json"
+(
+  cd "$target_checkout"
+  "$(dirname "$command_under_test")/workflow-provenance.sh" >"$ledger"
+)
+provenance="$(jq -r .canonical "$ledger")"
+
+run_new() {
+  (
+    cd "$target_checkout"
+    "$command_under_test" "$@" --new-pr
+  )
+}
 
 cat >"$fixture/facts.json" <<'EOF'
 {
@@ -95,14 +135,19 @@ No findings required adjudication.
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
+| Workflow provenance | PROVENANCE |
 EOF
+awk -v provenance="$provenance" \
+  '{ sub(/PROVENANCE/, provenance); print }' \
+  "$fixture/expected.md" >"$fixture/expected.with-provenance.md"
+mv "$fixture/expected.with-provenance.md" "$fixture/expected.md"
 
-"$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/actual.md"
+run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/actual.md"
 diff -u "$fixture/expected.md" "$fixture/actual.md"
 "$(dirname "$command_under_test")/validate-closeout-body.sh" 164 "$fixture/actual.md"
 
 # stdin is the other documented input mode.
-"$command_under_test" - "$fixture/narrative.md" <"$fixture/facts.json" >"$fixture/stdin.md"
+run_new - "$fixture/narrative.md" <"$fixture/facts.json" >"$fixture/stdin.md"
 diff -u "$fixture/expected.md" "$fixture/stdin.md"
 
 # A paragraph-first narrative must be placed behind a renderer-owned H2
@@ -124,7 +169,7 @@ Implemented the closeout renderer.
 The public CLI scenario passed.
 
 EOF
-"$command_under_test" "$fixture/facts.json" "$fixture/paragraph-narrative.md" \
+run_new "$fixture/facts.json" "$fixture/paragraph-narrative.md" \
   >"$fixture/paragraph-narrative-body.md"
 awk '
   $0 == "## Narrative" { found = 1 }
@@ -158,7 +203,7 @@ validation output stays literal
 ```
 
 EOF
-"$command_under_test" "$fixture/facts.json" "$fixture/list-code-narrative.md" \
+run_new "$fixture/facts.json" "$fixture/list-code-narrative.md" \
   >"$fixture/list-code-narrative-body.md"
 awk '
   $0 == "## Narrative" { found = 1 }
@@ -172,15 +217,17 @@ diff -u \
   164 "$fixture/list-code-narrative-body.md"
 
 # The renderer must not publish a candidate that its shipped validator rejects.
-mkdir "$fixture/drifted-install"
-cp "$command_under_test" "$fixture/drifted-install/render-closeout.sh"
-cat >"$fixture/drifted-install/validate-closeout-body.sh" <<'EOF'
+cp -R "$skills_checkout" "$fixture/drifted-checkout"
+drifted_script_root="$fixture/drifted-checkout/skills/personal/work-on/scripts"
+cat >"$drifted_script_root/validate-closeout-body.sh" <<'EOF'
 #!/usr/bin/env bash
 printf 'closeout body invalid: scripted renderer-validator contract drift\n' >&2
 exit 1
 EOF
-chmod +x "$fixture/drifted-install/"*.sh
-if "$fixture/drifted-install/render-closeout.sh" "$fixture/facts.json" \
+chmod +x "$drifted_script_root/"*.sh
+if (cd "$target_checkout" && \
+    "$drifted_script_root/render-closeout.sh" \
+      "$fixture/facts.json" "$fixture/narrative.md" --new-pr) \
     >"$fixture/drifted.out" 2>"$fixture/drifted.err"; then
   printf 'FAIL[validator-drift]: renderer emitted a rejected candidate\n' >&2
   exit 1
@@ -197,13 +244,14 @@ jq '
   | .acceptance[0].criterion = "Input | output"
 ' \
   "$fixture/facts.json" >"$fixture/pipe.json"
-"$command_under_test" "$fixture/pipe.json" >"$fixture/pipe.md"
+run_new "$fixture/pipe.json" "$fixture/narrative.md" >"$fixture/pipe.md"
 grep -Fqx '| Input &#124; output | `render-closeout.sh` | Public CLI via a facts file | Literal-output scenario | tested |' \
   "$fixture/pipe.md"
 
 expect_failure() {
   local name="$1" diagnostic="$2"
-  if "$command_under_test" "$fixture/$name.json" >"$fixture/$name.out" 2>"$fixture/$name.err"; then
+  if run_new "$fixture/$name.json" "$fixture/narrative.md" \
+      >"$fixture/$name.out" 2>"$fixture/$name.err"; then
     printf 'FAIL[%s]: malformed closeout was accepted\n' "$name" >&2
     exit 1
   fi
@@ -294,7 +342,67 @@ jq '
   | .telemetry.blocking_findings_resolved = "unknown"
   | .telemetry.findings_rejected_at_adjudication = "unknown"
 ' "$fixture/facts.json" >"$fixture/unknown-counts.json"
-"$command_under_test" "$fixture/unknown-counts.json" >"$fixture/unknown-counts.md"
+run_new "$fixture/unknown-counts.json" "$fixture/narrative.md" \
+  >"$fixture/unknown-counts.md"
 [[ "$(grep -Fc '| unknown |' "$fixture/unknown-counts.md")" -eq 6 ]]
+
+# Resuming an existing pull request appends the current run as a phase even
+# when its governing fingerprint matches the previous run.
+(
+  cd "$target_checkout"
+  "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" \
+    --previous-body "$fixture/actual.md" >"$fixture/resumed.md"
+)
+grep -Fqx '| Workflow provenance | mixed (2 phases) |' "$fixture/resumed.md"
+[[ "$(grep -Fxc "Phase 1: $provenance" "$fixture/resumed.md")" -eq 1 ]]
+[[ "$(grep -Fxc "Phase 2: $provenance" "$fixture/resumed.md")" -eq 1 ]]
+
+# Every prior phase remains byte-for-byte and the resumed run appends a third
+# phase even when all three governing fingerprints are equal.
+(
+  cd "$target_checkout"
+  "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" \
+    --previous-body "$fixture/resumed.md" >"$fixture/resumed-again.md"
+)
+grep -Fqx '| Workflow provenance | mixed (3 phases) |' \
+  "$fixture/resumed-again.md"
+for phase_number in 1 2 3; do
+  grep -Fqx "Phase $phase_number: $provenance" "$fixture/resumed-again.md"
+done
+
+# A resumed closeout preserves the live PR body's provenance and appends the
+# fingerprint captured after loaded work-on bytes changed.
+printf 'mid-run change\n' \
+  >>"$(dirname "$command_under_test")/../references/github-closeout.md"
+(
+  cd "$target_checkout"
+  "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" \
+    --previous-body "$fixture/actual.md" >"$fixture/mixed.md"
+)
+grep -Fqx '| Workflow provenance | mixed (2 phases) |' "$fixture/mixed.md"
+grep -Fqx "Phase 1: $provenance" "$fixture/mixed.md"
+current_provenance="$(
+  (cd "$target_checkout" && \
+    "$(dirname "$command_under_test")/workflow-provenance.sh") \
+    | jq -r .canonical
+)"
+grep -Fqx "Phase 2: $current_provenance" "$fixture/mixed.md"
+
+# A mode is mandatory, and the start-of-run ledger is mandatory at closeout.
+if (cd "$target_checkout" && \
+    "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md") \
+    >"$fixture/no-mode.out" 2>"$fixture/no-mode.err"; then
+  printf 'FAIL[no-mode]: renderer accepted a mode-less closeout\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/no-mode.out" ]]
+
+mv "$ledger" "$fixture/saved-ledger.json"
+if run_new "$fixture/facts.json" "$fixture/narrative.md" \
+    >"$fixture/no-ledger.out" 2>"$fixture/no-ledger.err"; then
+  printf 'FAIL[no-ledger]: renderer accepted a closeout without a ledger\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/no-ledger.out" ]]
 
 printf 'work-on closeout renderer black-box scenarios passed\n'
