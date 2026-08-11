@@ -212,8 +212,9 @@ reviewer runs; reconcile handoffs or report `unknown`. For sharded suites,
 report every shard and the sum. The outcome must match the issue mapping.
 
 Each provenance digest is the first 12 lowercase hexadecimal characters of a
-SHA-256 identity over the loaded component bytes. A `*` after a digest marks
-bytes that were not fetchable at capture time. A target repository's
+SHA-256 identity over a complete skill directory or the selected workflow
+file. A `*` after a digest marks bytes that were not fetchable at capture time.
+A target repository's
 `docs/workflow.md` adds `@owner/repo` to the workflow digest when that repository
 differs from the skills repository. When more than one set governed the work,
 the row reads `mixed (N phases)` and ordered

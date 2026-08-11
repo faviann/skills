@@ -20,6 +20,8 @@ cp -R "$source_skill_root/../../engineering/tdd" \
   "$skills_checkout/skills/engineering/tdd"
 cp -R "$source_skill_root/../../engineering/code-review" \
   "$skills_checkout/skills/engineering/code-review"
+ln -s 'initial-target' \
+  "$skills_checkout/skills/engineering/tdd/provenance-link"
 printf 'skills/engineering/tdd/ignored-provenance-fixture\n' \
   >"$skills_checkout/.gitignore"
 
@@ -66,7 +68,25 @@ jq -e '
 ' "$fixture/clean.json" >/dev/null
 
 clean_canonical="$(canonical_from "$fixture/clean.json")"
+clean_work_on="$(component_value "$clean_canonical" work-on)"
+clean_workflow="$(component_value "$clean_canonical" workflow)"
 clean_tdd="$(component_value "$clean_canonical" tdd)"
+clean_review="$(component_value "$clean_canonical" review)"
+[[ "$clean_tdd" =~ ^[0-9a-f]{12}$ ]]
+ln -sfn 'changed-target' \
+  "$skills_checkout/skills/engineering/tdd/provenance-link"
+(
+  cd "$skills_checkout"
+  "$command_under_test" >"$fixture/symlink-target.json"
+)
+symlink_target_canonical="$(canonical_from "$fixture/symlink-target.json")"
+[[ "$(component_value "$symlink_target_canonical" work-on)" == "$clean_work_on" ]]
+[[ "$(component_value "$symlink_target_canonical" workflow)" == "$clean_workflow" ]]
+[[ "$(component_value "$symlink_target_canonical" tdd)" =~ ^[0-9a-f]{12}\*$ ]]
+[[ "$(component_value "$symlink_target_canonical" tdd)" != "$clean_tdd" ]]
+[[ "$(component_value "$symlink_target_canonical" review)" == "$clean_review" ]]
+git -C "$skills_checkout" restore skills/engineering/tdd/provenance-link
+
 printf 'non-SKILL fixture change\n' \
   >>"$skills_checkout/skills/engineering/tdd/tests.md"
 (

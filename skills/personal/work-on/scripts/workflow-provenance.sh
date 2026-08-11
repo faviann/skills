@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Fingerprint the instruction bytes that governed this work-on run. The JSON is
-# suitable for the target repository's git-dir ledger; `canonical` is the
-# human-readable value rendered into pull-request telemetry.
+# Fingerprint the complete work-on, TDD, and review skill directories plus the
+# selected workflow file that governed this work-on run. The JSON is suitable
+# for the target repository's git-dir ledger; `canonical` is the human-readable
+# value rendered into pull-request telemetry.
 
 script_root="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 work_on_root="$(cd -P -- "$script_root/.." && pwd -P)"
@@ -16,9 +17,15 @@ hash_directory() {
     while IFS= read -r -d '' relative_path; do
       relative_path="${relative_path#./}"
       printf '%s\0' "$relative_path"
-      cat "$relative_path"
+      if [[ -L "$relative_path" ]]; then
+        readlink -n -- "$relative_path"
+      else
+        cat "$relative_path"
+      fi
       printf '\0'
-    done < <(LC_ALL=C find . -type f -print0 | LC_ALL=C sort -z)
+    done < <(
+      LC_ALL=C find . \( -type f -o -type l \) -print0 | LC_ALL=C sort -z
+    )
   ) | sha256sum | awk '{ print $1 }'
 }
 
@@ -35,7 +42,8 @@ hash_head_directory() {
         metadata="${record%%$'\t'*}"
         repo_path="${record#*$'\t'}"
         mode="${metadata%% *}"
-        [[ "$mode" == 100644 || "$mode" == 100755 ]] || continue
+        [[ "$mode" == 100644 || "$mode" == 100755 \
+          || "$mode" == 120000 ]] || continue
         component_path="${repo_path#"$relative"/}"
         printf '%s\0' "$component_path"
         git -C "$repo" cat-file blob "HEAD:$repo_path"
