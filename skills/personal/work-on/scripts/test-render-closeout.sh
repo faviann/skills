@@ -407,8 +407,8 @@ for phase_number in 1 2 3; do
   grep -Fqx "Phase $phase_number: $provenance" "$fixture/resumed-again.md"
 done
 
-# A resumed closeout preserves the live PR body's provenance and appends the
-# fingerprint captured after loaded work-on bytes changed.
+# A resumed closeout preserves the live PR body's provenance, appends the
+# run-start ledger as a new phase, then appends a changed current fingerprint.
 printf 'mid-run change\n' \
   >>"$(dirname "$command_under_test")/../references/github-closeout.md"
 (
@@ -416,14 +416,21 @@ printf 'mid-run change\n' \
   "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" \
     --previous-body "$fixture/actual.md" >"$fixture/mixed.md"
 )
-grep -Fqx '| Workflow provenance | mixed (2 phases) |' "$fixture/mixed.md"
-grep -Fqx "Phase 1: $provenance" "$fixture/mixed.md"
 current_provenance="$(
   (cd "$target_checkout" && \
     "$(dirname "$command_under_test")/workflow-provenance.sh") \
     | jq -r .canonical
 )"
-grep -Fqx "Phase 2: $current_provenance" "$fixture/mixed.md"
+cat >"$fixture/mixed-phases.expected" <<EOF
+| Workflow provenance | mixed (3 phases) |
+Phase 1: $provenance
+Phase 2: $provenance
+Phase 3: $current_provenance
+EOF
+awk '
+  /\| Workflow provenance \|/ || /^Phase [1-9][0-9]*: / { print }
+' "$fixture/mixed.md" >"$fixture/mixed-phases.actual"
+diff -u "$fixture/mixed-phases.expected" "$fixture/mixed-phases.actual"
 
 # A mode is mandatory, and the start-of-run ledger is mandatory at closeout.
 if (cd "$target_checkout" && \

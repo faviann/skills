@@ -271,11 +271,7 @@ fi
 if [[ "$closeout_mode" == previous ]]; then
   # A resumed run is a new phase even when it loaded the same fingerprint; the
   # phase boundary itself is part of the pull-request history.
-  last_index=$((${#phases[@]} - 1))
-  if [[ "${phases[$last_index]}" != "$ledger_canonical" \
-      || "$ledger_canonical" == "$current_canonical" ]]; then
-    phases+=("$ledger_canonical")
-  fi
+  phases+=("$ledger_canonical")
 else
   append_phase "$ledger_canonical"
 fi
