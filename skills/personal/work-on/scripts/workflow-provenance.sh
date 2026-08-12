@@ -1,86 +1,72 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Fingerprint the complete work-on, TDD, and review skill directories plus the
-# selected workflow file that governed this work-on run. The JSON is suitable
-# for the target repository's git-dir ledger; `canonical` is the human-readable
-# value rendered into pull-request telemetry.
+# Fingerprint the declared instruction files that govern a work-on run: the
+# work-on instructions, the selected workflow, and the TDD and review skills.
+# `capture` freezes them in the target repository's git-dir ledger; `verify`
+# proves they have not changed and prints the frozen canonical value.
 
 script_root="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 work_on_root="$(cd -P -- "$script_root/.." && pwd -P)"
 skills_checkout="$(cd -P -- "$work_on_root/../../.." && pwd -P)"
 
-hash_directory() {
-  local root="$1"
-  (
-    cd "$root"
-    while IFS= read -r -d '' relative_path; do
-      relative_path="${relative_path#./}"
-      if [[ -L "$relative_path" ]]; then
-        mode=120000
-        payload_digest="$(
-          readlink -n -- "$relative_path" | sha256sum | awk '{ print $1 }'
-        )"
-      else
-        if [[ -x "$relative_path" ]]; then
-          mode=100755
-        else
-          mode=100644
-        fi
-        payload_digest="$(sha256sum <"$relative_path" | awk '{ print $1 }')"
-      fi
-      printf '%s\0%s\0%s\0' "$relative_path" "$mode" "$payload_digest"
-    done < <(
-      LC_ALL=C find . \( -type f -o -type l \) -print0 | LC_ALL=C sort -z
-    )
-  ) | sha256sum | awk '{ print $1 }'
-}
+work_on_inputs=(
+  skills/personal/work-on/SKILL.md
+  skills/personal/work-on/references/github-closeout.md
+)
+default_workflow_inputs=(
+  skills/personal/work-on/references/default-workflow.md
+)
+target_workflow_inputs=(docs/workflow.md)
+tdd_inputs=(
+  skills/engineering/tdd/SKILL.md
+  skills/engineering/tdd/mocking.md
+  skills/engineering/tdd/tests.md
+)
+review_inputs=(skills/engineering/code-review/SKILL.md)
 
-hash_file() {
-  sha256sum "$1" | awk '{ print $1 }'
-}
+# A failed capture must not leave the previous run's ledger behind: a later
+# verify would read it as this run's frozen value. Verification failures only
+# report, so they never discard the record.
+ledger=""
+invalidate_ledger_on_fail=false
 
-hash_head_directory() {
-  local repo="$1" root="$2" relative
-  relative="${root#"$repo"/}"
-  (
-    git -C "$repo" ls-tree -r -z HEAD -- "$relative" |
-      while IFS= read -r -d '' record; do
-        metadata="${record%%$'\t'*}"
-        repo_path="${record#*$'\t'}"
-        mode="${metadata%% *}"
-        [[ "$mode" == 100644 || "$mode" == 100755 \
-          || "$mode" == 120000 ]] || continue
-        component_path="${repo_path#"$relative"/}"
-        payload_digest="$(
-          git -C "$repo" cat-file blob "HEAD:$repo_path" \
-            | sha256sum | awk '{ print $1 }'
-        )"
-        printf '%s\0%s\0%s\0' \
-          "$component_path" "$mode" "$payload_digest"
-      done
-  ) | sha256sum | awk '{ print $1 }'
-}
-
-path_matches_head() {
-  local repo="$1" path="$2" relative current_hash head_hash
-  relative="${path#"$repo"/}"
-  if [[ -d "$path" ]]; then
-    current_hash="$(hash_directory "$path")"
-    head_hash="$(hash_head_directory "$repo" "$path")" || return 1
-  elif [[ -f "$path" ]]; then
-    current_hash="$(hash_file "$path")"
-    head_hash="$(git -C "$repo" cat-file blob "HEAD:$relative" \
-      | sha256sum | awk '{ print $1 }')" || return 1
-  else
-    return 1
+fail() {
+  if [[ "$invalidate_ledger_on_fail" == true && -n "$ledger" ]]; then
+    rm -f "$ledger"
   fi
-  [[ "$current_hash" == "$head_hash" ]]
+  printf 'workflow provenance: %s\n' "$1" >&2
+  exit 1
+}
+
+# Identity is the declared relative path plus the exact bytes of each input,
+# in declaration order. Executable modes and symlink-node identity are not
+# part of it; every input must resolve to a readable regular file.
+inputs_digest() {
+  local root="$1" rel payload=""
+  shift
+  for rel in "$@"; do
+    [[ -f "$root/$rel" && -r "$root/$rel" ]] \
+      || fail "declared instruction input is unreadable: $root/$rel"
+    payload+="$rel"$'\n'"$(sha256sum <"$root/$rel")"$'\n'
+  done
+  printf '%s' "$payload" | sha256sum | cut -c1-12
+}
+
+head_digest() {
+  local root="$1" rel payload="" blob
+  shift
+  for rel in "$@"; do
+    blob="$(git -C "$root" rev-parse --quiet --verify "HEAD:$rel" 2>/dev/null)" \
+      || return 1
+    payload+="$rel"$'\n'"$(git -C "$root" cat-file blob "$blob" | sha256sum)"$'\n'
+  done
+  printf '%s' "$payload" | sha256sum | cut -c1-12
 }
 
 origin_slug() {
-  local repo="$1" origin slug
-  origin="$(git -C "$repo" remote get-url origin 2>/dev/null)" || return 1
+  local origin slug
+  origin="$(git -C "$1" remote get-url origin 2>/dev/null)" || return 1
   origin="${origin%.git}"
   case "$origin" in
     *github.com:*) slug="${origin##*github.com:}" ;;
@@ -91,99 +77,86 @@ origin_slug() {
   printf '%s\n' "$slug"
 }
 
-repo_root_for() {
-  git -C "$1" rev-parse --show-toplevel 2>/dev/null
-}
+subcommand="${1:-}"
+[[ "$subcommand" == capture || "$subcommand" == verify ]] \
+  || fail "usage: workflow-provenance.sh (capture|verify)"
 
-command -v git >/dev/null 2>&1 || {
-  printf 'workflow provenance capture requires git\n' >&2
-  exit 1
-}
-skills_repo="$(repo_root_for "$skills_checkout")" || {
-  printf 'workflow provenance capture requires a Git-backed skills checkout\n' >&2
-  exit 1
-}
-[[ "$skills_repo" == "$skills_checkout" ]] || {
-  printf 'workflow provenance capture requires a Git-backed skills checkout\n' >&2
-  exit 1
-}
+command -v git >/dev/null 2>&1 || fail "capture requires git"
 
-repo_commit_is_fetchable() {
-  local repo="$1" head
-  head="$(git -C "$repo" rev-parse HEAD 2>/dev/null)" || return 1
-  git -C "$repo" for-each-ref --format='%(refname)' \
-    --contains "$head" refs/remotes/origin 2>/dev/null \
-    | grep -Ev '/HEAD$' | grep -q .
-}
-
-target_root="$PWD"
-capture_context_valid=false
-resolved_target_root="$(repo_root_for "$PWD" || true)"
-if [[ -n "$resolved_target_root" ]]; then
-  target_root="$resolved_target_root"
-  capture_context_valid=true
+# Resolve the ledger before validating anything else, so every later capture
+# failure can invalidate a previous run's record.
+target_root="$(git rev-parse --show-toplevel 2>/dev/null)" \
+  || fail "capture requires a Git-backed target repository"
+ledger="$(git rev-parse --absolute-git-dir)/work-on-provenance.json"
+if [[ "$subcommand" == capture ]]; then
+  invalidate_ledger_on_fail=true
 fi
 
-workflow_path="$work_on_root/references/default-workflow.md"
-workflow_repo="$skills_checkout"
-workflow_suffix=""
-if [[ -f "$target_root/docs/workflow.md" ]]; then
-  workflow_path="$target_root/docs/workflow.md"
-  workflow_repo="$target_root"
-  target_slug="$(origin_slug "$target_root" || true)"
-  skills_origin_slug="$(origin_slug "$skills_checkout" || true)"
-  if [[ -n "$target_slug" \
-      && "$target_slug" != "$skills_origin_slug" ]]; then
-    workflow_suffix="@$target_slug"
-  fi
+[[ "$(git -C "$skills_checkout" rev-parse --show-toplevel 2>/dev/null)" \
+  == "$skills_checkout" ]] \
+  || fail "capture requires a Git-backed skills checkout"
+
+# Selection turns on whether the target repository offers a workflow at all, not
+# on whether that path happens to be readable. A docs/workflow.md that exists as
+# a directory, a broken symlink, or an unreadable file is the selected input and
+# must fail as one; falling back to the default would fingerprint instructions
+# the run did not read.
+workflow_root="$skills_checkout"
+workflow_inputs=("${default_workflow_inputs[@]}")
+if [[ -e "$target_root/docs/workflow.md" || -L "$target_root/docs/workflow.md" ]]; then
+  workflow_root="$target_root"
+  workflow_inputs=("${target_workflow_inputs[@]}")
 fi
 
-work_on_digest="$(hash_directory "$work_on_root")"
-work_on_digest="${work_on_digest:0:12}"
-workflow_digest="$(hash_file "$workflow_path")"
-workflow_digest="${workflow_digest:0:12}"
-tdd_digest="$(hash_directory "$skills_checkout/skills/engineering/tdd")"
-tdd_digest="${tdd_digest:0:12}"
-review_digest="$(hash_directory "$skills_checkout/skills/engineering/code-review")"
-review_digest="${review_digest:0:12}"
+work_on_digest="$(inputs_digest "$skills_checkout" "${work_on_inputs[@]}")"
+workflow_digest="$(inputs_digest "$workflow_root" "${workflow_inputs[@]}")"
+tdd_digest="$(inputs_digest "$skills_checkout" "${tdd_inputs[@]}")"
+review_digest="$(inputs_digest "$skills_checkout" "${review_inputs[@]}")"
 
-work_on_star=true
-workflow_star=true
-tdd_star=true
-review_star=true
-commit="unknown"
-
-if [[ "$capture_context_valid" == true ]]; then
-  skills_repo="$(repo_root_for "$skills_checkout" || true)"
-  skills_slug="$(origin_slug "$skills_checkout" || true)"
-  if [[ -n "$skills_repo" && -n "$skills_slug" ]]; then
-    commit="$skills_slug@$(git -C "$skills_repo" rev-parse --short=12 HEAD)"
-    if repo_commit_is_fetchable "$skills_repo"; then
-      path_matches_head "$skills_repo" "$work_on_root" && work_on_star=false
-      path_matches_head "$skills_repo" "$skills_checkout/skills/engineering/tdd" \
-        && tdd_star=false
-      path_matches_head "$skills_repo" "$skills_checkout/skills/engineering/code-review" \
-        && review_star=false
-    fi
-  fi
-
-  workflow_git_root="$(repo_root_for "$workflow_repo" || true)"
-  workflow_slug="$(origin_slug "$workflow_repo" || true)"
-  if [[ -n "$workflow_git_root" && -n "$workflow_slug" ]] \
-      && repo_commit_is_fetchable "$workflow_git_root" \
-      && path_matches_head "$workflow_git_root" "$workflow_path"; then
-    workflow_star=false
-  fi
+if [[ "$subcommand" == verify ]]; then
+  [[ -f "$ledger" ]] || fail "run ledger is missing: $ledger"
+  for component in work-on workflow tdd review; do
+    recorded="$(jq -er --arg component "$component" \
+      '.[$component] | select(type == "string" and length == 12)' \
+      "$ledger" 2>/dev/null)" || fail "run ledger is invalid: $ledger"
+    case "$component" in
+      work-on) current="$work_on_digest" ;;
+      workflow) current="$workflow_digest" ;;
+      tdd) current="$tdd_digest" ;;
+      review) current="$review_digest" ;;
+    esac
+    [[ "$recorded" == "$current" ]] \
+      || fail "$component instructions changed since capture"
+  done
+  jq -er '.canonical | select(type == "string" and length > 0)' \
+    "$ledger" 2>/dev/null || fail "run ledger is invalid: $ledger"
+  exit 0
 fi
 
-star_suffix() {
-  [[ "$1" == true ]] && printf '*' || true
+# `*` means the component's declared inputs differ from that repository's
+# HEAD. It makes no claim about whether the commit is fetchable.
+star_for() {
+  local root="$1" digest="$2"
+  shift 2
+  [[ "$(head_digest "$root" "$@" || true)" == "$digest" ]] || printf '*'
 }
 
-work_on_value="$work_on_digest$(star_suffix "$work_on_star")"
-workflow_value="$workflow_digest$(star_suffix "$workflow_star")$workflow_suffix"
-tdd_value="$tdd_digest$(star_suffix "$tdd_star")"
-review_value="$review_digest$(star_suffix "$review_star")"
-canonical="work-on:$work_on_value workflow:$workflow_value tdd:$tdd_value review:$review_value ($commit)"
+skills_sha="$(git -C "$skills_checkout" rev-parse --short=12 HEAD)" \
+  || fail "capture requires a committed skills checkout"
+pointer="$(origin_slug "$skills_checkout" || printf 'unknown')@$skills_sha"
 
-printf '{"canonical":"%s"}\n' "$canonical"
+canonical="work-on:$work_on_digest$(star_for "$skills_checkout" \
+  "$work_on_digest" "${work_on_inputs[@]}")"
+canonical+=" workflow:$workflow_digest$(star_for "$workflow_root" \
+  "$workflow_digest" "${workflow_inputs[@]}")"
+canonical+=" tdd:$tdd_digest$(star_for "$skills_checkout" \
+  "$tdd_digest" "${tdd_inputs[@]}")"
+canonical+=" review:$review_digest$(star_for "$skills_checkout" \
+  "$review_digest" "${review_inputs[@]}")"
+canonical+=" ($pointer)"
+
+staged="$ledger.$$"
+printf '{"work-on":"%s","workflow":"%s","tdd":"%s","review":"%s","canonical":"%s"}\n' \
+  "$work_on_digest" "$workflow_digest" "$tdd_digest" "$review_digest" \
+  "$canonical" >"$staged"
+mv -f "$staged" "$ledger"

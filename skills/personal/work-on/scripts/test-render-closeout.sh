@@ -34,9 +34,12 @@ git -C "$target_checkout" commit -qm fixture
 ledger="$target_checkout/.git/work-on-provenance.json"
 (
   cd "$target_checkout"
-  "$(dirname "$command_under_test")/workflow-provenance.sh" >"$ledger"
+  "$(dirname "$command_under_test")/workflow-provenance.sh" capture
 )
-provenance="$(jq -r .canonical "$ledger")"
+provenance="$(
+  cd "$target_checkout"
+  "$(dirname "$command_under_test")/workflow-provenance.sh" verify
+)"
 
 run_new() {
   (
@@ -135,7 +138,9 @@ No findings required adjudication.
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
-| Workflow provenance | PROVENANCE |
+| Workflow provenance | 1 run |
+
+Run 1: PROVENANCE
 EOF
 awk -v provenance="$provenance" \
   '{ sub(/PROVENANCE/, provenance); print }' \
@@ -228,7 +233,7 @@ chmod +x "$drifted_script_root/"*.sh
 cp "$ledger" "$fixture/original-ledger.json"
 (
   cd "$target_checkout"
-  "$drifted_script_root/workflow-provenance.sh" >"$ledger"
+  "$drifted_script_root/workflow-provenance.sh" capture
 )
 if (cd "$target_checkout" && \
     "$drifted_script_root/render-closeout.sh" \
@@ -275,6 +280,13 @@ expect_failure() {
 
 printf '{not json\n' >"$fixture/malformed.json"
 expect_failure malformed "facts are not valid JSON"
+
+for supplied in provenance workflow_provenance runs phases; do
+  jq --arg key "$supplied" '.[$key] = "supplied by facts"' \
+    "$fixture/facts.json" >"$fixture/supplied-$supplied.json"
+  expect_failure "supplied-$supplied" \
+    "workflow provenance comes from the run ledger and previous PR body"
+done
 
 jq 'del(.acceptance_criteria)' "$fixture/facts.json" >"$fixture/missing-criteria.json"
 expect_failure missing-criteria "acceptance_criteria must be a non-empty array"
@@ -386,35 +398,35 @@ if (
 fi
 [[ ! -s "$fixture/decreased-count.out" ]]
 grep -Fqx \
-  'closeout invalid: telemetry implementation_rounds decreased from 1 to 0' \
+  'closeout body invalid: workflow telemetry Implementation rounds decreased from 1 to 0' \
   "$fixture/decreased-count.err"
 
-# Resuming an existing pull request appends the current run as a phase even
-# when its governing fingerprint matches the previous run.
+# Resuming an existing pull request appends the current run even when its
+# governing fingerprint matches the previous run.
 (
   cd "$target_checkout"
   "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" \
     --previous-body "$fixture/actual.md" >"$fixture/resumed.md"
 )
-grep -Fqx '| Workflow provenance | mixed (2 phases) |' "$fixture/resumed.md"
-[[ "$(grep -Fxc "Phase 1: $provenance" "$fixture/resumed.md")" -eq 1 ]]
-[[ "$(grep -Fxc "Phase 2: $provenance" "$fixture/resumed.md")" -eq 1 ]]
+grep -Fqx '| Workflow provenance | 2 runs |' "$fixture/resumed.md"
+[[ "$(grep -Fxc "Run 1: $provenance" "$fixture/resumed.md")" -eq 1 ]]
+[[ "$(grep -Fxc "Run 2: $provenance" "$fixture/resumed.md")" -eq 1 ]]
 
-# Every prior phase remains byte-for-byte and the resumed run appends a third
-# phase even when all three governing fingerprints are equal.
+# Every prior run remains byte-for-byte and the resumed run appends a third
+# run even when all three governing fingerprints are equal.
 (
   cd "$target_checkout"
   "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" \
     --previous-body "$fixture/resumed.md" >"$fixture/resumed-again.md"
 )
-grep -Fqx '| Workflow provenance | mixed (3 phases) |' \
+grep -Fqx '| Workflow provenance | 3 runs |' \
   "$fixture/resumed-again.md"
-for phase_number in 1 2 3; do
-  grep -Fqx "Phase $phase_number: $provenance" "$fixture/resumed-again.md"
+for run_number in 1 2 3; do
+  grep -Fqx "Run $run_number: $provenance" "$fixture/resumed-again.md"
 done
 
-# A closeout recapture that differs from the run ledger fails without emitting
-# a body in either renderer mode. A mid-run change never becomes a phase.
+# A declared instruction input changed after capture fails verification without
+# emitting a body in either renderer mode.
 printf 'mid-run change\n' \
   >>"$(dirname "$command_under_test")/../references/github-closeout.md"
 if (
@@ -427,7 +439,7 @@ if (
 fi
 [[ ! -s "$fixture/previous-mismatch.out" ]]
 grep -Fqx \
-  'closeout invalid: current workflow provenance does not match the run ledger' \
+  'workflow provenance: work-on instructions changed since capture' \
   "$fixture/previous-mismatch.err"
 
 if run_new "$fixture/facts.json" "$fixture/narrative.md" \
@@ -437,7 +449,7 @@ if run_new "$fixture/facts.json" "$fixture/narrative.md" \
 fi
 [[ ! -s "$fixture/new-mismatch.out" ]]
 grep -Fqx \
-  'closeout invalid: current workflow provenance does not match the run ledger' \
+  'workflow provenance: work-on instructions changed since capture' \
   "$fixture/new-mismatch.err"
 
 # A mode is mandatory, and the frozen-run ledger is mandatory at closeout.

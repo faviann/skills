@@ -201,30 +201,31 @@ done
 [[ "$telemetry_outcome" == "$issue_outcome" ]] \
   || fail "issue outcome $issue_outcome contradicts telemetry outcome $telemetry_outcome"
 
-canonical_provenance_pattern='^work-on:[0-9a-f]{12}\*?[[:space:]]workflow:[0-9a-f]{12}\*?(@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?[[:space:]]tdd:[0-9a-f]{12}\*?[[:space:]]review:[0-9a-f]{12}\*?[[:space:]]\(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{7,40}|unknown)\)$'
+canonical_provenance_pattern='^work-on:[0-9a-f]{12}\*?[[:space:]]workflow:[0-9a-f]{12}\*?[[:space:]]tdd:[0-9a-f]{12}\*?[[:space:]]review:[0-9a-f]{12}\*?[[:space:]]\(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+|unknown)@[0-9a-f]{7,40}\)$'
 
-provenance_phases=()
-if [[ "$provenance_value" =~ $canonical_provenance_pattern ]]; then
-  [[ "${#telemetry_lines[@]}" -eq 12 ]] \
-    || fail "single workflow provenance must not have phase lines"
-  provenance_phases+=("$provenance_value")
-elif [[ "$provenance_value" =~ ^mixed[[:space:]]\(([2-9]|[1-9][0-9]+)[[:space:]]phases\)$ ]]; then
-  phase_count="${BASH_REMATCH[1]}"
-  [[ "${#telemetry_lines[@]}" -eq $((12 + phase_count)) ]] \
-    || fail "workflow provenance phase count does not match phase lines"
-  for ((index = 1; index <= phase_count; index++)); do
-    phase_line="${telemetry_lines[$((11 + index))]}"
-    phase_prefix="Phase $index: "
-    [[ "$phase_line" == "$phase_prefix"* ]] \
-      || fail "workflow provenance phase $index is malformed or out of order"
-    phase="${phase_line#"$phase_prefix"}"
-    [[ "$phase" =~ $canonical_provenance_pattern ]] \
-      || fail "workflow provenance phase $index is malformed"
-    provenance_phases+=("$phase")
-  done
+[[ "$provenance_value" =~ ^([1-9][0-9]*)[[:space:]]runs?$ ]] \
+  || fail "workflow provenance is malformed"
+run_count="${BASH_REMATCH[1]}"
+if [[ "$run_count" -eq 1 ]]; then
+  [[ "$provenance_value" == '1 run' ]] || fail "workflow provenance is malformed"
 else
-  fail "workflow provenance is malformed"
+  [[ "$provenance_value" == "$run_count runs" ]] \
+    || fail "workflow provenance is malformed"
 fi
+[[ "${#telemetry_lines[@]}" -eq $((12 + run_count)) ]] \
+  || fail "workflow provenance run count does not match run lines"
+
+provenance_runs=()
+for ((index = 1; index <= run_count; index++)); do
+  run_line="${telemetry_lines[$((11 + index))]}"
+  run_prefix="Run $index: "
+  [[ "$run_line" == "$run_prefix"* ]] \
+    || fail "workflow provenance run $index is malformed or out of order"
+  run="${run_line#"$run_prefix"}"
+  [[ "$run" =~ $canonical_provenance_pattern ]] \
+    || fail "workflow provenance run $index is malformed"
+  provenance_runs+=("$run")
+done
 
 if [[ -n "$previous_source" ]]; then
   [[ -f "$previous_source" ]] \
@@ -232,31 +233,22 @@ if [[ -n "$previous_source" ]]; then
   previous_body="$fixture/previous.md"
   sed 's/\r$//' "$previous_source" >"$previous_body"
   "$0" "$issue_number" "$previous_body"
-  mapfile -t previous_phases < <(awk -F'|' '
-    function trim(value) {
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      return value
-    }
+  mapfile -t previous_runs < <(awk '
     $0 == "## Workflow telemetry" { in_telemetry = 1; next }
     in_telemetry && /^## / { exit }
-    in_telemetry && $2 ~ /^[[:space:]]*Workflow provenance[[:space:]]*$/ {
-      provenance = trim($3)
-      if (provenance !~ /^mixed /) print provenance
-      next
-    }
-    in_telemetry && /^Phase [1-9][0-9]*: / {
-      sub(/^Phase [1-9][0-9]*: /, "")
+    in_telemetry && /^Run [1-9][0-9]*: / {
+      sub(/^Run [1-9][0-9]*: /, "")
       print
     }
   ' "$previous_body")
-  [[ "${#provenance_phases[@]}" -ge "${#previous_phases[@]}" ]] \
-    || fail "workflow provenance dropped previous phases"
-  for ((index = 0; index < ${#previous_phases[@]}; index++)); do
-    [[ "${provenance_phases[$index]}" == "${previous_phases[$index]}" ]] \
-      || fail "workflow provenance rewrote previous phase $((index + 1))"
+  [[ "${#provenance_runs[@]}" -ge "${#previous_runs[@]}" ]] \
+    || fail "workflow provenance dropped previous runs"
+  for ((index = 0; index < ${#previous_runs[@]}; index++)); do
+    [[ "${provenance_runs[$index]}" == "${previous_runs[$index]}" ]] \
+      || fail "workflow provenance rewrote previous run $((index + 1))"
   done
-  [[ "${#provenance_phases[@]}" -gt "${#previous_phases[@]}" ]] \
-    || fail "workflow provenance must append at least one phase"
+  [[ "${#provenance_runs[@]}" -gt "${#previous_runs[@]}" ]] \
+    || fail "workflow provenance must append at least one run"
 
   mapfile -t previous_count_values < <(awk -F'|' '
     function trim(value) {

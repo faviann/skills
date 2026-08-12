@@ -41,8 +41,10 @@ fi
 
 jq -e . "$facts" >/dev/null 2>&1 || fail "facts are not valid JSON"
 jq -e 'type == "object"' "$facts" >/dev/null || fail "facts must be a JSON object"
-jq -e '(has("provenance") or has("workflow_provenance") or has("phases")) | not' \
-  "$facts" >/dev/null \
+jq -e '
+  (has("provenance") or has("workflow_provenance")
+    or has("runs") or has("phases")) | not
+' "$facts" >/dev/null \
   || fail "workflow provenance comes from the run ledger and previous PR body"
 
 jq -e '.issue_number | type == "number" and . > 0 and floor == .' \
@@ -162,14 +164,6 @@ telemetry_count_fields=(
   blocking_findings_resolved
   findings_rejected_at_adjudication
 )
-telemetry_count_labels=(
-  'Implementation rounds'
-  'Independent-review rounds'
-  'Remediation rounds'
-  'Validation executions'
-  'Blocking findings resolved'
-  'Findings rejected at adjudication'
-)
 for field in "${telemetry_count_fields[@]}"; do
   jq -e --arg field "$field" \
     '.telemetry[$field] |
@@ -188,86 +182,31 @@ if [[ -n "$narrative_source" && ! -f "$narrative_source" ]]; then
   fail "narrative file does not exist: $narrative_source"
 fi
 
-git_dir="$(git rev-parse --absolute-git-dir 2>/dev/null)" \
-  || fail "target repository git directory is unavailable"
-ledger="$git_dir/work-on-provenance.json"
-[[ -f "$ledger" ]] || fail "work-on provenance ledger is missing: $ledger"
-ledger_canonical="$(jq -er '.canonical | select(type == "string" and length > 0)' \
-  "$ledger" 2>/dev/null)" \
-  || fail "work-on provenance ledger is invalid"
+# The frozen run's canonical value is opaque here: workflow-provenance.sh
+# owns capture, verification, and its shape.
+run_value="$("$script_root/workflow-provenance.sh" verify)" \
+  || fail "workflow provenance verification failed"
 
-current_provenance="$fixture/current-provenance.json"
-"$script_root/workflow-provenance.sh" >"$current_provenance"
-current_canonical="$(jq -er '.canonical | select(type == "string" and length > 0)' \
-  "$current_provenance" 2>/dev/null)" \
-  || fail "current workflow provenance is invalid"
-[[ "$current_canonical" == "$ledger_canonical" ]] \
-  || fail "current workflow provenance does not match the run ledger"
-
-phases=()
+runs=()
 if [[ "$closeout_mode" == previous ]]; then
-  normalized_previous_body="$fixture/previous-body.md"
-  sed 's/\r$//' "$previous_body" >"$normalized_previous_body"
-  "$script_root/validate-closeout-body.sh" "$issue_number" "$normalized_previous_body"
-  for ((index = 0; index < ${#telemetry_count_fields[@]}; index++)); do
-    field="${telemetry_count_fields[$index]}"
-    label="${telemetry_count_labels[$index]}"
-    previous_count="$(awk -F'|' -v wanted="$label" '
-      $0 == "## Workflow telemetry" { in_telemetry = 1; next }
-      in_telemetry && /^## / { exit }
-      in_telemetry {
-        field = $2
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", field)
-        if (field == wanted) {
-          value = $3
-          gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-          print value
-          exit
-        }
-      }
-    ' "$normalized_previous_body")"
-    current_count="$(jq -r --arg field "$field" \
-      '.telemetry[$field] | tostring' "$facts")"
-    if [[ "$previous_count" =~ ^[0-9]+$ && "$current_count" =~ ^[0-9]+$ ]] \
-        && (( 10#$current_count < 10#$previous_count )); then
-      fail "telemetry $field decreased from $previous_count to $current_count"
-    fi
-  done
-  previous_value="$(awk -F'|' '
+  mapfile -t runs < <(sed 's/\r$//' "$previous_body" | awk '
     $0 == "## Workflow telemetry" { in_telemetry = 1; next }
     in_telemetry && /^## / { exit }
-    in_telemetry && $2 ~ /^[[:space:]]*Workflow provenance[[:space:]]*$/ {
-      value = $3
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      print value
-      exit
+    in_telemetry && /^Run [1-9][0-9]*: / {
+      sub(/^Run [1-9][0-9]*: /, "")
+      print
     }
-  ' "$normalized_previous_body")"
-  if [[ "$previous_value" =~ ^mixed[[:space:]]\(([1-9][0-9]*)[[:space:]]phases\)$ ]]; then
-    mapfile -t previous_phases < <(awk '
-      $0 == "## Workflow telemetry" { in_telemetry = 1; next }
-      in_telemetry && /^## / { exit }
-      in_telemetry && /^Phase [1-9][0-9]*: / {
-        sub(/^Phase [1-9][0-9]*: /, "")
-        print
-      }
-    ' "$normalized_previous_body")
-    for phase in "${previous_phases[@]}"; do
-      phases+=("$phase")
-    done
-  else
-    phases+=("$previous_value")
-  fi
+  ')
 fi
-# Every render contributes exactly one frozen root-run phase. An update keeps
-# the previous pull-request phases as an immutable prefix, even when the new
-# phase has the same fingerprint as the one before it.
-phases+=("$ledger_canonical")
+# Every render appends exactly one frozen root run. An update keeps the
+# previous pull-request runs as an immutable prefix, even when the new run has
+# the same fingerprint as the one before it.
+runs+=("$run_value")
 
-if [[ "${#phases[@]}" -eq 1 ]]; then
-  provenance_value="${phases[0]}"
+if [[ "${#runs[@]}" -eq 1 ]]; then
+  provenance_value='1 run'
 else
-  provenance_value="mixed (${#phases[@]} phases)"
+  provenance_value="${#runs[@]} runs"
 fi
 
 # Markdown table cells are kept single-line and escaped without changing the
@@ -319,13 +258,10 @@ candidate="$fixture/candidate.md"
   printf '| Blocking findings resolved | %s |\n' "$(telemetry_value blocking_findings_resolved)"
   printf '| Findings rejected at adjudication | %s |\n' "$(telemetry_value findings_rejected_at_adjudication)"
   printf '| Final workflow outcome | %s |\n' "$telemetry_outcome"
-  printf '| Workflow provenance | %s |\n' "$provenance_value"
-  if [[ "${#phases[@]}" -gt 1 ]]; then
-    printf '\n'
-    for ((index = 0; index < ${#phases[@]}; index++)); do
-      printf 'Phase %s: %s\n' "$((index + 1))" "${phases[$index]}"
-    done
-  fi
+  printf '| Workflow provenance | %s |\n\n' "$provenance_value"
+  for ((index = 0; index < ${#runs[@]}; index++)); do
+    printf 'Run %s: %s\n' "$((index + 1))" "${runs[$index]}"
+  done
 } >"$candidate"
 
 if [[ "$closeout_mode" == previous ]]; then

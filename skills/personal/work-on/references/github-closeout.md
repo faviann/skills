@@ -144,8 +144,8 @@ Render the complete human-readable pull-request body:
 For an existing pull request, first save its live body, then render with
 `--previous-body <old-body.md>` in place of `--new-pr`. Exactly one mode is
 required. The renderer accepts `-` instead of the facts path to read facts from
-stdin. It fails before writing any body when the frozen-run provenance ledger is
-missing, the facts are malformed, the authoritative criteria and closure rows
+stdin. It fails before writing any body when the run's frozen provenance cannot
+be verified, the facts are malformed, the authoritative criteria and closure rows
 do not match exactly once, a required acceptance row or telemetry value is
 absent, a status is outside
 `tested`/`failing`/`inferred`/`unverified`, a `Closes` row is not `tested`, the
@@ -154,13 +154,10 @@ rejects the rendered candidate. Inspect the rendered Markdown as the actual PR
 body; manual `work-on` does not depend on the AFK watcher or on a human reading
 JSON.
 
-The renderer captures provenance again at closeout. Its canonical value must
-equal the frozen run ledger; a mismatch is a hard failure that writes no body
-and never creates a mid-run phase. In `--new-pr` mode the ledger is the sole
-provenance value. In `--previous-body` mode, prior phases come only from the
-saved live pull-request body and the renderer appends exactly one phase from
-the current ledger, even when it equals the prior phase. Facts never supply
-provenance or prior phases.
+Every render appends exactly one run from the frozen provenance of the current
+run, even when it equals the prior run. In `--previous-body` mode the prior runs
+come only from the saved live pull-request body and survive as an exact prefix.
+Facts never supply provenance or prior runs.
 
 The renderer generates this issue mapping:
 
@@ -207,7 +204,10 @@ The renderer adds this section to every pull request created or updated by
 | Blocking findings resolved | <count or unknown> |
 | Findings rejected at adjudication | <count or unknown> |
 | Final workflow outcome | Closes or Progresses |
-| Workflow provenance | work-on:<digest> workflow:<digest> tdd:<digest> review:<digest> (owner/repo@shortsha) |
+| Workflow provenance | <count> runs |
+
+Run 1: work-on:<digest> workflow:<digest> tdd:<digest> review:<digest> (owner/repo@shortsha)
+Run 2: work-on:<digest> workflow:<digest> tdd:<digest> review:<digest> (owner/repo@shortsha)
 ```
 
 Use observed values only; never estimate. Count each agent-launched top-level
@@ -216,17 +216,13 @@ reviewer runs; reconcile handoffs or report `unknown`. For sharded suites,
 report every shard and the sum. The outcome must match the issue mapping.
 
 Each provenance digest is the first 12 lowercase hexadecimal characters of a
-SHA-256 identity over a complete skill directory or the selected workflow
-file. A `*` after a digest marks bytes that were not fetchable at capture time.
-A target repository's
-`docs/workflow.md` adds `@owner/repo` to the workflow digest when that repository
-differs from the skills repository. When the pull request records more than one
-root run, the row reads `mixed (N phases)` and ordered
-`Phase N: <canonical provenance>` lines follow the table; telemetry counts stay
-cumulative. The repository pointer is `(unknown)` when the Git-backed skills
-checkout has no identifiable GitHub origin.
-Closeout provenance recapture is local and offline; it performs no GitHub or
-network lookup.
+SHA-256 identity over the declared instruction files of that component. A `*`
+after a digest marks inputs that differ from that repository's `HEAD`. One
+ordered `Run N: <canonical provenance>` line follows the table for each root
+run, and the row states their count; telemetry counts stay cumulative. The
+repository pointer names the skills checkout, or `unknown@shortsha` when it has
+no identifiable GitHub origin. Provenance is local and offline; it performs no
+GitHub or network lookup.
 
 Create or update the pull request, then read back its final body and validate
 the exact content returned by GitHub:
@@ -237,7 +233,7 @@ gh pr view <pr-number> --json body --jq .body \
 ```
 
 For an updated pull request, also pass `--previous <old-body.md>` so validation
-proves that its prior provenance phase list was preserved as an exact prefix.
+proves that its prior provenance runs were preserved as an exact prefix.
 
 The canonical issue mapping, acceptance rows and statuses, and telemetry
 outcome must survive read-back. Generic validation accepts canonical `Closes`

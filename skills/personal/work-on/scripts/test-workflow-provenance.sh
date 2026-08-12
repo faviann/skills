@@ -5,22 +5,6 @@ readonly source_skill_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 
-# The telemetry clock starts during setup, but the provenance ledger freezes
-# only after update and workflow selection, immediately before delegation.
-grep -Fqx \
-  '   `~/.agents/skills/work-on/scripts/workflow-provenance.sh > "$(git rev-parse --git-dir)/work-on-provenance.json"`' \
-  "$source_skill_root/SKILL.md"
-telemetry_line="$(grep -Fn \
-  '3. Check the current worktree status and record the telemetry start time.' \
-  "$source_skill_root/SKILL.md" | cut -d: -f1)"
-workflow_line="$(grep -Fn \
-  '5. Use `docs/workflow.md` when present and announce it; otherwise use this' \
-  "$source_skill_root/SKILL.md" | cut -d: -f1)"
-capture_line="$(grep -Fn \
-  '6. Immediately before delegating implementation, run' \
-  "$source_skill_root/SKILL.md" | cut -d: -f1)"
-[[ "$telemetry_line" -lt "$workflow_line" && "$workflow_line" -lt "$capture_line" ]]
-
 skills_checkout="$fixture/skills-checkout"
 mkdir -p \
   "$skills_checkout/skills/personal" \
@@ -30,289 +14,242 @@ cp -R "$source_skill_root/../../engineering/tdd" \
   "$skills_checkout/skills/engineering/tdd"
 cp -R "$source_skill_root/../../engineering/code-review" \
   "$skills_checkout/skills/engineering/code-review"
-ln -s 'initial-target' \
-  "$skills_checkout/skills/engineering/tdd/provenance-link"
-printf 'backslash payload\n' \
-  >"$skills_checkout/skills/engineering/tdd/backslash\\name"
-printf 'newline payload\n' \
-  >"$skills_checkout/skills/engineering/tdd/"$'newline\nname'
-printf 'skills/engineering/tdd/ignored-provenance-fixture\n' \
-  >"$skills_checkout/.gitignore"
 
 git -C "$skills_checkout" init -q -b main
 git -C "$skills_checkout" config user.name 'Provenance Test'
 git -C "$skills_checkout" config user.email provenance@example.invalid
 git -C "$skills_checkout" add .
 git -C "$skills_checkout" commit -qm 'fixture'
-git init -q --bare "$fixture/skills-origin.git"
 git -C "$skills_checkout" remote add origin \
-  'https://github.com/example/skills.git'
-git -C "$skills_checkout" config remote.origin.url \
-  "$fixture/skills-origin.git"
-git -C "$skills_checkout" push -q -u origin main
-# Keep the fetch/push transport local while giving the script a canonical
-# GitHub origin to report.
-git -C "$skills_checkout" config remote.origin.url \
   'https://github.com/example/skills.git'
 
 command_under_test="$skills_checkout/skills/personal/work-on/scripts/workflow-provenance.sh"
+skills_ledger="$skills_checkout/.git/work-on-provenance.json"
 
-canonical_from() {
-  jq -er '
-    if (keys == ["canonical"] and (.canonical | type == "string"))
-    then .canonical
-    else error("provenance ledger must contain only canonical")
-    end
-  ' "$1"
+capture_in() {
+  (cd "$1" && "${2:-$command_under_test}" capture)
 }
-
+verify_in() {
+  (cd "$1" && "${2:-$command_under_test}" verify)
+}
 component_value() {
-  local canonical="$1" component="$2"
-  sed -n "s/.*${component}:\\([^ ]*\\).*/\\1/p" <<<"$canonical"
+  sed -n "s/.*$2:\\([^ ]*\\).*/\\1/p" <<<"$1"
 }
 
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/clean.json"
-)
-jq -e '
-  keys == ["canonical"]
-  and (.canonical
-    | test("^work-on:[0-9a-f]{12} workflow:[0-9a-f]{12} tdd:[0-9a-f]{12} review:[0-9a-f]{12} \\(example/skills@[0-9a-f]{12}\\)$"))
-' "$fixture/clean.json" >/dev/null
+# Capture writes the ledger and keeps provenance off stdout.
+capture_in "$skills_checkout" >"$fixture/capture.out"
+[[ ! -s "$fixture/capture.out" ]]
+[[ -f "$skills_ledger" ]]
 
-clean_canonical="$(canonical_from "$fixture/clean.json")"
+clean_canonical="$(verify_in "$skills_checkout")"
+[[ "$clean_canonical" =~ ^work-on:[0-9a-f]{12}[[:space:]]workflow:[0-9a-f]{12}[[:space:]]tdd:[0-9a-f]{12}[[:space:]]review:[0-9a-f]{12}[[:space:]]\(example/skills@[0-9a-f]{12}\)$ ]]
 clean_work_on="$(component_value "$clean_canonical" work-on)"
 clean_workflow="$(component_value "$clean_canonical" workflow)"
 clean_tdd="$(component_value "$clean_canonical" tdd)"
 clean_review="$(component_value "$clean_canonical" review)"
-[[ "$clean_tdd" =~ ^[0-9a-f]{12}$ ]]
 
-collision_fixture="$skills_checkout/skills/engineering/tdd/binary-collision"
-mkdir "$collision_fixture"
-printf 'X' >"$collision_fixture/a"
-printf 'Y' >"$collision_fixture/b"
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/binary-collision-two-files.json"
-)
-binary_collision_two_files="$(
-  canonical_from "$fixture/binary-collision-two-files.json"
-)"
-
-rm "$collision_fixture/b"
-printf 'X\0%s\0%s\0Y' 'binary-collision/b' '100644' \
-  >"$collision_fixture/a"
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/binary-collision-one-file.json"
-)
-binary_collision_one_file="$(
-  canonical_from "$fixture/binary-collision-one-file.json"
-)"
-
-[[ "$(component_value "$binary_collision_two_files" tdd)" != \
-  "$(component_value "$binary_collision_one_file" tdd)" ]]
-rm -r "$collision_fixture"
-
-ln -sfn 'changed-target' \
-  "$skills_checkout/skills/engineering/tdd/provenance-link"
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/symlink-target.json"
-)
-symlink_target_canonical="$(canonical_from "$fixture/symlink-target.json")"
-[[ "$(component_value "$symlink_target_canonical" work-on)" == "$clean_work_on" ]]
-[[ "$(component_value "$symlink_target_canonical" workflow)" == "$clean_workflow" ]]
-[[ "$(component_value "$symlink_target_canonical" tdd)" =~ ^[0-9a-f]{12}\*$ ]]
-[[ "$(component_value "$symlink_target_canonical" tdd)" != "$clean_tdd" ]]
-[[ "$(component_value "$symlink_target_canonical" review)" == "$clean_review" ]]
-git -C "$skills_checkout" restore skills/engineering/tdd/provenance-link
-
-rm "$skills_checkout/skills/engineering/tdd/provenance-link"
-printf 'initial-target' \
-  >"$skills_checkout/skills/engineering/tdd/provenance-link"
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/symlink-replaced-by-file.json"
-)
-symlink_replaced_canonical="$(canonical_from "$fixture/symlink-replaced-by-file.json")"
-[[ "$(component_value "$symlink_replaced_canonical" work-on)" == "$clean_work_on" ]]
-[[ "$(component_value "$symlink_replaced_canonical" workflow)" == "$clean_workflow" ]]
-[[ "$(component_value "$symlink_replaced_canonical" tdd)" =~ ^[0-9a-f]{12}\*$ ]]
-[[ "$(component_value "$symlink_replaced_canonical" tdd)" != "$clean_tdd" ]]
-[[ "$(component_value "$symlink_replaced_canonical" review)" == "$clean_review" ]]
-git -C "$skills_checkout" restore skills/engineering/tdd/provenance-link
-
-chmod +x "$skills_checkout/skills/engineering/tdd/tests.md"
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/executable-bit.json"
-)
-executable_bit_canonical="$(canonical_from "$fixture/executable-bit.json")"
-[[ "$(component_value "$executable_bit_canonical" work-on)" == "$clean_work_on" ]]
-[[ "$(component_value "$executable_bit_canonical" workflow)" == "$clean_workflow" ]]
-[[ "$(component_value "$executable_bit_canonical" tdd)" =~ ^[0-9a-f]{12}\*$ ]]
-[[ "$(component_value "$executable_bit_canonical" tdd)" != "$clean_tdd" ]]
-[[ "$(component_value "$executable_bit_canonical" review)" == "$clean_review" ]]
-git -C "$skills_checkout" restore skills/engineering/tdd/tests.md
-
-printf 'non-SKILL fixture change\n' \
+# A changed declared input stars and changes only its own component.
+printf 'dirty instruction change\n' \
   >>"$skills_checkout/skills/engineering/tdd/tests.md"
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/dirty.json"
-)
-dirty_canonical="$(canonical_from "$fixture/dirty.json")"
-[[ "$dirty_canonical" =~ ^work-on:[0-9a-f]{12}[[:space:]]workflow:[0-9a-f]{12}[[:space:]]tdd:[0-9a-f]{12}\*[[:space:]]review:[0-9a-f]{12}[[:space:]]\(example/skills@[0-9a-f]{12}\)$ ]]
-[[ "$(component_value "$dirty_canonical" tdd)" != "$clean_tdd" ]]
+capture_in "$skills_checkout"
+dirty_canonical="$(verify_in "$skills_checkout")"
+[[ "$(component_value "$dirty_canonical" work-on)" == "$clean_work_on" ]]
+[[ "$(component_value "$dirty_canonical" workflow)" == "$clean_workflow" ]]
+[[ "$(component_value "$dirty_canonical" review)" == "$clean_review" ]]
+dirty_tdd="$(component_value "$dirty_canonical" tdd)"
+[[ "$dirty_tdd" =~ ^[0-9a-f]{12}\*$ ]]
+[[ "$dirty_tdd" != "$clean_tdd" ]]
 
-git -C "$skills_checkout" restore skills/engineering/tdd/tests.md
-printf 'ignored but instruction-affecting\n' \
-  >"$skills_checkout/skills/engineering/tdd/ignored-provenance-fixture"
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/ignored.json"
-)
-ignored_canonical="$(canonical_from "$fixture/ignored.json")"
-[[ "$ignored_canonical" =~ ^work-on:[0-9a-f]{12}[[:space:]]workflow:[0-9a-f]{12}[[:space:]]tdd:[0-9a-f]{12}\*[[:space:]]review:[0-9a-f]{12}[[:space:]]\(example/skills@[0-9a-f]{12}\)$ ]]
-[[ "$(component_value "$ignored_canonical" tdd)" != "$clean_tdd" ]]
-rm "$skills_checkout/skills/engineering/tdd/ignored-provenance-fixture"
+# An undeclared file in a component directory is not workflow identity.
+printf 'not an instruction input\n' \
+  >"$skills_checkout/skills/engineering/tdd/undeclared.md"
+capture_in "$skills_checkout"
+[[ "$(verify_in "$skills_checkout")" == "$dirty_canonical" ]]
+rm "$skills_checkout/skills/engineering/tdd/undeclared.md"
 
-git -C "$skills_checkout" update-index --assume-unchanged \
-  skills/engineering/tdd/tests.md
-printf 'hidden tracked change\n' \
-  >>"$skills_checkout/skills/engineering/tdd/tests.md"
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/assume-unchanged.json"
-)
-assume_unchanged_canonical="$(canonical_from "$fixture/assume-unchanged.json")"
-[[ "$assume_unchanged_canonical" =~ ^work-on:[0-9a-f]{12}[[:space:]]workflow:[0-9a-f]{12}[[:space:]]tdd:[0-9a-f]{12}\*[[:space:]]review:[0-9a-f]{12}[[:space:]]\(example/skills@[0-9a-f]{12}\)$ ]]
-[[ "$(component_value "$assume_unchanged_canonical" tdd)" != "$clean_tdd" ]]
-git -C "$skills_checkout" update-index --no-assume-unchanged \
-  skills/engineering/tdd/tests.md
-git -C "$skills_checkout" restore skills/engineering/tdd/tests.md
-
-printf 'unpushed instruction change\n' \
-  >>"$skills_checkout/skills/engineering/tdd/tests.md"
+# Committing the captured bytes keeps verification passing on the frozen value,
+# then clears the star on recapture without changing the digest.
 git -C "$skills_checkout" add .
-git -C "$skills_checkout" commit -qm 'unpushed fixture change'
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/unpushed.json"
-)
-unpushed_canonical="$(canonical_from "$fixture/unpushed.json")"
-[[ "$unpushed_canonical" =~ ^work-on:[0-9a-f]{12}\*[[:space:]]workflow:[0-9a-f]{12}\*[[:space:]]tdd:[0-9a-f]{12}\*[[:space:]]review:[0-9a-f]{12}\*[[:space:]]\(example/skills@[0-9a-f]{12}\)$ ]]
+git -C "$skills_checkout" commit -qm 'unpushed instruction change'
+[[ "$(verify_in "$skills_checkout")" == "$dirty_canonical" ]]
+capture_in "$skills_checkout"
+unpushed_canonical="$(verify_in "$skills_checkout")"
+[[ "$unpushed_canonical" =~ ^work-on:[0-9a-f]{12}[[:space:]]workflow:[0-9a-f]{12}[[:space:]]tdd:[0-9a-f]{12}[[:space:]]review:[0-9a-f]{12}[[:space:]]\(example/skills@[0-9a-f]{12}\)$ ]]
+[[ "$(component_value "$unpushed_canonical" tdd)" == "${dirty_tdd%\*}" ]]
 
 # The installed harness links the whole skill directory, not each script.
 mkdir -p "$fixture/installed-skills"
 ln -s "$skills_checkout/skills/personal/work-on" \
   "$fixture/installed-skills/work-on"
-(
-  cd "$skills_checkout"
-  timeout 5 "$fixture/installed-skills/work-on/scripts/workflow-provenance.sh" \
-    >"$fixture/symlinked-parent.json"
-)
-[[ "$(canonical_from "$fixture/symlinked-parent.json")" == \
+installed_command="$fixture/installed-skills/work-on/scripts/workflow-provenance.sh"
+capture_in "$skills_checkout" "$installed_command"
+[[ "$(verify_in "$skills_checkout" "$installed_command")" == \
   "$unpushed_canonical" ]]
 
-mkdir -p "$skills_checkout/docs"
-printf '# Same-repository workflow\n' >"$skills_checkout/docs/workflow.md"
-(
-  cd "$skills_checkout"
-  "$command_under_test" >"$fixture/same-repository.json"
-)
-jq -e '
-  .canonical
-  | test(" workflow:[0-9a-f]{12}\\*? tdd:")
-' "$fixture/same-repository.json" >/dev/null
+# Verify survives an unrelated commit and a byte-identical input being
+# committed, and prints exactly the captured value.
+printf 'unrelated content\n' >"$skills_checkout/unrelated.txt"
+git -C "$skills_checkout" add .
+git -C "$skills_checkout" commit -qm 'unrelated commit'
+[[ "$(verify_in "$skills_checkout")" == "$unpushed_canonical" ]]
 
-same_identity_checkout="$fixture/same-identity-checkout"
-git init -q -b main "$same_identity_checkout"
-git -C "$same_identity_checkout" config user.name 'Provenance Test'
-git -C "$same_identity_checkout" config user.email provenance@example.invalid
-mkdir -p "$same_identity_checkout/docs"
-printf '# Same-origin workflow\n' >"$same_identity_checkout/docs/workflow.md"
-git -C "$same_identity_checkout" add .
-git -C "$same_identity_checkout" commit -qm 'same-origin target fixture'
-git init -q --bare "$fixture/same-identity-origin.git"
-git -C "$same_identity_checkout" remote add origin \
-  "$fixture/same-identity-origin.git"
-git -C "$same_identity_checkout" push -q -u origin main
-git -C "$same_identity_checkout" config remote.origin.url \
-  'https://github.com/example/skills.git'
-(
-  cd "$same_identity_checkout"
-  "$command_under_test" >"$fixture/same-identity.json"
-)
-jq -e '
-  .canonical
-  | test(" workflow:[0-9a-f]{12} tdd:")
-' "$fixture/same-identity.json" >/dev/null
+# A changed declared input after capture fails verification by name.
+printf 'post-capture change\n' \
+  >>"$skills_checkout/skills/personal/work-on/references/github-closeout.md"
+if verify_in "$skills_checkout" \
+    >"$fixture/frozen.out" 2>"$fixture/frozen.err"; then
+  printf 'FAIL[frozen]: verify accepted changed instructions\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/frozen.out" ]]
+grep -Fqx 'workflow provenance: work-on instructions changed since capture' \
+  "$fixture/frozen.err"
+# A failed verification reports; it never discards the frozen run record.
+[[ -f "$skills_ledger" ]]
+git -C "$skills_checkout" restore \
+  skills/personal/work-on/references/github-closeout.md
 
+# A missing ledger fails verification without a canonical value.
+mv "$skills_ledger" "$fixture/saved-ledger.json"
+if verify_in "$skills_checkout" \
+    >"$fixture/no-ledger.out" 2>"$fixture/no-ledger.err"; then
+  printf 'FAIL[no-ledger]: verify accepted a missing ledger\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/no-ledger.out" ]]
+grep -Fq 'run ledger is missing' "$fixture/no-ledger.err"
+mv "$fixture/saved-ledger.json" "$skills_ledger"
+
+# A target repository's docs/workflow.md supplies the workflow identity with no
+# repository suffix, and is starred only while it differs from target HEAD.
 target_checkout="$fixture/target-checkout"
 git init -q -b main "$target_checkout"
 git -C "$target_checkout" config user.name 'Provenance Test'
 git -C "$target_checkout" config user.email provenance@example.invalid
 mkdir -p "$target_checkout/docs"
 printf '# Target workflow\n' >"$target_checkout/docs/workflow.md"
+git -C "$target_checkout" remote add origin 'git@github.com:example/target.git'
+capture_in "$target_checkout"
+target_dirty_canonical="$(verify_in "$target_checkout")"
+[[ "$(component_value "$target_dirty_canonical" workflow)" =~ ^[0-9a-f]{12}\*$ ]]
+[[ "$(component_value "$target_dirty_canonical" workflow)" != "$clean_workflow" ]]
+[[ "$target_dirty_canonical" == *'(example/skills@'* ]]
+
 git -C "$target_checkout" add .
 git -C "$target_checkout" commit -qm 'target fixture'
-git init -q --bare "$fixture/target-origin.git"
-git -C "$target_checkout" remote add origin "$fixture/target-origin.git"
-git -C "$target_checkout" push -q -u origin main
-git -C "$target_checkout" config remote.origin.url \
-  'git@github.com:example/target.git'
-(
-  cd "$target_checkout"
-  "$command_under_test" >"$fixture/target.json"
-)
-jq -e '
-  .canonical
-  | test(" workflow:[0-9a-f]{12}@example/target ")
-' "$fixture/target.json" >/dev/null
+capture_in "$target_checkout"
+target_canonical="$(verify_in "$target_checkout")"
+[[ "$(component_value "$target_canonical" workflow)" =~ ^[0-9a-f]{12}$ ]]
 
-git -C "$skills_checkout" config remote.origin.url \
-  "$fixture/skills-origin.git"
-(
-  cd "$target_checkout"
-  "$command_under_test" >"$fixture/unidentifiable-skills-origin.json"
-)
-jq -e '
-  .canonical
-  | test(" workflow:[0-9a-f]{12}@example/target tdd:[0-9a-f]{12}\\* review:[0-9a-f]{12}\\* \\(unknown\\)$")
-' "$fixture/unidentifiable-skills-origin.json" >/dev/null
-git -C "$skills_checkout" config remote.origin.url \
+# An unrecognizable skills origin still captures, with an unknown pointer.
+git -C "$skills_checkout" remote set-url origin "$fixture/skills-origin.git"
+capture_in "$target_checkout"
+unknown_canonical="$(verify_in "$target_checkout")"
+[[ "$unknown_canonical" =~ [[:space:]]\(unknown@[0-9a-f]{12}\)$ ]]
+git -C "$skills_checkout" remote set-url origin \
   'https://github.com/example/skills.git'
 
+# Capture requires git.
 no_git_bin="$fixture/no-git-bin"
 mkdir "$no_git_bin"
-for dependency in awk bash cat dirname find grep mktemp pwd readlink rm sha256sum sort; do
-  dependency_path="$(command -v "$dependency")"
-  [[ "$dependency_path" != "$(command -v git)" ]]
+for dependency in awk bash cat cut dirname grep jq mktemp mv printf pwd rm sed sha256sum; do
+  dependency_path="$(command -v "$dependency")" || continue
   ln -s "$dependency_path" "$no_git_bin/$dependency"
 done
+[[ ! -e "$no_git_bin/git" ]]
 if (
   cd "$target_checkout"
-  PATH="$no_git_bin" /bin/bash "$command_under_test"
+  PATH="$no_git_bin" /bin/bash "$command_under_test" capture
 ) >"$fixture/no-git.out" 2>"$fixture/no-git.err"; then
-  printf 'FAIL[no-git]: provenance capture succeeded without git\n' >&2
+  printf 'FAIL[no-git]: capture succeeded without git\n' >&2
   exit 1
 fi
 [[ ! -s "$fixture/no-git.out" ]]
 
+# Capture requires a Git-backed skills checkout.
 non_git_skills_checkout="$fixture/non-git-skills-checkout"
 mkdir -p "$non_git_skills_checkout"
 cp -R "$skills_checkout/skills" "$non_git_skills_checkout/skills"
 non_git_command="$non_git_skills_checkout/skills/personal/work-on/scripts/workflow-provenance.sh"
-if (
-  cd "$target_checkout"
-  "$non_git_command"
-) >"$fixture/non-git-skills.out" 2>"$fixture/non-git-skills.err"; then
-  printf 'FAIL[non-git-skills]: provenance capture succeeded from a non-git skills checkout\n' >&2
+if capture_in "$target_checkout" "$non_git_command" \
+    >"$fixture/non-git-skills.out" 2>"$fixture/non-git-skills.err"; then
+  printf 'FAIL[non-git-skills]: capture succeeded from a non-git skills checkout\n' >&2
   exit 1
 fi
 [[ ! -s "$fixture/non-git-skills.out" ]]
+# The target repository is resolvable here, so a stale ledger is reachable and
+# must not survive the failure.
+[[ ! -e "$target_checkout/.git/work-on-provenance.json" ]]
+
+# Capture requires every declared input to be a readable regular file.
+unreadable_checkout="$fixture/unreadable-checkout"
+cp -R "$skills_checkout" "$unreadable_checkout"
+rm "$unreadable_checkout/skills/engineering/tdd/mocking.md"
+rm -f "$unreadable_checkout/.git/work-on-provenance.json"
+unreadable_command="$unreadable_checkout/skills/personal/work-on/scripts/workflow-provenance.sh"
+if capture_in "$unreadable_checkout" "$unreadable_command" \
+    >"$fixture/unreadable.out" 2>"$fixture/unreadable.err"; then
+  printf 'FAIL[unreadable]: capture succeeded with a missing declared input\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/unreadable.out" ]]
+[[ ! -e "$unreadable_checkout/.git/work-on-provenance.json" ]]
+grep -Fq 'declared instruction input is unreadable' "$fixture/unreadable.err"
+
+# A target docs/workflow.md that exists but is not a readable regular file is a
+# selected input that cannot be read, never a silent fall back to the default.
+invalid_workflow_target="$fixture/invalid-workflow-target"
+git init -q -b main "$invalid_workflow_target"
+git -C "$invalid_workflow_target" config user.name 'Provenance Test'
+git -C "$invalid_workflow_target" config user.email provenance@example.invalid
+invalid_workflow_ledger="$invalid_workflow_target/.git/work-on-provenance.json"
+mkdir -p "$invalid_workflow_target/docs"
+
+refuse_invalid_workflow() {
+  local label="$1"
+  if capture_in "$invalid_workflow_target" \
+      >"$fixture/$label.out" 2>"$fixture/$label.err"; then
+    printf 'FAIL[%s]: capture accepted an invalid target workflow\n' "$label" >&2
+    exit 1
+  fi
+  [[ ! -s "$fixture/$label.out" ]]
+  [[ ! -e "$invalid_workflow_ledger" ]]
+  grep -Fq 'declared instruction input is unreadable' "$fixture/$label.err"
+}
+
+mkdir "$invalid_workflow_target/docs/workflow.md"
+refuse_invalid_workflow workflow-directory
+rmdir "$invalid_workflow_target/docs/workflow.md"
+
+ln -s missing-workflow.md "$invalid_workflow_target/docs/workflow.md"
+refuse_invalid_workflow workflow-broken-symlink
+rm "$invalid_workflow_target/docs/workflow.md"
+
+# Root bypasses permission bits, so the unreadable case is only meaningful for
+# an ordinary user.
+if [[ "$(id -u)" -ne 0 ]]; then
+  printf '# Target workflow\n' >"$invalid_workflow_target/docs/workflow.md"
+  chmod 000 "$invalid_workflow_target/docs/workflow.md"
+  refuse_invalid_workflow workflow-unreadable
+  chmod 644 "$invalid_workflow_target/docs/workflow.md"
+fi
+
+# A failing capture invalidates the previous run's ledger rather than leaving a
+# stale record that a later verify would treat as this run's frozen value.
+stale_checkout="$fixture/stale-ledger-checkout"
+cp -R "$skills_checkout" "$stale_checkout"
+stale_command="$stale_checkout/skills/personal/work-on/scripts/workflow-provenance.sh"
+stale_ledger="$stale_checkout/.git/work-on-provenance.json"
+capture_in "$stale_checkout" "$stale_command"
+[[ -f "$stale_ledger" ]]
+rm "$stale_checkout/skills/engineering/tdd/mocking.md"
+if capture_in "$stale_checkout" "$stale_command" \
+    >"$fixture/stale-ledger.out" 2>"$fixture/stale-ledger.err"; then
+  printf 'FAIL[stale-ledger]: capture succeeded with a missing declared input\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/stale-ledger.out" ]]
+[[ ! -e "$stale_ledger" ]]
+grep -Fq 'declared instruction input is unreadable' "$fixture/stale-ledger.err"
 
 printf 'work-on workflow provenance black-box scenarios passed\n'

@@ -33,7 +33,9 @@ Readable narrative stays readable.
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
-| Workflow provenance | work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456) |
+| Workflow provenance | 1 run |
+
+Run 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
 EOF
 
 "$command_under_test" 164 "$fixture/canonical.md"
@@ -112,7 +114,9 @@ cat >>"$fixture/pr-162.md" <<'EOF'
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
-| Workflow provenance | work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456) |
+| Workflow provenance | 1 run |
+
+Run 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
 EOF
 expect_failure pr-162 "missing canonical closure gate table header"
 
@@ -157,61 +161,73 @@ for field in "${count_fields[@]}"; do
 done
 "$command_under_test" 164 "$fixture/unknown-counts.md"
 
-sed '/| Workflow provenance |/d' "$fixture/canonical.md" \
+sed -e '/| Workflow provenance |/d' -e '/^Run 1: /d' "$fixture/canonical.md" \
   >"$fixture/nine-telemetry-rows.md"
 expect_failure nine-telemetry-rows \
   "workflow telemetry must contain ten canonical rows"
 
 sed 's/work-on:111111111111/work-on:NOT-A-DIGEST/' \
   "$fixture/canonical.md" >"$fixture/malformed-provenance.md"
-expect_failure malformed-provenance "workflow provenance is malformed"
+expect_failure malformed-provenance "workflow provenance run 1 is malformed"
 
-for phase_count in 0 1; do
-  sed "s/| Workflow provenance |.*|/| Workflow provenance | mixed ($phase_count phases) |/" \
-    "$fixture/canonical.md" >"$fixture/too-few-phases-$phase_count.md"
-  expect_failure "too-few-phases-$phase_count" \
-    "workflow provenance is malformed"
+# The trailing pointer always carries a commit, and the workflow digest never
+# carries a repository suffix.
+sed 's/(example\/skills@abcdef123456)/(example\/skills)/' \
+  "$fixture/canonical.md" >"$fixture/pointer-without-sha.md"
+expect_failure pointer-without-sha "workflow provenance run 1 is malformed"
+sed 's/workflow:222222222222/workflow:222222222222@example\/target/' \
+  "$fixture/canonical.md" >"$fixture/workflow-suffix.md"
+expect_failure workflow-suffix "workflow provenance run 1 is malformed"
+
+# An unknown skills origin still carries a commit.
+sed 's/(example\/skills@abcdef123456)/(unknown@abcdef123456)/' \
+  "$fixture/canonical.md" >"$fixture/unknown-pointer.md"
+"$command_under_test" 164 "$fixture/unknown-pointer.md"
+
+# The run count agrees with its plural and with the number of run lines.
+for malformed_count in '0 runs' '1 runs' 'mixed (2 phases)'; do
+  sed "s/| Workflow provenance |.*|/| Workflow provenance | $malformed_count |/" \
+    "$fixture/canonical.md" >"$fixture/malformed-count.md"
+  expect_failure malformed-count "workflow provenance is malformed"
 done
 
-sed 's/| Workflow provenance |.*|/| Workflow provenance | mixed (2 phases) |/' \
-  "$fixture/canonical.md" >"$fixture/phase-count.md"
-cat >>"$fixture/phase-count.md" <<'EOF'
+sed 's/| Workflow provenance |.*|/| Workflow provenance | 2 runs |/' \
+  "$fixture/canonical.md" >"$fixture/run-count.md"
+expect_failure run-count \
+  "workflow provenance run count does not match run lines"
 
-Phase 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
+sed 's/| Workflow provenance |.*|/| Workflow provenance | 2 runs |/' \
+  "$fixture/canonical.md" >"$fixture/two-runs.md"
+cat >>"$fixture/two-runs.md" <<'EOF'
+Run 2: work-on:aaaaaaaaaaaa* workflow:bbbbbbbbbbbb* tdd:cccccccccccc* review:dddddddddddd* (example/skills@123456789abc)
 EOF
-expect_failure phase-count \
-  "workflow provenance phase count does not match phase lines"
+"$command_under_test" --previous "$fixture/canonical.md" 164 "$fixture/two-runs.md"
 
-sed 's/| Workflow provenance |.*|/| Workflow provenance | mixed (2 phases) |/' \
-  "$fixture/canonical.md" >"$fixture/mixed.md"
-cat >>"$fixture/mixed.md" <<'EOF'
+sed 's/^Run 2: /Run 3: /' "$fixture/two-runs.md" >"$fixture/out-of-order.md"
+expect_failure out-of-order \
+  "workflow provenance run 2 is malformed or out of order"
 
-Phase 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
-Phase 2: work-on:aaaaaaaaaaaa* workflow:bbbbbbbbbbbb*@example/target tdd:cccccccccccc* review:dddddddddddd* (example/skills@123456789abc)
-EOF
-"$command_under_test" --previous "$fixture/canonical.md" 164 "$fixture/mixed.md"
-
-sed 's/| Workflow provenance |.*|/| Workflow provenance | mixed (10 phases) |/' \
-  "$fixture/canonical.md" >"$fixture/ten-phases.md"
-printf '\n' >>"$fixture/ten-phases.md"
-for phase_number in {1..10}; do
-  printf 'Phase %s: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)\n' \
-    "$phase_number" >>"$fixture/ten-phases.md"
+sed 's/| Workflow provenance |.*|/| Workflow provenance | 10 runs |/' \
+  "$fixture/canonical.md" >"$fixture/ten-runs.md"
+sed -i '/^Run 1: /d' "$fixture/ten-runs.md"
+for run_number in {1..10}; do
+  printf 'Run %s: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)\n' \
+    "$run_number" >>"$fixture/ten-runs.md"
 done
-"$command_under_test" 164 "$fixture/ten-phases.md"
+"$command_under_test" 164 "$fixture/ten-runs.md"
 
 if "$command_under_test" --previous "$fixture/canonical.md" \
     164 "$fixture/canonical.md" >"$fixture/unchanged.out" 2>"$fixture/unchanged.err"; then
-  printf 'FAIL[unchanged-body]: validator accepted a body with no appended phase\n' >&2
+  printf 'FAIL[unchanged-body]: validator accepted a body with no appended run\n' >&2
   exit 1
 fi
 [[ ! -s "$fixture/unchanged.out" ]]
 grep -Fqx \
-  'closeout body invalid: workflow provenance must append at least one phase' \
+  'closeout body invalid: workflow provenance must append at least one run' \
   "$fixture/unchanged.err"
 
 sed 's/| Validation executions | 3 |/| Validation executions | 2 |/' \
-  "$fixture/mixed.md" >"$fixture/decreased-count.md"
+  "$fixture/two-runs.md" >"$fixture/decreased-count.md"
 if "$command_under_test" --previous "$fixture/canonical.md" \
     164 "$fixture/decreased-count.md" \
     >"$fixture/decreased-count.out" 2>"$fixture/decreased-count.err"; then
@@ -223,26 +239,26 @@ grep -Fqx \
   'closeout body invalid: workflow telemetry Validation executions decreased from 3 to 2' \
   "$fixture/decreased-count.err"
 
-if "$command_under_test" --previous "$fixture/mixed.md" \
+if "$command_under_test" --previous "$fixture/two-runs.md" \
     164 "$fixture/canonical.md" >"$fixture/dropped.out" 2>"$fixture/dropped.err"; then
-  printf 'FAIL[dropped-phases]: validator accepted dropped provenance phases\n' >&2
+  printf 'FAIL[dropped-runs]: validator accepted dropped provenance runs\n' >&2
   exit 1
 fi
 [[ ! -s "$fixture/dropped.out" ]]
 grep -Fqx \
-  'closeout body invalid: workflow provenance dropped previous phases' \
+  'closeout body invalid: workflow provenance dropped previous runs' \
   "$fixture/dropped.err"
 
-sed 's/^Phase 1: work-on:111111111111/Phase 1: work-on:999999999999/' \
-  "$fixture/mixed.md" >"$fixture/rewritten.md"
-if "$command_under_test" --previous "$fixture/mixed.md" \
+sed 's/^Run 1: work-on:111111111111/Run 1: work-on:999999999999/' \
+  "$fixture/two-runs.md" >"$fixture/rewritten.md"
+if "$command_under_test" --previous "$fixture/two-runs.md" \
     164 "$fixture/rewritten.md" >"$fixture/rewritten.out" 2>"$fixture/rewritten.err"; then
-  printf 'FAIL[rewritten-phase]: validator accepted rewritten provenance\n' >&2
+  printf 'FAIL[rewritten-run]: validator accepted rewritten provenance\n' >&2
   exit 1
 fi
 [[ ! -s "$fixture/rewritten.out" ]]
 grep -Fqx \
-  'closeout body invalid: workflow provenance rewrote previous phase 1' \
+  'closeout body invalid: workflow provenance rewrote previous run 1' \
   "$fixture/rewritten.err"
 
 printf 'work-on closeout body validator black-box scenarios passed\n'

@@ -45,10 +45,9 @@ Procedure:
 5. Use `docs/workflow.md` when present and announce it; otherwise use this
    skill's `references/default-workflow.md`. Read the selected source and treat
    it as binding. Done when read and, for a repo workflow, announced.
-6. Immediately before delegating implementation, run
-   `~/.agents/skills/work-on/scripts/workflow-provenance.sh > "$(git rev-parse --git-dir)/work-on-provenance.json"`
-   to freeze the current run's governing instructions. Abort if capture fails.
-   Done with the provenance ledger in the target repository's git directory.
+6. Immediately before delegating implementation, run this skill's
+   `scripts/workflow-provenance.sh capture` to freeze the governing
+   instructions this run read. Abort if it fails. Done when capture succeeds.
 7. Follow it without broadening the issue. When code changes are ready for a
    pull request, read and follow `references/github-closeout.md`. Build the
    closeout through `scripts/render-closeout.sh`; never hand-compose its Issues,

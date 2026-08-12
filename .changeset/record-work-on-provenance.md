@@ -2,4 +2,4 @@
 "faviann-skills": patch
 ---
 
-Record the complete work-on, TDD, and review skill directories plus the selected workflow file that govern each pull-request closeout, preserving ordered phases across resumed runs.
+Record the declared work-on, TDD, and review instruction files plus the selected workflow file that govern each pull-request closeout, as one appended run per root run.
