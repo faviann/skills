@@ -247,8 +247,10 @@ if [[ -n "$previous_source" ]]; then
     [[ "${provenance_runs[$index]}" == "${previous_runs[$index]}" ]] \
       || fail "workflow provenance rewrote previous run $((index + 1))"
   done
-  [[ "${#provenance_runs[@]}" -gt "${#previous_runs[@]}" ]] \
-    || fail "workflow provenance must append at least one run"
+  # One root run contributes one ledger value. More than one appended entry
+  # cannot have come from a single run's ledger.
+  [[ "${#provenance_runs[@]}" -eq $((${#previous_runs[@]} + 1)) ]] \
+    || fail "workflow provenance must append exactly one run"
 
   mapfile -t previous_count_values < <(awk -F'|' '
     function trim(value) {
@@ -267,6 +269,12 @@ if [[ -n "$previous_source" ]]; then
   for ((index = 0; index < ${#telemetry_count_values[@]}; index++)); do
     previous_count="${previous_count_values[$index]}"
     current_count="${telemetry_count_values[$index]}"
+    # `unknown` is a permitted starting state, but a count that was once known
+    # is a lower bound the pull request established; replacing it with
+    # `unknown` discards that bound as surely as decreasing it would.
+    if [[ "$previous_count" =~ ^[0-9]+$ && "$current_count" == unknown ]]; then
+      fail "workflow telemetry ${telemetry_fields[$((index + 2))]} became unknown after $previous_count"
+    fi
     if [[ "$previous_count" =~ ^[0-9]+$ && "$current_count" =~ ^[0-9]+$ ]] \
         && decimal_is_less_than "$current_count" "$previous_count"; then
       fail "workflow telemetry ${telemetry_fields[$((index + 2))]} decreased from $previous_count to $current_count"

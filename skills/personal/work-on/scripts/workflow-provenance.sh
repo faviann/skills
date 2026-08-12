@@ -53,56 +53,20 @@ inputs_digest() {
   printf '%s' "$payload" | sha256sum | cut -c1-12
 }
 
-normalize_repo_path() {
-  local part out=()
-  local IFS=/
-  for part in $1; do
-    case "$part" in
-      '' | .) ;;
-      ..)
-        [[ "${#out[@]}" -gt 0 ]] || return 1
-        unset 'out[-1]'
-        ;;
-      *) out+=("$part") ;;
-    esac
-  done
-  [[ "${#out[@]}" -gt 0 ]] || return 1
-  printf '%s' "${out[*]}"
-}
-
-# Git stores a symlink's target text as the blob, but the run reads the file the
-# link resolves to. Follow symlink entries inside HEAD so a committed,
-# unmodified symlink compares equal to the bytes Bash hashed.
-head_blob() {
-  local root="$1" rel="$2" depth=0 entry mode target dir
-  while ((depth++ < 10)); do
-    entry="$(git -C "$root" ls-tree HEAD -- "$rel" 2>/dev/null)" || return 1
-    [[ -n "$entry" ]] || return 1
-    mode="${entry%% *}"
-    if [[ "$mode" != 120000 ]]; then
-      git -C "$root" rev-parse --quiet --verify "HEAD:$rel" 2>/dev/null
-      return
-    fi
-    target="$(git -C "$root" cat-file blob "HEAD:$rel" 2>/dev/null)" || return 1
-    # An absolute or repository-escaping target is outside the identity Git can
-    # account for; treat it as unresolvable rather than guessing.
-    [[ "$target" != /* ]] || return 1
-    dir="${rel%/*}"
-    [[ "$dir" != "$rel" ]] || dir=""
-    rel="$(normalize_repo_path "${dir:+$dir/}$target")" || return 1
-  done
-  return 1
-}
-
-head_digest() {
-  local root="$1" rel payload="" blob
+# `*` means the component's declared inputs differ from that repository's HEAD.
+# Git answers this directly, so provenance carries no tree-walking of its own:
+# no blob comparison, no symlink resolution, no path normalization. An input
+# absent from HEAD is a difference too, which `git diff` alone would not report.
+star_for() {
+  local root="$1" rel
   shift
   for rel in "$@"; do
-    blob="$(head_blob "$root" "$rel")" || return 1
-    [[ -n "$blob" ]] || return 1
-    payload+="$rel"$'\n'"$(git -C "$root" cat-file blob "$blob" | sha256sum)"$'\n'
+    git -C "$root" cat-file -e "HEAD:$rel" 2>/dev/null || {
+      printf '*'
+      return
+    }
   done
-  printf '%s' "$payload" | sha256sum | cut -c1-12
+  git -C "$root" diff --quiet HEAD -- "$@" 2>/dev/null || printf '*'
 }
 
 origin_slug() {
@@ -177,26 +141,18 @@ if [[ "$subcommand" == verify ]]; then
   exit 0
 fi
 
-# `*` means the component's declared inputs differ from that repository's
-# HEAD. It makes no claim about whether the commit is fetchable.
-star_for() {
-  local root="$1" digest="$2"
-  shift 2
-  [[ "$(head_digest "$root" "$@" || true)" == "$digest" ]] || printf '*'
-}
-
 skills_sha="$(git -C "$skills_checkout" rev-parse --short=12 HEAD)" \
   || fail "capture requires a committed skills checkout"
 pointer="$(origin_slug "$skills_checkout" || printf 'unknown')@$skills_sha"
 
 canonical="work-on:$work_on_digest$(star_for "$skills_checkout" \
-  "$work_on_digest" "${work_on_inputs[@]}")"
+  "${work_on_inputs[@]}")"
 canonical+=" workflow:$workflow_digest$(star_for "$workflow_root" \
-  "$workflow_digest" "${workflow_inputs[@]}")"
+  "${workflow_inputs[@]}")"
 canonical+=" tdd:$tdd_digest$(star_for "$skills_checkout" \
-  "$tdd_digest" "${tdd_inputs[@]}")"
+  "${tdd_inputs[@]}")"
 canonical+=" review:$review_digest$(star_for "$skills_checkout" \
-  "$review_digest" "${review_inputs[@]}")"
+  "${review_inputs[@]}")"
 canonical+=" ($pointer)"
 
 staged="$ledger.$$"

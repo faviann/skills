@@ -223,8 +223,52 @@ if "$command_under_test" --previous "$fixture/canonical.md" \
 fi
 [[ ! -s "$fixture/unchanged.out" ]]
 grep -Fqx \
-  'closeout body invalid: workflow provenance must append at least one run' \
+  'closeout body invalid: workflow provenance must append exactly one run' \
   "$fixture/unchanged.err"
+
+# One root run appends one entry. Two at once cannot have come from a single
+# ledger, so the extra entry is unattributable.
+sed 's/| Workflow provenance |.*|/| Workflow provenance | 3 runs |/' \
+  "$fixture/two-runs.md" >"$fixture/three-runs.md"
+cat >>"$fixture/three-runs.md" <<'EOF'
+Run 3: work-on:eeeeeeeeeeee workflow:ffffffffffff tdd:111111111111 review:222222222222 (example/skills@456789abcdef)
+EOF
+"$command_under_test" 164 "$fixture/three-runs.md"
+if "$command_under_test" --previous "$fixture/canonical.md" \
+    164 "$fixture/three-runs.md" \
+    >"$fixture/two-appended.out" 2>"$fixture/two-appended.err"; then
+  printf 'FAIL[two-appended]: validator accepted two appended runs\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/two-appended.out" ]]
+grep -Fqx \
+  'closeout body invalid: workflow provenance must append exactly one run' \
+  "$fixture/two-appended.err"
+
+# `unknown` is a permitted starting state, but replacing a known count with it
+# discards a lower bound the pull request had already established.
+sed 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
+  "$fixture/two-runs.md" >"$fixture/count-to-unknown.md"
+if "$command_under_test" --previous "$fixture/canonical.md" \
+    164 "$fixture/count-to-unknown.md" \
+    >"$fixture/count-to-unknown.out" 2>"$fixture/count-to-unknown.err"; then
+  printf 'FAIL[count-to-unknown]: validator accepted a known count becoming unknown\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/count-to-unknown.out" ]]
+grep -Fqx \
+  'closeout body invalid: workflow telemetry Validation executions became unknown after 3' \
+  "$fixture/count-to-unknown.err"
+
+# An unknown count may still stay unknown, and may become known.
+sed -e 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
+  "$fixture/canonical.md" >"$fixture/unknown-previous.md"
+"$command_under_test" --previous "$fixture/unknown-previous.md" \
+  164 "$fixture/two-runs.md"
+sed 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
+  "$fixture/two-runs.md" >"$fixture/unknown-both.md"
+"$command_under_test" --previous "$fixture/unknown-previous.md" \
+  164 "$fixture/unknown-both.md"
 
 sed 's/| Validation executions | 3 |/| Validation executions | 2 |/' \
   "$fixture/two-runs.md" >"$fixture/decreased-count.md"
