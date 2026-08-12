@@ -52,6 +52,21 @@ Unverified:
 Risks:
 ```
 
+Give the readiness sweep, both `code-review` axes, and closure sweep this brief:
+after reproducing a defect, name its mechanism and governing criterion, then
+trace only its immediate neighborhood — the same boundary's branches, call
+sites, and input shapes; diagnostics from the same untrusted source; or states
+under the same invariant. For a failure-raising operation, enumerate its
+occurrences in the same public flow and attempt the seed-shaped input at each
+compatible one through its public entry point, including in-process test entry
+points. Count a sibling only at a distinct branch, call site, diagnostic, or
+governed state; more inputs at the seed location are reproduction evidence, not
+siblings. Group the seed with minimally reproduced siblings, each with its own
+location, criterion, and impact; report the seed alone when none reproduce.
+State the stop boundary and stop before another criterion, subsystem, external
+boundary, or speculative defense. Report reproduced instances only; the
+primary retains adjudication and repair.
+
 ## 3. Primary checkpoint
 
 Inspect the worktree and run affected focused checks. Before the first commit,
