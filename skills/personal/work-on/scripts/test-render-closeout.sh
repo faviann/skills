@@ -17,10 +17,7 @@ git -C "$skills_checkout" config user.name 'Closeout Test'
 git -C "$skills_checkout" config user.email closeout@example.invalid
 git -C "$skills_checkout" add .
 git -C "$skills_checkout" commit -qm fixture
-git init -q --bare "$fixture/skills-origin.git"
-git -C "$skills_checkout" remote add origin "$fixture/skills-origin.git"
-git -C "$skills_checkout" push -q -u origin main
-git -C "$skills_checkout" config remote.origin.url \
+git -C "$skills_checkout" remote add origin \
   'https://github.com/example/skills.git'
 
 readonly command_under_test="$skills_checkout/skills/personal/work-on/scripts/render-closeout.sh"

@@ -48,6 +48,12 @@ clean_workflow="$(component_value "$clean_canonical" workflow)"
 clean_tdd="$(component_value "$clean_canonical" tdd)"
 clean_review="$(component_value "$clean_canonical" review)"
 
+# File modes are not instruction identity.
+chmod +x "$skills_checkout/skills/engineering/tdd/tests.md"
+capture_in "$skills_checkout"
+[[ "$(verify_in "$skills_checkout")" == "$clean_canonical" ]]
+chmod -x "$skills_checkout/skills/engineering/tdd/tests.md"
+
 # A changed declared input stars and changes only its own component.
 printf 'dirty instruction change\n' \
   >>"$skills_checkout/skills/engineering/tdd/tests.md"
@@ -140,11 +146,9 @@ git -C "$target_checkout" commit -qm 'target fixture'
 capture_in "$target_checkout"
 target_canonical="$(verify_in "$target_checkout")"
 [[ "$(component_value "$target_canonical" workflow)" =~ ^[0-9a-f]{12}$ ]]
-target_workflow="$(component_value "$target_canonical" workflow)"
 
-# A committed, unmodified instruction symlink is clean, and its identity is the
-# bytes read through the link — identical to a regular file of the same content
-# at the same declared path.
+# A declared instruction input must itself be an ordinary file, even when its
+# target is readable.
 symlink_checkout="$fixture/symlink-checkout"
 git init -q -b main "$symlink_checkout"
 git -C "$symlink_checkout" config user.name 'Provenance Test'
@@ -154,25 +158,26 @@ printf '# Target workflow\n' >"$symlink_checkout/workflows/main.md"
 ln -s ../workflows/main.md "$symlink_checkout/docs/workflow.md"
 git -C "$symlink_checkout" add .
 git -C "$symlink_checkout" commit -qm 'symlinked workflow fixture'
-capture_in "$symlink_checkout"
-symlink_canonical="$(verify_in "$symlink_checkout")"
-[[ "$(component_value "$symlink_canonical" workflow)" == "$target_workflow" ]]
-
-# Editing through the link changes the identity, which is what comparability
-# rests on. The star is Git's own view of the declared path and does not follow
-# the link, so it stays clear here; this is the documented limit of the
-# component-level star, not a claim that the bytes are committed.
-printf 'linked workflow change\n' >>"$symlink_checkout/workflows/main.md"
-capture_in "$symlink_checkout"
-symlink_edited="$(component_value "$(verify_in "$symlink_checkout")" workflow)"
-[[ "${symlink_edited%\*}" != "$target_workflow" ]]
-git -C "$symlink_checkout" checkout -q -- workflows/main.md
+if capture_in "$symlink_checkout" \
+    >"$fixture/symlink.out" 2>"$fixture/symlink.err"; then
+  printf 'FAIL[symlink]: capture accepted a declared input symlink\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/symlink.out" ]]
+[[ ! -e "$symlink_checkout/.git/work-on-provenance.json" ]]
+grep -Fq 'declared instruction input is unreadable' "$fixture/symlink.err"
 
 # An unrecognizable skills origin still captures, with an unknown pointer.
 git -C "$skills_checkout" remote set-url origin "$fixture/skills-origin.git"
 capture_in "$target_checkout"
 unknown_canonical="$(verify_in "$target_checkout")"
 [[ "$unknown_canonical" =~ [[:space:]]\(unknown@[0-9a-f]{12}\)$ ]]
+
+git -C "$skills_checkout" remote set-url origin \
+  'https://example.invalid/github.com/not-github/repo.git'
+capture_in "$target_checkout"
+non_github_canonical="$(verify_in "$target_checkout")"
+[[ "$non_github_canonical" =~ [[:space:]]\(unknown@[0-9a-f]{12}\)$ ]]
 git -C "$skills_checkout" remote set-url origin \
   'https://github.com/example/skills.git'
 

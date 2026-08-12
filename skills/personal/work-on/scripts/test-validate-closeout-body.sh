@@ -66,8 +66,11 @@ grep -Fqx \
 "$command_under_test" --require-closes 164 "$fixture/canonical.md"
 
 expect_failure() {
-  local name="$1" diagnostic="$2"
-  if "$command_under_test" 164 "$fixture/$name.md" >"$fixture/$name.out" 2>"$fixture/$name.err"; then
+  local name="$1" diagnostic="$2" body="${3:-$1}" previous="${4:-}"
+  local previous_args=()
+  [[ -z "$previous" ]] || previous_args=(--previous "$fixture/$previous.md")
+  if "$command_under_test" "${previous_args[@]}" 164 "$fixture/$body.md" \
+      >"$fixture/$name.out" 2>"$fixture/$name.err"; then
     printf 'FAIL[%s]: malformed body was accepted\n' "$name" >&2
     exit 1
   fi
@@ -216,15 +219,8 @@ for run_number in {1..10}; do
 done
 "$command_under_test" 164 "$fixture/ten-runs.md"
 
-if "$command_under_test" --previous "$fixture/canonical.md" \
-    164 "$fixture/canonical.md" >"$fixture/unchanged.out" 2>"$fixture/unchanged.err"; then
-  printf 'FAIL[unchanged-body]: validator accepted a body with no appended run\n' >&2
-  exit 1
-fi
-[[ ! -s "$fixture/unchanged.out" ]]
-grep -Fqx \
-  'closeout body invalid: workflow provenance must append exactly one run' \
-  "$fixture/unchanged.err"
+expect_failure unchanged-body \
+  "workflow provenance must append exactly one run" canonical canonical
 
 # One root run appends one entry. Two at once cannot have come from a single
 # ledger, so the extra entry is unattributable.
@@ -234,31 +230,16 @@ cat >>"$fixture/three-runs.md" <<'EOF'
 Run 3: work-on:eeeeeeeeeeee workflow:ffffffffffff tdd:111111111111 review:222222222222 (example/skills@456789abcdef)
 EOF
 "$command_under_test" 164 "$fixture/three-runs.md"
-if "$command_under_test" --previous "$fixture/canonical.md" \
-    164 "$fixture/three-runs.md" \
-    >"$fixture/two-appended.out" 2>"$fixture/two-appended.err"; then
-  printf 'FAIL[two-appended]: validator accepted two appended runs\n' >&2
-  exit 1
-fi
-[[ ! -s "$fixture/two-appended.out" ]]
-grep -Fqx \
-  'closeout body invalid: workflow provenance must append exactly one run' \
-  "$fixture/two-appended.err"
+expect_failure two-appended \
+  "workflow provenance must append exactly one run" three-runs canonical
 
 # `unknown` is a permitted starting state, but replacing a known count with it
 # discards a lower bound the pull request had already established.
 sed 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
   "$fixture/two-runs.md" >"$fixture/count-to-unknown.md"
-if "$command_under_test" --previous "$fixture/canonical.md" \
-    164 "$fixture/count-to-unknown.md" \
-    >"$fixture/count-to-unknown.out" 2>"$fixture/count-to-unknown.err"; then
-  printf 'FAIL[count-to-unknown]: validator accepted a known count becoming unknown\n' >&2
-  exit 1
-fi
-[[ ! -s "$fixture/count-to-unknown.out" ]]
-grep -Fqx \
-  'closeout body invalid: workflow telemetry Validation executions became unknown after 3' \
-  "$fixture/count-to-unknown.err"
+expect_failure count-to-unknown \
+  "workflow telemetry Validation executions became unknown after 3" \
+  count-to-unknown canonical
 
 # An unknown count may still stay unknown, and may become known.
 sed -e 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
@@ -272,37 +253,16 @@ sed 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
 
 sed 's/| Validation executions | 3 |/| Validation executions | 2 |/' \
   "$fixture/two-runs.md" >"$fixture/decreased-count.md"
-if "$command_under_test" --previous "$fixture/canonical.md" \
-    164 "$fixture/decreased-count.md" \
-    >"$fixture/decreased-count.out" 2>"$fixture/decreased-count.err"; then
-  printf 'FAIL[decreased-count]: validator accepted decreased telemetry\n' >&2
-  exit 1
-fi
-[[ ! -s "$fixture/decreased-count.out" ]]
-grep -Fqx \
-  'closeout body invalid: workflow telemetry Validation executions decreased from 3 to 2' \
-  "$fixture/decreased-count.err"
+expect_failure decreased-count \
+  "workflow telemetry Validation executions decreased from 3 to 2" \
+  decreased-count canonical
 
-if "$command_under_test" --previous "$fixture/two-runs.md" \
-    164 "$fixture/canonical.md" >"$fixture/dropped.out" 2>"$fixture/dropped.err"; then
-  printf 'FAIL[dropped-runs]: validator accepted dropped provenance runs\n' >&2
-  exit 1
-fi
-[[ ! -s "$fixture/dropped.out" ]]
-grep -Fqx \
-  'closeout body invalid: workflow provenance dropped previous runs' \
-  "$fixture/dropped.err"
+expect_failure dropped-runs \
+  "workflow provenance dropped previous runs" canonical two-runs
 
 sed 's/^Run 1: work-on:111111111111/Run 1: work-on:999999999999/' \
   "$fixture/two-runs.md" >"$fixture/rewritten.md"
-if "$command_under_test" --previous "$fixture/two-runs.md" \
-    164 "$fixture/rewritten.md" >"$fixture/rewritten.out" 2>"$fixture/rewritten.err"; then
-  printf 'FAIL[rewritten-run]: validator accepted rewritten provenance\n' >&2
-  exit 1
-fi
-[[ ! -s "$fixture/rewritten.out" ]]
-grep -Fqx \
-  'closeout body invalid: workflow provenance rewrote previous run 1' \
-  "$fixture/rewritten.err"
+expect_failure rewritten-run \
+  "workflow provenance rewrote previous run 1" rewritten two-runs
 
 printf 'work-on closeout body validator black-box scenarios passed\n'

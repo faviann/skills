@@ -40,44 +40,44 @@ fail() {
 }
 
 # Identity is the declared relative path plus the exact bytes of each input,
-# in declaration order. Executable modes and symlink-node identity are not
-# part of it; every input must resolve to a readable regular file.
+# in declaration order. Executable modes are not part of it; every input must
+# itself be a readable regular file.
 inputs_digest() {
   local root="$1" rel payload=""
   shift
   for rel in "$@"; do
-    [[ -f "$root/$rel" && -r "$root/$rel" ]] \
+    [[ -f "$root/$rel" && ! -L "$root/$rel" && -r "$root/$rel" ]] \
       || fail "declared instruction input is unreadable: $root/$rel"
     payload+="$rel"$'\n'"$(sha256sum <"$root/$rel")"$'\n'
   done
   printf '%s' "$payload" | sha256sum | cut -c1-12
 }
 
-# `*` means the component's declared inputs differ from that repository's HEAD.
-# Git answers this directly, so provenance carries no tree-walking of its own:
-# no blob comparison, no symlink resolution, no path normalization. An input
-# absent from HEAD is a difference too, which `git diff` alone would not report.
+# `*` means a declared input's filename or bytes differ from that repository's
+# HEAD. Modes are not identity; compare the declared paths directly without
+# walking trees, resolving symlinks, or normalizing paths.
 star_for() {
-  local root="$1" rel
+  local root="$1" rel head_hash
   shift
   for rel in "$@"; do
-    git -C "$root" cat-file -e "HEAD:$rel" 2>/dev/null || {
+    head_hash="$(git -C "$root" show "HEAD:$rel" 2>/dev/null | sha256sum)" || {
+      printf '*'
+      return
+    }
+    [[ "$head_hash" == "$(sha256sum <"$root/$rel")" ]] || {
       printf '*'
       return
     }
   done
-  git -C "$root" diff --quiet HEAD -- "$@" 2>/dev/null || printf '*'
 }
 
 origin_slug() {
   local origin slug
   origin="$(git -C "$1" remote get-url origin 2>/dev/null)" || return 1
   origin="${origin%.git}"
-  case "$origin" in
-    *github.com:*) slug="${origin##*github.com:}" ;;
-    *github.com/*) slug="${origin##*github.com/}" ;;
-    *) return 1 ;;
-  esac
+  [[ "$origin" =~ ^([A-Za-z][A-Za-z0-9+.-]*://([^/@]+@)?github\.com(:[0-9]+)?/|([^/:@]+@)?github\.com:)(.*)$ ]] \
+    || return 1
+  slug="${BASH_REMATCH[5]}"
   # Only a real owner/repo identifier is a recognizable pointer. Anything else
   # is `unknown`: the slug is interpolated into the ledger JSON and the pull
   # request row, and characters outside this set would corrupt both.
