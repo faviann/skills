@@ -173,6 +173,10 @@ sed 's/work-on:111111111111/work-on:NOT-A-DIGEST/' \
   "$fixture/canonical.md" >"$fixture/malformed-provenance.md"
 expect_failure malformed-provenance "workflow provenance run 1 is malformed"
 
+sed $'/^Run 1: /s/ /\t/3g' \
+  "$fixture/canonical.md" >"$fixture/tab-separated-provenance.md"
+expect_failure tab-separated-provenance "workflow provenance run 1 is malformed"
+
 # The trailing pointer always carries a commit, and the workflow digest never
 # carries a repository suffix.
 sed 's/(example\/skills@abcdef123456)/(example\/skills)/' \

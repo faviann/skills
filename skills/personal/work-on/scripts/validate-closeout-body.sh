@@ -201,7 +201,7 @@ done
 [[ "$telemetry_outcome" == "$issue_outcome" ]] \
   || fail "issue outcome $issue_outcome contradicts telemetry outcome $telemetry_outcome"
 
-canonical_provenance_pattern='^work-on:[0-9a-f]{12}\*?[[:space:]]workflow:[0-9a-f]{12}\*?[[:space:]]tdd:[0-9a-f]{12}\*?[[:space:]]review:[0-9a-f]{12}\*?[[:space:]]\(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+|unknown)@[0-9a-f]{7,40}\)$'
+canonical_provenance_pattern='^work-on:[0-9a-f]{12}\*? workflow:[0-9a-f]{12}\*? tdd:[0-9a-f]{12}\*? review:[0-9a-f]{12}\*? \(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+|unknown)@[0-9a-f]{7,40}\)$'
 
 [[ "$provenance_value" =~ ^([1-9][0-9]*)[[:space:]]runs?$ ]] \
   || fail "workflow provenance is malformed"
