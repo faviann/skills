@@ -33,6 +33,9 @@ Readable narrative stays readable.
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
+| Workflow provenance | 1 run |
+
+Run 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
 EOF
 
 "$command_under_test" 164 "$fixture/canonical.md"
@@ -63,8 +66,11 @@ grep -Fqx \
 "$command_under_test" --require-closes 164 "$fixture/canonical.md"
 
 expect_failure() {
-  local name="$1" diagnostic="$2"
-  if "$command_under_test" 164 "$fixture/$name.md" >"$fixture/$name.out" 2>"$fixture/$name.err"; then
+  local name="$1" diagnostic="$2" body="${3:-$1}" previous="${4:-}"
+  local previous_args=()
+  [[ -z "$previous" ]] || previous_args=(--previous "$fixture/$previous.md")
+  if "$command_under_test" "${previous_args[@]}" 164 "$fixture/$body.md" \
+      >"$fixture/$name.out" 2>"$fixture/$name.err"; then
     printf 'FAIL[%s]: malformed body was accepted\n' "$name" >&2
     exit 1
   fi
@@ -111,6 +117,9 @@ cat >>"$fixture/pr-162.md" <<'EOF'
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
+| Workflow provenance | 1 run |
+
+Run 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
 EOF
 expect_failure pr-162 "missing canonical closure gate table header"
 
@@ -154,5 +163,110 @@ for field in "${count_fields[@]}"; do
   mv "$fixture/unknown-counts.next" "$fixture/unknown-counts.md"
 done
 "$command_under_test" 164 "$fixture/unknown-counts.md"
+
+sed -e '/| Workflow provenance |/d' -e '/^Run 1: /d' "$fixture/canonical.md" \
+  >"$fixture/nine-telemetry-rows.md"
+expect_failure nine-telemetry-rows \
+  "workflow telemetry must contain ten canonical rows"
+
+sed 's/work-on:111111111111/work-on:NOT-A-DIGEST/' \
+  "$fixture/canonical.md" >"$fixture/malformed-provenance.md"
+expect_failure malformed-provenance "workflow provenance run 1 is malformed"
+
+sed $'/^Run 1: /s/ /\t/3g' \
+  "$fixture/canonical.md" >"$fixture/tab-separated-provenance.md"
+expect_failure tab-separated-provenance "workflow provenance run 1 is malformed"
+
+# The trailing pointer always carries a commit, and the workflow digest never
+# carries a repository suffix.
+sed 's/(example\/skills@abcdef123456)/(example\/skills)/' \
+  "$fixture/canonical.md" >"$fixture/pointer-without-sha.md"
+expect_failure pointer-without-sha "workflow provenance run 1 is malformed"
+sed 's/workflow:222222222222/workflow:222222222222@example\/target/' \
+  "$fixture/canonical.md" >"$fixture/workflow-suffix.md"
+expect_failure workflow-suffix "workflow provenance run 1 is malformed"
+
+# An unknown skills origin still carries a commit.
+sed 's/(example\/skills@abcdef123456)/(unknown@abcdef123456)/' \
+  "$fixture/canonical.md" >"$fixture/unknown-pointer.md"
+"$command_under_test" 164 "$fixture/unknown-pointer.md"
+
+# The run count agrees with its plural and with the number of run lines.
+for malformed_count in '0 runs' '1 runs' 'mixed (2 phases)'; do
+  sed "s/| Workflow provenance |.*|/| Workflow provenance | $malformed_count |/" \
+    "$fixture/canonical.md" >"$fixture/malformed-count.md"
+  expect_failure malformed-count "workflow provenance is malformed"
+done
+
+sed 's/| Workflow provenance |.*|/| Workflow provenance | 2 runs |/' \
+  "$fixture/canonical.md" >"$fixture/run-count.md"
+expect_failure run-count \
+  "workflow provenance run count does not match run lines"
+
+sed 's/| Workflow provenance |.*|/| Workflow provenance | 2 runs |/' \
+  "$fixture/canonical.md" >"$fixture/two-runs.md"
+cat >>"$fixture/two-runs.md" <<'EOF'
+Run 2: work-on:aaaaaaaaaaaa* workflow:bbbbbbbbbbbb* tdd:cccccccccccc* review:dddddddddddd* (example/skills@123456789abc)
+EOF
+"$command_under_test" --previous "$fixture/canonical.md" 164 "$fixture/two-runs.md"
+
+sed 's/^Run 2: /Run 3: /' "$fixture/two-runs.md" >"$fixture/out-of-order.md"
+expect_failure out-of-order \
+  "workflow provenance run 2 is malformed or out of order"
+
+sed 's/| Workflow provenance |.*|/| Workflow provenance | 10 runs |/' \
+  "$fixture/canonical.md" >"$fixture/ten-runs.md"
+sed -i '/^Run 1: /d' "$fixture/ten-runs.md"
+for run_number in {1..10}; do
+  printf 'Run %s: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)\n' \
+    "$run_number" >>"$fixture/ten-runs.md"
+done
+"$command_under_test" 164 "$fixture/ten-runs.md"
+
+expect_failure unchanged-body \
+  "workflow provenance must append exactly one run" canonical canonical
+
+# One root run appends one entry. Two at once cannot have come from a single
+# ledger, so the extra entry is unattributable.
+sed 's/| Workflow provenance |.*|/| Workflow provenance | 3 runs |/' \
+  "$fixture/two-runs.md" >"$fixture/three-runs.md"
+cat >>"$fixture/three-runs.md" <<'EOF'
+Run 3: work-on:eeeeeeeeeeee workflow:ffffffffffff tdd:111111111111 review:222222222222 (example/skills@456789abcdef)
+EOF
+"$command_under_test" 164 "$fixture/three-runs.md"
+expect_failure two-appended \
+  "workflow provenance must append exactly one run" three-runs canonical
+
+# `unknown` is a permitted starting state, but replacing a known count with it
+# discards a lower bound the pull request had already established.
+sed 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
+  "$fixture/two-runs.md" >"$fixture/count-to-unknown.md"
+expect_failure count-to-unknown \
+  "workflow telemetry Validation executions became unknown after 3" \
+  count-to-unknown canonical
+
+# An unknown count may still stay unknown, and may become known.
+sed -e 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
+  "$fixture/canonical.md" >"$fixture/unknown-previous.md"
+"$command_under_test" --previous "$fixture/unknown-previous.md" \
+  164 "$fixture/two-runs.md"
+sed 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
+  "$fixture/two-runs.md" >"$fixture/unknown-both.md"
+"$command_under_test" --previous "$fixture/unknown-previous.md" \
+  164 "$fixture/unknown-both.md"
+
+sed 's/| Validation executions | 3 |/| Validation executions | 2 |/' \
+  "$fixture/two-runs.md" >"$fixture/decreased-count.md"
+expect_failure decreased-count \
+  "workflow telemetry Validation executions decreased from 3 to 2" \
+  decreased-count canonical
+
+expect_failure dropped-runs \
+  "workflow provenance dropped previous runs" canonical two-runs
+
+sed 's/^Run 1: work-on:111111111111/Run 1: work-on:999999999999/' \
+  "$fixture/two-runs.md" >"$fixture/rewritten.md"
+expect_failure rewritten-run \
+  "workflow provenance rewrote previous run 1" rewritten two-runs
 
 printf 'work-on closeout body validator black-box scenarios passed\n'

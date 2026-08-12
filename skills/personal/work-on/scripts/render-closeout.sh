@@ -6,14 +6,26 @@ set -euo pipefail
 # copied under a renderer-owned narrative boundary between the issue mapping
 # and the mechanical evidence sections.
 
-facts_source="${1:--}"
-narrative_source="${2:-}"
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 fail() {
   printf 'closeout invalid: %s\n' "$1" >&2
   exit 1
 }
+
+if [[ "$#" -eq 3 && "$3" == --new-pr ]]; then
+  closeout_mode=new
+  previous_body=""
+elif [[ "$#" -eq 4 && "$3" == --previous-body ]]; then
+  closeout_mode=previous
+  previous_body="$4"
+  [[ -f "$previous_body" ]] || fail "previous body file does not exist: $previous_body"
+else
+  fail "usage: render-closeout.sh <facts.json|-> <narrative.md> (--new-pr | --previous-body <old-body.md>)"
+fi
+
+facts_source="$1"
+narrative_source="$2"
 
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
@@ -29,6 +41,11 @@ fi
 
 jq -e . "$facts" >/dev/null 2>&1 || fail "facts are not valid JSON"
 jq -e 'type == "object"' "$facts" >/dev/null || fail "facts must be a JSON object"
+jq -e '
+  (has("provenance") or has("workflow_provenance")
+    or has("runs") or has("phases")) | not
+' "$facts" >/dev/null \
+  || fail "workflow provenance comes from the run ledger and previous PR body"
 
 jq -e '.issue_number | type == "number" and . > 0 and floor == .' \
   "$facts" >/dev/null || fail "issue_number must be a positive integer"
@@ -165,6 +182,33 @@ if [[ -n "$narrative_source" && ! -f "$narrative_source" ]]; then
   fail "narrative file does not exist: $narrative_source"
 fi
 
+# The frozen run's canonical value is opaque here: workflow-provenance.sh
+# owns capture, verification, and its shape.
+run_value="$("$script_root/workflow-provenance.sh" verify)" \
+  || fail "workflow provenance verification failed"
+
+runs=()
+if [[ "$closeout_mode" == previous ]]; then
+  mapfile -t runs < <(sed 's/\r$//' "$previous_body" | awk '
+    $0 == "## Workflow telemetry" { in_telemetry = 1; next }
+    in_telemetry && /^## / { exit }
+    in_telemetry && /^Run [1-9][0-9]*: / {
+      sub(/^Run [1-9][0-9]*: /, "")
+      print
+    }
+  ')
+fi
+# Every render appends exactly one frozen root run. An update keeps the
+# previous pull-request runs as an immutable prefix, even when the new run has
+# the same fingerprint as the one before it.
+runs+=("$run_value")
+
+if [[ "${#runs[@]}" -eq 1 ]]; then
+  provenance_value='1 run'
+else
+  provenance_value="${#runs[@]} runs"
+fi
+
 # Markdown table cells are kept single-line and escaped without changing the
 # facts themselves. Narrative Markdown is copied byte-for-byte (apart from
 # normalizing the final blank-line boundary).
@@ -214,7 +258,16 @@ candidate="$fixture/candidate.md"
   printf '| Blocking findings resolved | %s |\n' "$(telemetry_value blocking_findings_resolved)"
   printf '| Findings rejected at adjudication | %s |\n' "$(telemetry_value findings_rejected_at_adjudication)"
   printf '| Final workflow outcome | %s |\n' "$telemetry_outcome"
+  printf '| Workflow provenance | %s |\n\n' "$provenance_value"
+  for ((index = 0; index < ${#runs[@]}; index++)); do
+    printf 'Run %s: %s\n' "$((index + 1))" "${runs[$index]}"
+  done
 } >"$candidate"
 
-"$script_root/validate-closeout-body.sh" "$issue_number" "$candidate"
+if [[ "$closeout_mode" == previous ]]; then
+  "$script_root/validate-closeout-body.sh" \
+    --previous "$previous_body" "$issue_number" "$candidate"
+else
+  "$script_root/validate-closeout-body.sh" "$issue_number" "$candidate"
+fi
 cat "$candidate"

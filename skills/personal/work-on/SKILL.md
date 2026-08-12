@@ -34,10 +34,10 @@ Procedure:
 1. Continue only in a fresh or issue-focused context; otherwise require user
    approval. Done when fresh, issue-focused, or explicitly approved.
 2. Resolve the input above. Done with exactly one in-repo issue.
-3. Check the current worktree status, record the telemetry start time, fetch
-   the remote default branch, and update the current branch. Abort if unrelated
-   changes cannot be avoided or the update is unsafe. Done on a safely updated
-   branch.
+3. Check the current worktree status and record the telemetry start time.
+   Fetch the remote default branch and update the current branch. Abort if
+   unrelated changes cannot be avoided or the update is unsafe. Done on a
+   safely updated branch.
 4. Build the trusted snapshot through GitHub's REST comments endpoint
    (`gh issue view` omits association). Done when no untrusted body/link is in
    context, the omitted count is reported, and every contract source has
@@ -45,7 +45,10 @@ Procedure:
 5. Use `docs/workflow.md` when present and announce it; otherwise use this
    skill's `references/default-workflow.md`. Read the selected source and treat
    it as binding. Done when read and, for a repo workflow, announced.
-6. Follow it without broadening the issue. When code changes are ready for a
+6. Immediately before delegating implementation, run this skill's
+   `scripts/workflow-provenance.sh capture` to freeze the governing
+   instructions this run read. Abort if it fails. Done when capture succeeds.
+7. Follow it without broadening the issue. When code changes are ready for a
    pull request, read and follow `references/github-closeout.md`. Build the
    closeout through `scripts/render-closeout.sh`; never hand-compose its Issues,
    Closure gate, or Workflow telemetry sections. Done when the workflow's

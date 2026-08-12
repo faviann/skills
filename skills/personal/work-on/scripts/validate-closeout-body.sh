@@ -6,16 +6,48 @@ set -euo pipefail
 # independently deciding whether the evidence merits an unattended merge.
 
 require_closes=false
-if [[ "${1:-}" == --require-closes ]]; then
-  require_closes=true
-  shift
-fi
-issue_number="${1:?usage: validate-closeout-body.sh [--require-closes] <issue-number> [body-file|-]}"
+previous_source=""
+while [[ "${1:-}" == --* ]]; do
+  case "$1" in
+    --require-closes)
+      require_closes=true
+      shift
+      ;;
+    --previous)
+      [[ "$#" -ge 2 ]] || {
+        printf 'closeout body invalid: --previous requires a body file\n' >&2
+        exit 1
+      }
+      previous_source="$2"
+      shift 2
+      ;;
+    *)
+      printf 'closeout body invalid: unknown option: %s\n' "$1" >&2
+      exit 1
+      ;;
+  esac
+done
+issue_number="${1:?usage: validate-closeout-body.sh [--require-closes] [--previous <old-body.md>] <issue-number> [body-file|-]}"
 body_source="${2:--}"
 
 fail() {
   printf 'closeout body invalid: %s\n' "$1" >&2
   exit 1
+}
+
+decimal_is_less_than() {
+  local left="$1" right="$2" LC_ALL=C
+  while [[ "${#left}" -gt 1 && "${left:0:1}" == 0 ]]; do
+    left="${left:1}"
+  done
+  while [[ "${#right}" -gt 1 && "${right:0:1}" == 0 ]]; do
+    right="${right:1}"
+  done
+  if [[ "${#left}" -ne "${#right}" ]]; then
+    [[ "${#left}" -lt "${#right}" ]]
+  else
+    [[ "$left" < "$right" ]]
+  fi
 }
 
 [[ "$issue_number" =~ ^[1-9][0-9]*$ ]] \
@@ -125,9 +157,11 @@ telemetry_fields=(
   "Blocking findings resolved"
   "Findings rejected at adjudication"
   "Final workflow outcome"
+  "Workflow provenance"
 )
-[[ "${#telemetry_lines[@]}" -eq 11 ]] \
-  || fail "workflow telemetry must contain exactly nine canonical rows"
+telemetry_count_values=()
+[[ "${#telemetry_lines[@]}" -ge 12 ]] \
+  || fail "workflow telemetry must contain ten canonical rows"
 
 for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
   row="${telemetry_lines[$((index + 2))]}"
@@ -151,10 +185,14 @@ for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
     "Implementation rounds"|"Independent-review rounds"|"Remediation rounds"|"Validation executions"|"Blocking findings resolved"|"Findings rejected at adjudication")
       [[ "$value" == unknown || "$value" =~ ^[0-9]+$ ]] \
         || fail "workflow telemetry $field must be a nonnegative integer or unknown"
+      telemetry_count_values+=("$value")
       ;;
   esac
   if [[ "$field" == "Final workflow outcome" ]]; then
     telemetry_outcome="$value"
+  fi
+  if [[ "$field" == "Workflow provenance" ]]; then
+    provenance_value="$value"
   fi
 done
 
@@ -162,3 +200,84 @@ done
   || fail "workflow telemetry outcome must be Closes or Progresses"
 [[ "$telemetry_outcome" == "$issue_outcome" ]] \
   || fail "issue outcome $issue_outcome contradicts telemetry outcome $telemetry_outcome"
+
+canonical_provenance_pattern='^work-on:[0-9a-f]{12}\*? workflow:[0-9a-f]{12}\*? tdd:[0-9a-f]{12}\*? review:[0-9a-f]{12}\*? \(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+|unknown)@[0-9a-f]{7,40}\)$'
+
+[[ "$provenance_value" =~ ^([1-9][0-9]*)[[:space:]]runs?$ ]] \
+  || fail "workflow provenance is malformed"
+run_count="${BASH_REMATCH[1]}"
+if [[ "$run_count" -eq 1 ]]; then
+  [[ "$provenance_value" == '1 run' ]] || fail "workflow provenance is malformed"
+else
+  [[ "$provenance_value" == "$run_count runs" ]] \
+    || fail "workflow provenance is malformed"
+fi
+[[ "${#telemetry_lines[@]}" -eq $((12 + run_count)) ]] \
+  || fail "workflow provenance run count does not match run lines"
+
+provenance_runs=()
+for ((index = 1; index <= run_count; index++)); do
+  run_line="${telemetry_lines[$((11 + index))]}"
+  run_prefix="Run $index: "
+  [[ "$run_line" == "$run_prefix"* ]] \
+    || fail "workflow provenance run $index is malformed or out of order"
+  run="${run_line#"$run_prefix"}"
+  [[ "$run" =~ $canonical_provenance_pattern ]] \
+    || fail "workflow provenance run $index is malformed"
+  provenance_runs+=("$run")
+done
+
+if [[ -n "$previous_source" ]]; then
+  [[ -f "$previous_source" ]] \
+    || fail "previous body file does not exist: $previous_source"
+  previous_body="$fixture/previous.md"
+  sed 's/\r$//' "$previous_source" >"$previous_body"
+  "$0" "$issue_number" "$previous_body"
+  mapfile -t previous_runs < <(awk '
+    $0 == "## Workflow telemetry" { in_telemetry = 1; next }
+    in_telemetry && /^## / { exit }
+    in_telemetry && /^Run [1-9][0-9]*: / {
+      sub(/^Run [1-9][0-9]*: /, "")
+      print
+    }
+  ' "$previous_body")
+  [[ "${#provenance_runs[@]}" -ge "${#previous_runs[@]}" ]] \
+    || fail "workflow provenance dropped previous runs"
+  for ((index = 0; index < ${#previous_runs[@]}; index++)); do
+    [[ "${provenance_runs[$index]}" == "${previous_runs[$index]}" ]] \
+      || fail "workflow provenance rewrote previous run $((index + 1))"
+  done
+  # One root run contributes one ledger value. More than one appended entry
+  # cannot have come from a single run's ledger.
+  [[ "${#provenance_runs[@]}" -eq $((${#previous_runs[@]} + 1)) ]] \
+    || fail "workflow provenance must append exactly one run"
+
+  mapfile -t previous_count_values < <(awk -F'|' '
+    function trim(value) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      return value
+    }
+    $0 == "## Workflow telemetry" { in_telemetry = 1; next }
+    in_telemetry && /^## / { exit }
+    in_telemetry {
+      field = trim($2)
+      if (field ~ /^(Implementation rounds|Independent-review rounds|Remediation rounds|Validation executions|Blocking findings resolved|Findings rejected at adjudication)$/) {
+        print trim($3)
+      }
+    }
+  ' "$previous_body")
+  for ((index = 0; index < ${#telemetry_count_values[@]}; index++)); do
+    previous_count="${previous_count_values[$index]}"
+    current_count="${telemetry_count_values[$index]}"
+    # `unknown` is a permitted starting state, but a count that was once known
+    # is a lower bound the pull request established; replacing it with
+    # `unknown` discards that bound as surely as decreasing it would.
+    if [[ "$previous_count" =~ ^[0-9]+$ && "$current_count" == unknown ]]; then
+      fail "workflow telemetry ${telemetry_fields[$((index + 2))]} became unknown after $previous_count"
+    fi
+    if [[ "$previous_count" =~ ^[0-9]+$ && "$current_count" =~ ^[0-9]+$ ]] \
+        && decimal_is_less_than "$current_count" "$previous_count"; then
+      fail "workflow telemetry ${telemetry_fields[$((index + 2))]} decreased from $previous_count to $current_count"
+    fi
+  done
+fi
