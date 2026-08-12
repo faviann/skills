@@ -140,12 +140,53 @@ git -C "$target_checkout" commit -qm 'target fixture'
 capture_in "$target_checkout"
 target_canonical="$(verify_in "$target_checkout")"
 [[ "$(component_value "$target_canonical" workflow)" =~ ^[0-9a-f]{12}$ ]]
+target_workflow="$(component_value "$target_canonical" workflow)"
+
+# Git stores a symlink's target text as its blob, but the run reads the file the
+# link points at. A committed, unmodified instruction symlink is therefore
+# clean, and its identity is the bytes read — identical to a regular file of the
+# same content at the same declared path.
+symlink_checkout="$fixture/symlink-checkout"
+git init -q -b main "$symlink_checkout"
+git -C "$symlink_checkout" config user.name 'Provenance Test'
+git -C "$symlink_checkout" config user.email provenance@example.invalid
+mkdir -p "$symlink_checkout/docs" "$symlink_checkout/workflows"
+printf '# Target workflow\n' >"$symlink_checkout/workflows/main.md"
+ln -s ../workflows/main.md "$symlink_checkout/docs/workflow.md"
+git -C "$symlink_checkout" add .
+git -C "$symlink_checkout" commit -qm 'symlinked workflow fixture'
+capture_in "$symlink_checkout"
+symlink_canonical="$(verify_in "$symlink_checkout")"
+[[ "$(component_value "$symlink_canonical" workflow)" == "$target_workflow" ]]
+
+# Editing through the link is a real change and stars the component.
+printf 'linked workflow change\n' >>"$symlink_checkout/workflows/main.md"
+capture_in "$symlink_checkout"
+symlink_dirty="$(component_value "$(verify_in "$symlink_checkout")" workflow)"
+[[ "$symlink_dirty" =~ ^[0-9a-f]{12}\*$ ]]
+[[ "${symlink_dirty%\*}" != "$target_workflow" ]]
+git -C "$symlink_checkout" checkout -q -- workflows/main.md
 
 # An unrecognizable skills origin still captures, with an unknown pointer.
 git -C "$skills_checkout" remote set-url origin "$fixture/skills-origin.git"
 capture_in "$target_checkout"
 unknown_canonical="$(verify_in "$target_checkout")"
 [[ "$unknown_canonical" =~ [[:space:]]\(unknown@[0-9a-f]{12}\)$ ]]
+git -C "$skills_checkout" remote set-url origin \
+  'https://github.com/example/skills.git'
+
+# A GitHub-shaped origin whose slug is not a valid repository identifier is not
+# a recognizable pointer. Accepting it would put unescaped bytes in the ledger
+# JSON, so capture would succeed and verify would then fail to read it back.
+for hostile_origin in \
+    'https://github.com/example/re"po.git' \
+    'https://github.com/exa mple/repo.git' \
+    'https://github.com/example/re\po.git'; do
+  git -C "$skills_checkout" remote set-url origin "$hostile_origin"
+  capture_in "$target_checkout"
+  hostile_canonical="$(verify_in "$target_checkout")"
+  [[ "$hostile_canonical" =~ [[:space:]]\(unknown@[0-9a-f]{12}\)$ ]]
+done
 git -C "$skills_checkout" remote set-url origin \
   'https://github.com/example/skills.git'
 

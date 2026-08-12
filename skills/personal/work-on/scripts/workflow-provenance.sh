@@ -53,12 +53,53 @@ inputs_digest() {
   printf '%s' "$payload" | sha256sum | cut -c1-12
 }
 
+normalize_repo_path() {
+  local part out=()
+  local IFS=/
+  for part in $1; do
+    case "$part" in
+      '' | .) ;;
+      ..)
+        [[ "${#out[@]}" -gt 0 ]] || return 1
+        unset 'out[-1]'
+        ;;
+      *) out+=("$part") ;;
+    esac
+  done
+  [[ "${#out[@]}" -gt 0 ]] || return 1
+  printf '%s' "${out[*]}"
+}
+
+# Git stores a symlink's target text as the blob, but the run reads the file the
+# link resolves to. Follow symlink entries inside HEAD so a committed,
+# unmodified symlink compares equal to the bytes Bash hashed.
+head_blob() {
+  local root="$1" rel="$2" depth=0 entry mode target dir
+  while ((depth++ < 10)); do
+    entry="$(git -C "$root" ls-tree HEAD -- "$rel" 2>/dev/null)" || return 1
+    [[ -n "$entry" ]] || return 1
+    mode="${entry%% *}"
+    if [[ "$mode" != 120000 ]]; then
+      git -C "$root" rev-parse --quiet --verify "HEAD:$rel" 2>/dev/null
+      return
+    fi
+    target="$(git -C "$root" cat-file blob "HEAD:$rel" 2>/dev/null)" || return 1
+    # An absolute or repository-escaping target is outside the identity Git can
+    # account for; treat it as unresolvable rather than guessing.
+    [[ "$target" != /* ]] || return 1
+    dir="${rel%/*}"
+    [[ "$dir" != "$rel" ]] || dir=""
+    rel="$(normalize_repo_path "${dir:+$dir/}$target")" || return 1
+  done
+  return 1
+}
+
 head_digest() {
   local root="$1" rel payload="" blob
   shift
   for rel in "$@"; do
-    blob="$(git -C "$root" rev-parse --quiet --verify "HEAD:$rel" 2>/dev/null)" \
-      || return 1
+    blob="$(head_blob "$root" "$rel")" || return 1
+    [[ -n "$blob" ]] || return 1
     payload+="$rel"$'\n'"$(git -C "$root" cat-file blob "$blob" | sha256sum)"$'\n'
   done
   printf '%s' "$payload" | sha256sum | cut -c1-12
@@ -73,7 +114,10 @@ origin_slug() {
     *github.com/*) slug="${origin##*github.com/}" ;;
     *) return 1 ;;
   esac
-  [[ "$slug" =~ ^[^/]+/[^/]+$ ]] || return 1
+  # Only a real owner/repo identifier is a recognizable pointer. Anything else
+  # is `unknown`: the slug is interpolated into the ledger JSON and the pull
+  # request row, and characters outside this set would corrupt both.
+  [[ "$slug" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || return 1
   printf '%s\n' "$slug"
 }
 
