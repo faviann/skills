@@ -2,112 +2,322 @@
 
 Date: 2026-08-13
 
+Status: revised after one independent, read-only local-agent review
+
 This plan follows the evidence and diagnosis preserved beside this file. It is
-staged deliberately: improve observability first, then change one workflow
-variable at a time. A cheaper workflow is not successful if it is weaker.
+staged deliberately: establish an attributable control, close the TDD/refactor
+hole, change one review-topology variable at a time, and retain one fresh blind
+cumulative confirmation. A cheaper workflow is not successful if it is weaker.
 
-## Stage 0: instrument the current workflow
+Issue [#64](https://github.com/faviann/skills/issues/64) owns the review-topology
+investigation. Issue [#9](https://github.com/faviann/skills/issues/9) owns the
+telemetry mechanisms consumed by this plan. Issue
+[#62](https://github.com/faviann/skills/issues/62) owns bounded
+same-mechanism sibling discovery; delta review must preserve its search radius.
 
-Record enough structured evidence to attribute cost without turning every run
-into a new analytics subsystem.
+## Independent-review adjudication
 
-Candidate fields:
+The local review produced five findings. All were accepted, with one typo
+clarification: its reference to `#6` is interpreted as `#62`.
 
-- lifecycle, parent-round, and agent-launch identifiers;
-- model configuration and agent role;
-- review kind and scope (`readiness`, `standards`, `spec`, `closure`;
-  `cumulative`, `delta`, `final-cumulative`);
-- input byte counts by artifact type: trusted snapshot, diff, standards,
-  repository docs, and prior finding fingerprints;
-- input/output token counts when exposed by the runtime;
-- validation command identity, duration, exit status, and focused/full class;
-- finding fingerprint, mechanism, governing criterion, severity, first
-  discovery round, and `new`/`repeat` status;
-- adjudication and resolution (`accepted`, `rejected`, `follow-up`, `removed`);
-- elapsed time split into implementation, review, validation, and live
-  operations; and
-- final outcome.
+1. An instrumented control window is required before review semantics change.
+2. A delta may bound seed discovery, but not the mechanism-neighborhood sweep
+   after a defect reproduces.
+3. Final cumulative confirmation needs an explicit loop-back rule, and fixes it
+   triggers consume the same convergence budget.
+4. Smell-severity changes and a behavior-preserving coherence pass must land as
+   one paired change; otherwise the workflow temporarily contains no refactor
+   phase at all.
+5. Telemetry must be split into a small mechanical foundation and later
+   finding-identity support, with #9 as owner.
 
-Use hashes and counts. Do not persist full prompts, secrets, raw untrusted
-diagnostics, or repository content merely for analytics.
+## Phase A: establish an attributable control
 
-## Stage 1: pre-implementation closability and review-budget gate
+### A1. Mechanical run telemetry — owned by #9
 
-Before implementation delegation, require the primary to establish:
+Land the smallest mechanically derivable foundation:
 
-- every acceptance criterion has a direct observable seam;
-- every prerequisite required to exercise those seams is complete and
-  available;
+- every subagent launch, role, phase, and round;
+- review kind and scope (`readiness`, `full`, or `delta`), compared SHAs, and
+  input byte count;
+- validation command, stable execution ID, duration, and outcome;
+- phase-specific elapsed time where observable; and
+- final workflow outcome.
+
+Do not make stable finding identity a prerequisite for this step. Do not put
+per-launch event rows into the human PR-body summary table. The implementation
+frontier under #9 must name a run-scoped machine-readable sink and mechanically
+aggregate bounded summary fields into closeout telemetry. Do not persist full
+prompts, repository contents, raw untrusted diagnostics, or secrets merely for
+analytics.
+
+Record token counts where the runtime exposes them. Their absence does not
+block the roadmap.
+
+### A2. Hard pre-implementation closability gate
+
+Before implementation delegation, require:
+
+- every acceptance criterion has a direct validation seam available in the
+  current run;
+- every blocking prerequisite is complete;
 - no criterion is knowingly limited to `inferred` or `unverified` evidence;
-- the ticket fits one implementation context and one reviewable PR budget;
-- contract density and state space do not require a staged split; and
-- repository-local workflow requirements can run in the current environment.
+- the selected repository workflow and required commands are executable; and
+- the trusted contract is internally consistent.
 
-Failure returns the issue to triage/splitting or creates a blocking tracker
-issue before code is written. It is not merely flagged for closure.
+Failure returns to triage, prerequisite work, issue splitting, or human contract
+amendment before code is written.
 
-## Stage 2: compare review topologies
+A subjective “one reviewable PR” estimate is not part of this hard mechanical
+gate. Review-budget fit remains a triage/sizing tripwire until attributable
+evidence supports a stronger rule.
 
-Run a blinded comparison between the current topology and this candidate.
+### A3. Instrumented control window
 
-### Current topology
+After A1 and A2 are active, keep implementation, readiness, review,
+remediation, and closeout semantics otherwise unchanged for a predeclared
+number of completed runs.
 
-- Full cumulative Standards, Spec, and closure review after every remediation.
+The telemetry implementation ticket states the run-count target before outcomes
+are observed; elapsed time is not the stopping rule. The window includes at
+least one run that reaches remediation, otherwise it cannot establish a control
+for review churn.
 
-### Candidate topology
+A2 precedes this window so control and candidate populations share the same
+objective closability filter. Do not land smell-severity, coherence,
+delta-review, or convergence changes during the control window.
 
-1. One pre-implementation closability/readiness pass.
-2. Implementation and focused checks.
-3. One comprehensive cumulative Standards/Spec/closure review.
-4. One batched remediation.
-5. Delta-focused review of remediation commits, expanding to affected criteria
-   or neighboring mechanisms only when reproduced evidence requires it.
-6. One fresh blind cumulative confirmation before full validation and closeout.
+## Phase B: close the TDD/refactor hole without hiding defects
 
-Delta reviewers may receive stable finding fingerprints and adjudicated
-dispositions solely to avoid rediscovering unchanged rejected findings. They
-must not inherit conclusions as truth. The final confirmation remains blind and
-cumulative.
+### B1. Pair blocker severity with a behavior-preserving coherence pass
 
-## Stage 3: explicit convergence guard
+These two changes land together.
 
-Choose a small explicit remediation budget during triage. Exceeding it forces
-one of:
+#### Blocker severity
 
-- human inspection;
-- issue split or contract amendment;
-- a prerequisite or follow-up issue; or
-- a recorded decision to continue for named reasons.
+A Fowler/baseline smell is advisory unless it reproduces either:
 
-It must not silently continue indefinitely. The exact budget must be tested,
-not selected from the current sample as a universal threshold.
+1. a documented repository-standard violation; or
+2. an acceptance-criterion defect with observable impact.
 
-## Stage 4: reconcile TDD and review responsibilities
+A mechanically testable cleanup preference is not automatically blocking. Hard
+safety rules, contract failures, and direct evidence defects remain blocking.
 
-Test one or both of:
+#### Coherence/refactor pass
 
-- permit a bounded coherence/refactor pass before the first candidate review;
-  or
-- make baseline smell findings non-blocking unless they reproduce a documented
-  standard breach or acceptance-criterion impact.
+After the issue's red-green slices are complete and focused tests are green,
+the same implementation delegate performs one bounded behavior-preserving pass
+before the first independent cumulative gate.
 
-The goal is not to suppress maintainability feedback. It is to avoid designing
-TDD to defer refactoring and then treating the predictable deferred work as a
-surprise blocker.
+Allowed work:
 
-## Stage 5: consider risk-tiered review only after telemetry exists
+- remove obvious local duplication introduced across the TDD slices;
+- improve misleading local names;
+- simplify unnecessarily indirect local control flow; and
+- restore locality or domain coherence without changing the contract.
 
-A one-line configuration correction, documentation-only change, live migration,
-and new authentication lifecycle should not necessarily pay the same
-orchestration cost. Risk tiers may be useful, but this plan does not prescribe
-them before measured evidence exists.
+Required invariants:
+
+- existing focused tests are unchanged and green before and after the pass;
+- no new behavior or acceptance criterion is introduced;
+- no public interface, public seam, or validation seam is removed;
+- no speculative abstraction or unrelated cleanup is added; and
+- a cleanup requiring test changes or observable behavior changes returns to an
+  explicit red-green slice instead of being called refactoring.
+
+Unused or test-only production seam removal does not happen in this pass. It
+remains subject to the existing mechanism trace, adjudication, and review
+invalidation rules.
+
+Shipping advisory smells without this pass would create a period in which TDD
+defers refactoring and no later stage performs or enforces it.
+
+### B2. Measure the paired change
+
+Use a separately declared comparison window before changing review topology.
+Do not call the pair successful merely because blocker counts fell. Compare
+launches, phase cost, final-confirmation findings, regressions, and escaped
+defects against Phase A's control.
+
+## Phase C: change the review topology
+
+### C1. Finding identity telemetry — owned by #9
+
+Add only the finding-level support needed by later delta-review experiments:
+
+- a primary-assigned stable fingerprint after adjudication;
+- governing acceptance criterion or documented hard rule;
+- normalized mechanism identity and sorted repo-relative locations;
+- first-discovery round;
+- `new`, `repeated`, or `superseded` status; and
+- accepted, rejected, follow-up, or unresolved disposition.
+
+Do not hash a reviewer's free-form wording and call that stable identity. The
+primary already adjudicates the mechanism and criterion; derive identity from
+that normalized decision.
+
+Use the run-scoped telemetry/ledger mechanism owned by #9. Put bounded aggregate
+counts, not every event, in the PR body.
+
+### C2. Delta remediation-review topology
+
+Use this state machine:
+
+1. one fresh, blind cumulative Standards/Spec/closure gate after initial
+   implementation and the coherence pass;
+2. one primary adjudication pass batching all accepted blockers;
+3. one committed remediation batch;
+4. delta review of `previous-reviewed-HEAD...HEAD`, accepted directives,
+   affected criteria, and immediately changed production paths;
+5. repeated remediation and delta review only while unresolved blockers and
+   budget remain; and
+6. one fresh, blind cumulative Standards/Spec/closure confirmation before final
+   validation and closeout.
+
+#### Preserve #62's mechanism neighborhood
+
+The delta bounds the **seed search**, not the neighborhood investigation. Once a
+defect reproduces in the delta, inspect matching branches, call sites,
+diagnostics, governed states, and compatible occurrences in the same public
+flow as required by the shipped #62 brief, including relevant locations outside
+the remediation diff.
+
+Stop at the existing cross-criterion, cross-subsystem, external-boundary, and
+speculative-defense boundaries. This is not a repository-wide audit; the radius
+remains the same mechanism and public flow.
+
+Evaluation distinguishes seed findings from reproduced siblings so a shorter
+delta prompt cannot appear successful merely because it stopped looking.
+
+#### Final-confirmation loop-back
+
+The final blind cumulative confirmation is valid only for its exact base, HEAD,
+trusted snapshot, and artifacts. Any accepted finding causing a code or evidence
+change invalidates it. After such remediation, run the affected delta review and
+then another fresh blind cumulative confirmation. No changed candidate proceeds
+to final validation without a clean confirmation.
+
+### C3. Measure topology before exposing prior dispositions
+
+First evaluate C2 with delta reviewers receiving accepted remediation
+directives and reviewed-head identity, but not a list of prior rejected
+findings. This isolates topology from the independence risk of exposing prior
+dispositions.
+
+Use a separately declared comparison window and keep the mandatory final blind
+cumulative confirmation.
+
+### C4. Pilot fingerprint/disposition passing separately
+
+Only after C1 and C2 have evidence, test giving delta reviewers stable
+fingerprints and dispositions for unchanged prior findings. The purpose is to
+avoid spending tokens rediscovering an unchanged rejected concern; reviewers
+must not inherit a prior conclusion as truth or suppress new evidence.
+
+Measure reraised rejections, genuinely new evidence, and final-confirmation
+discoveries. Reject this optimization if it creates anchoring or missed hard
+findings.
+
+### C5. Explicit convergence guard
+
+Allow at most **two automatic committed remediation batches after the initial
+full cumulative gate**. Every behavior- or evidence-changing batch counts,
+including one triggered by final blind confirmation.
+
+If final confirmation finds a blocker and budget remains:
+
+1. adjudicate it;
+2. remediate;
+3. run affected delta review; and
+4. run another fresh blind cumulative confirmation.
+
+If budget is exhausted, unresolved findings are never marked green. Choose a
+durable non-success path:
+
+- split or amend the issue;
+- complete missing prerequisite work;
+- create or identify a blocking tracker issue;
+- render/update the candidate as `Progresses` where ordinary closeout is
+  available; or
+- abandon the candidate with a recorded rationale.
+
+Record `convergence-budget-exhausted` as a distinct telemetry outcome instead of
+folding it into rejected findings.
+
+An unattended/AFK run cannot request human authorization. On budget exhaustion
+it creates or identifies the blocking tracker, leaves any `Progresses` PR
+unmerged, and hands back. The existing `--require-closes` guard preventing merge
+is expected behavior, not another remediation round.
+
+Treat two batches as a provisional pilot value, not a universal threshold.
+Measure C5 in its own comparison window after C2.
+
+## Phase D: simplify only after the core loop is attributable
+
+### D1. Decide whether to fold the readiness sweep
+
+The pre-implementation closability gate cannot replace an independent
+raw-artifact reviewer because it runs before an implementation artifact exists.
+The coherence pass and primary inspection reduce defects but are also not
+independent.
+
+Keep readiness until A1/C1 data shows:
+
+- which unique hard findings it discovers;
+- whether the first cumulative gate also finds them;
+- whether final blind confirmation catches any class lost by removal; and
+- its launch, token, and material-read cost.
+
+Only then pilot removal. Its independent responsibility would move to the first
+fresh cumulative gate; coherence and primary checks are supporting defenses,
+not substitutes for independence.
+
+### D2. Improve remediation implementer continuity
+
+Either retain the same implementation delegate for remediation or provide a
+durable handoff containing:
+
+- accepted directive and governing criterion;
+- prior design summary;
+- touched production paths and invariants;
+- established evidence;
+- rejected alternatives and why; and
+- exact requested delta.
+
+Do not forward raw reviewer prose or let the delegate reinterpret the contract.
+
+### D3. Remove duplicate architecture/spec review from closeout
+
+After final blind cumulative review produces an immutable reviewed-candidate
+identity, make closeout focus on:
+
+- exact acceptance-criterion evidence;
+- actual artifact, mode, host, and public seam;
+- final regression and diff checks;
+- issue/follow-up reconciliation; and
+- PR-body rendering and read-back validation.
+
+Do not launch another architecture/spec hunt over an unchanged candidate merely
+because closeout begins. Any base, HEAD, snapshot, or artifact change invalidates
+the identity and returns to final confirmation.
+
+### D4. Introduce risk-tiered orchestration last
+
+Use attributable results to decide whether distinct paths are justified for
+tiny documentation/configuration changes, ordinary isolated code, broad
+state/compatibility work, security/authorization work, and live operations. Do
+not prescribe tiers from the selected anecdotal sample.
+
+## Authoritative dependency order
+
+`A1 mechanical telemetry (#9) → A2 objective closability → A3 instrumented control → B1 severity + behavior-preserving coherence (paired) → B2 comparison → C1 finding identity (#9) → C2 delta topology with #62 preserved and final-confirmation loop-back → C3 comparison → C4 disposition-passing pilot → C5 convergence guard → D1 readiness decision → D2 implementer continuity → D3 closeout reuse → D4 risk tiers`
 
 ## Evaluation metrics
 
 ### Resource metrics
 
 - total and per-role agent launches;
-- input/output tokens;
+- input/output tokens when exposed;
 - cumulative diff and snapshot bytes reread;
 - wall-clock time by phase;
 - validation executions and duration; and
@@ -119,6 +329,7 @@ them before measured evidence exists.
 - genuinely new findings after remediation;
 - repeated unchanged findings;
 - rejected findings reraised without new evidence;
+- seed versus same-mechanism sibling findings;
 - findings discovered only at final cumulative confirmation;
 - superseded or reverted remediations; and
 - criteria or subsystems entered after the original contract.
@@ -129,56 +340,37 @@ them before measured evidence exists.
 - escaped post-merge or live defects;
 - regression, rollback, and follow-up rate;
 - `Closes` versus `Progresses` outcome;
+- `convergence-budget-exhausted` outcomes;
 - human interventions; and
 - direct evidence coverage for every criterion.
 
-A candidate succeeds only if it reduces resource use and serial churn without
-increasing final hard findings or escaped defects. Lower round counts alone are
-not success.
+A stage succeeds only if it reduces attributable launches, tokens/material
+reread, validation cost, or serial remediation without increasing final hard
+findings, regressions, or escaped defects. Reclassification alone is not
+evidence of improvement.
 
 ## Non-goals and guardrails
 
 - Do not remove independent review.
 - Do not weaken documented hard rules, safety boundaries, or direct acceptance
   evidence.
-- Do not remove the final fresh cumulative confirmation.
+- Do not remove final fresh cumulative confirmation.
 - Do not optimize PR-body length while leaving agent work unchanged.
 - Do not reclassify blockers merely to improve telemetry.
 - Do not derive a universal ticket-size threshold from the selected sample.
-- Do not undo #62 without measuring its interaction with review topology.
+- Do not undo #62 or narrow its neighborhood radius when moving to delta review.
 - Do not merge this investigation into a general `to-tickets` rewrite; ticket
   sizing is a co-factor while #64 is focused on `work-on` execution and
   convergence.
 
-## Open questions
+## Remaining open questions
 
-- Can reviewers receive prior finding fingerprints without compromising
-  independent judgment?
-- Which remediation changes truly invalidate the entire cumulative review?
+- What predeclared control and comparison run count is proportionate?
+- Can prior finding dispositions be exposed without anchoring delta reviewers?
 - Should one implementer retain ownership through remediation while reviewers
   remain fresh?
 - How can token telemetry be captured across Codex, Claude Code, and other
   harnesses?
-- What stable fingerprint identifies the same finding across differently worded
-  reports?
-- Should closure evidence accounting be separated from defect discovery?
+- What normalized mechanism vocabulary is stable enough for finding identity?
 - How should risk tiers account for operational work when the tracked diff is
   small?
-- What signal should force issue splitting before implementation?
-
-## Recommended first frontier
-
-The first implementation frontier should improve observability without changing
-review semantics:
-
-1. add attributable agent-launch, review-scope, validation, and
-   finding-fingerprint telemetry;
-2. add a pre-implementation closability report that blocks known untestable
-   criteria; and
-3. collect comparable current-workflow baselines before changing review
-   topology.
-
-Only after that evidence exists should #64 choose among delta review,
-risk-tiered gates, implementer continuity, or a convergence budget. This
-prevents a lower-cost but weaker workflow from being declared successful by
-construction.
