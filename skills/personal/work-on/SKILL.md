@@ -52,7 +52,8 @@ Procedure:
 6. Before capturing provenance, and before any implementation delegation, edit,
    commit, or pull request, apply this skill's `references/closability-gate.md`
    to the trusted snapshot and the selected workflow. Done when every
-   acceptance criterion has an available direct validation seam, every blocking
+   acceptance criterion has an available direct validation seam, no criterion is
+   knowingly limited to `inferred` or `unverified` evidence, every blocking
    prerequisite is complete, the required commands are executable, and the
    trusted contract is consistent; otherwise finish the run's telemetry with
    outcome `aborted` and hand back as that reference requires.

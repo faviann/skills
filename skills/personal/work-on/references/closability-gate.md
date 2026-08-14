@@ -10,8 +10,9 @@ production or test edits, implementation commits, and any pull request.
 
 The gate decides only whether the issue is closable in this run. It changes no
 readiness, Standards, Spec, closure, remediation, validation, or closeout
-semantics, and adds no artifact, ledger, or telemetry field of its own: a pass
-records nothing, and an abort resolves the run's existing outcome as `aborted`.
+semantics, and adds no artifact, ledger, or telemetry field of its own. A pass
+records nothing. An abort resolves the run's existing outcome as `aborted`, as
+the abort steps below require.
 
 ## The reasoning the primary produces
 
@@ -36,8 +37,7 @@ A seam is **not** available when validation depends on:
   environment;
 - a future operator action not available in this run;
 - an out-of-scope mechanism;
-- a gate-only artifact whose sole purpose is making the criterion appear
-  testable; or
+- a gate-only artifact whose sole consumer is the gate; or
 - indirect inference where the closure contract requires direct evidence.
 
 ## Conditions

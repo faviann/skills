@@ -36,6 +36,24 @@ A case passes when the verdict matches its key **and** the reasoning names the
 condition the case was built to exercise. A right verdict reached through the
 wrong condition is a semantic mismatch, not a pass.
 
+Every run's verdict, the condition it named, the route it chose, and one
+verbatim sentence of its reasoning are retained under **Evaluator records**.
+Full transcripts are not: they carry nothing this file needs and would make the
+record unreadable.
+
+### The counterfactual arm
+
+A gate every reader passes is indistinguishable from no gate at all. So the
+same cases also run against the **pre-A2 instructions** — `default-workflow.md`
+as it stood at `ffcc8fd`, whose Orient step completed when "every criterion has
+a seam, **or its missing seam is flagged for the closure gate**", with no
+closability gate in the run at all. That evaluator reads no gate, sees the same
+issue, and commits to `delegate` or `abort`.
+
+Only a case that aborts under the gate and delegates without it shows the gate
+doing the work. A case that aborts under both is honest evidence that the
+earlier text already sufficed there.
+
 ## Cases and keys
 
 | Case | Isolates | Key |
@@ -209,6 +227,114 @@ recur on the run after the repair.
 
 It reported two others instead, both recorded below rather than repaired.
 
+### Version 4 — a review finding on the gate-only-artifact bullet
+
+Independent review of this branch found the seam-unavailability list's last-but-one
+bullet made intent decisive: *"a gate-only artifact whose sole purpose is making
+the criterion appear testable"* turns on why an artifact was built, so an
+implementer who believes their manufactured seam serves a real purpose escapes
+it. It was replaced with the structural test the closure gate already uses —
+*"a gate-only artifact whose sole consumer is the gate"* — giving **version 4**,
+the shipped text.
+
+Cases A and B were re-measured against it, being the two runs whose reasoning
+cited that bullet: A has to read a newly authorized test harness as *not*
+gate-only, and B has to read a private-helper test as gate-only.
+
+| Case | Version | Verdict | Key | Result |
+|---|---|---|---|---|
+| A | 4 | `proceed` | `proceed` | pass |
+| B | 4 | `abort` — condition 1, condition 3 | `abort`, 1/3 | pass |
+
+Both drew the distinction the replacement was meant to make available, in the
+structural terms the new wording supplies. A ruled its authorized harness in
+because it "runs under the repository's standing test command and outlives the
+gate, so the gate is not its sole consumer"; B ruled the private-helper test
+out, and separately noted that every seam-creating option the case leaves is "an
+out-of-scope mechanism" because the issue itself excludes them.
+
+### Version 5 — the telemetry sentence, finally split
+
+The framing sentence's version-3 repair did not hold. Both version-4 evaluators
+reported it again, and B named a behavioral risk the earlier reports had not:
+a reader skimming the pass-and-abort clause "could take 'records nothing' as
+covering both branches and **skip the mandatory `finish --outcome aborted`**."
+That is a completion condition of A2, not a cosmetic complaint.
+
+Both prescribed the same repair, so it was taken: the pass claim and the abort
+claim are now separate sentences, and the abort sentence points at the steps
+that carry it. B was re-measured against **version 5**, the shipped text, with
+its prompt additionally asking for every step the gate requires on an abort —
+the behavior the ambiguity threatened.
+
+| Case | Version | Verdict | Key | Result |
+|---|---|---|---|---|
+| B | 5 | `abort` — condition 1 primary, 3 and 5 downstream | `abort`, 1/3 | pass |
+
+The behavior the ambiguity threatened held: the run enumerated every abort step
+including `finish --outcome aborted`, and marked it as the one step its own
+tool restriction stopped it performing. It still called the sentence something
+that "reads as a contradiction on first pass and survives only because of that
+trailing clause" — so the wording is clearer, not clean, and the churn stops
+here. Five versions bought one repaired blocker and one repaired behavioral
+risk; the remaining reports are recorded below rather than chased.
+
+### The counterfactual arm — results
+
+Cases B and D ran against the pre-A2 instructions, with no gate in the run.
+
+| Case | Under the gate | Pre-A2 instructions | Discriminates |
+|---|---|---|---|
+| B — daemon retry | `abort` | `abort` | no |
+| D — subscription `past_due` | `abort` | **`delegate`** | yes |
+
+**D reproduces the defect A2 exists to remove.** Its pre-A2 evaluator recorded
+the unreachable half of the criterion, flagged it, and delegated implementation
+anyway — resting the decision on the exact sentence this change deleted:
+
+> Rests on: "Done when every criterion has a seam, or its missing seam is
+> flagged for the closure gate."
+>
+> The abort clause covers seams that are *unclear*. This one is not unclear — it
+> is clearly and fully characterised … Aborting here would treat a known,
+> documented evidence gap as an unknown one.
+
+That is the `overmind#202` failure in miniature: a criterion known before any
+code to be reachable only by inference, carried into implementation because the
+workflow offered somewhere to put it. Under the gate the same case aborts on
+condition 3.
+
+**B does not discriminate**, and that is worth recording rather than hiding: its
+pre-A2 evaluator aborted too, reading the missing seam as the existing "scope,
+acceptance criteria, readiness, or validation seam are unclear" abort condition
+instead of taking the escape hatch. Where a seam is absent outright, the old
+text was already enough for at least this reader. What the old text did not
+catch — and what D shows it waved through — is the seam that exists, is
+testable, and observes the wrong thing.
+
+## Evaluator records
+
+One bounded row per run: the verdict, the condition or sentence it rested on,
+the route it chose, and one verbatim sentence of its own reasoning.
+
+| Case | Ver | Verdict | Rested on | Route named | Verbatim |
+|---|---|---|---|---|---|
+| A | 1 | `proceed` | conditions 1–5 hold | — | "a binary-invoking harness is the only honest way to observe CLI exit codes and stdout" |
+| B | 1 | `abort` | condition 1, condition 3 | amend the issue to bring one observation seam into scope | "the helper can be correct while the daemon never invokes it on the real failure path" |
+| C | 1 | `abort` | condition 2 as root; 1 and 3 downstream | complete the blocking prerequisite | "nothing can distinguish 'completion writes exactly one record' from 'completion writes none, two, or the wrong actor'" |
+| D | 1 | `abort` | condition 3, condition 1 on the same facts | contract correction, or split so the endpoint criterion moves | "the endpoint could fail to surface the predicate's value, and no available observation would catch it" |
+| E | 1 | `abort` | condition 1, manual seam unavailable | obtain the required human/device environment — an attended run | "Do not implement now and defer confirmation to closeout; the gate rules that out explicitly." |
+| F | 1 | `proceed` | conditions 1–5 hold | — | "Size — roughly forty files, nine criteria, four subsystems — is explicitly not a condition and did not enter the decision." |
+| G | 1 | `abort` | condition 5, forcing 1 and 3 | request a trusted-maintainer contract correction | "Rejection is not reporting." |
+| A | 2 | `proceed` | conditions 1–5 hold | — | "the harness the issue authorizes is a genuine seam and not a gate-only artifact — it exercises the real binary" |
+| C | 2 | `abort` | condition 1, cleanest citation condition 2 | complete the blocking prerequisite | "A unit test of the writer proves the writer works, not that completion writes exactly one record" |
+| C | 3 | `abort` | condition 1, with 2 and 3 on the same root | complete the blocking prerequisite | "Exactly-once is a property of the call site under the completion flow" |
+| A | 4 | `proceed` | conditions 1–5 hold | — | "its consumer is the repository's ordinary test command, not this gate" |
+| B | 4 | `abort` | condition 1, condition 3 | amend the issue to bring one observation surface into scope | "Reading code observes intent, not the runtime transition the criterion asserts." |
+| B | 5 | `abort` | condition 1 primary, 3 and 5 downstream | request a contract correction bringing a seam into scope | "Both are proxies, not direct evidence." |
+| B | pre-A2 | `abort` | "scope, acceptance criteria, readiness, or validation seam are unclear" | widen scope by one observation seam | "the closure gate would have nothing but 'I read the code' to put in the table" |
+| D | pre-A2 | **`delegate`** | "or its missing seam is flagged for the closure gate" | — | "Aborting here would treat a known, documented evidence gap as an unknown one." |
+
 ## Limitations
 
 - One sample per case. This detects a wording that fails to transmit at all; it
@@ -223,9 +349,24 @@ It reported two others instead, both recorded below rather than repaired.
   criteria at different distances from a seam, and this pilot says nothing
   about how the gate behaves when a run has already spent effort orienting and
   the cheaper answer is to proceed.
-- Four reported ambiguities were left unrepaired because no run's verdict turned
+- The counterfactual arm is two cases, one of which discriminates. It shows the
+  gate changing one decision the earlier text got wrong; it does not measure how
+  often the escape hatch was being taken, and B shows at least one shape where
+  the earlier text already aborted.
+- Six reported ambiguities were left unrepaired because no run's verdict turned
   on them. They are recorded rather than fixed silently, because each is a place
   a future reader could land differently:
+  - The gate never says the run's telemetry sink is opened before it runs while
+    workflow provenance is captured after. Both are true of `SKILL.md`'s
+    procedure — the sink opens at step 3, the gate is step 6, capture is step 7 —
+    but B's version-5 evaluator observed that a primary treating sink-open and
+    provenance capture as one step "will abort with no sink to write to."
+  - Condition 3's *"a mocked internal path where the contract requires a public
+    boundary"* never says when a contract carries that requirement. B's
+    version-4 evaluator called this load-bearing for its own case and resolved
+    it against the seam definition — the criterion's subject is the daemon, so
+    the daemon is the artifact — while noting a reader could instead find a
+    direct call to a private helper is not a *mocked* path and proceed.
   - The gate never states the conjunction rule for a criterion that is only
     *partly* seamed. G met it — a criterion whose reject half is observable and
     whose report half is prohibited — and treated the criterion as the unit,
