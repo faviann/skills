@@ -2,7 +2,7 @@
 
 Date: 2026-08-13
 
-Status: revised after one independent, read-only local-agent review
+Status: revised after one independent review and one bounded resolution verification
 
 This plan follows the evidence and diagnosis preserved beside this file. It is
 staged deliberately: establish an attributable control, close the TDD/refactor
@@ -11,8 +11,10 @@ cumulative confirmation. A cheaper workflow is not successful if it is weaker.
 
 Issue [#64](https://github.com/faviann/skills/issues/64) owns the review-topology
 investigation. Issue [#9](https://github.com/faviann/skills/issues/9) owns the
-telemetry mechanisms consumed by this plan. Issue
-[#62](https://github.com/faviann/skills/issues/62) owns bounded
+telemetry mechanisms consumed by this plan and records the assigned A1/C1
+frontiers in its
+[ownership comment](https://github.com/faviann/skills/issues/9#issuecomment-5288561372).
+Issue [#62](https://github.com/faviann/skills/issues/62) owns bounded
 same-mechanism sibling discovery; delta review must preserve its search radius.
 
 ## Independent-review adjudication
@@ -30,6 +32,22 @@ clarification: its reference to `#6` is interpreted as `#62`.
    phase at all.
 5. Telemetry must be split into a small mechanical foundation and later
    finding-identity support, with #9 as owner.
+
+## Resolution-verification adjudication
+
+The bounded verification found one partially resolved item and one
+revision-introduced blocker. Both are accepted and resolved here.
+
+- **Telemetry ownership:** the split and sink design were already resolved, but
+  ownership was recorded only from #64. The #9 ownership comment now records A1
+  and C1 from the owning issue's side.
+- **Budget predicate:** final-confirmation invalidation and convergence-budget
+  consumption now use the same transition predicate. If a change makes the
+  confirmation's exact base, HEAD, trusted snapshot, or covered artifacts differ,
+  it both invalidates confirmation and consumes one remediation batch. This
+  includes standards-only source, test, documentation, naming, comment, or
+  formatting corrections when they change the reviewed candidate. No
+  invalidating change can occur outside the budget.
 
 ## Phase A: establish an attributable control
 
@@ -189,13 +207,24 @@ remains the same mechanism and public flow.
 Evaluation distinguishes seed findings from reproduced siblings so a shorter
 delta prompt cannot appear successful merely because it stopped looking.
 
-#### Final-confirmation loop-back
+#### Final-confirmation loop-back and budget predicate
 
-The final blind cumulative confirmation is valid only for its exact base, HEAD,
-trusted snapshot, and artifacts. Any accepted finding causing a code or evidence
-change invalidates it. After such remediation, run the affected delta review and
-then another fresh blind cumulative confirmation. No changed candidate proceeds
-to final validation without a clean confirmation.
+A final blind cumulative confirmation is valid only for its exact base, HEAD,
+trusted snapshot, and covered artifacts. Any accepted remediation that changes
+one of those identity inputs invalidates the confirmation **and consumes one
+convergence-budget batch**. The predicates are intentionally identical: no
+change may invalidate confirmation without consuming budget, and no unchanged
+candidate consumes budget merely because prose was discussed.
+
+An invalidating batch includes any committed source, test, configuration,
+documentation, naming, code-comment, formatting, or evidence/artifact change
+made in response to an accepted blocker. It does not matter whether the change
+alters runtime behavior; what matters is that the reviewed candidate identity
+changed.
+
+After an invalidating remediation, run the affected delta review and then
+another fresh blind cumulative confirmation. No changed candidate proceeds to
+final validation without a clean confirmation.
 
 ### C3. Measure topology before exposing prior dispositions
 
@@ -220,14 +249,17 @@ findings.
 
 ### C5. Explicit convergence guard
 
-Allow at most **two automatic committed remediation batches after the initial
-full cumulative gate**. Every behavior- or evidence-changing batch counts,
-including one triggered by final blind confirmation.
+Allow at most **two automatic invalidating remediation batches after the initial
+full cumulative gate**. Use exactly the C2 identity predicate: every batch that
+changes the confirmation's base, HEAD, trusted snapshot, or covered artifacts
+counts, including one triggered by final blind confirmation. A standards-only
+rename, documentation correction, code-comment fix, or formatting change counts
+when it changes the reviewed candidate. No invalidating transition is exempt.
 
 If final confirmation finds a blocker and budget remains:
 
 1. adjudicate it;
-2. remediate;
+2. remediate, consuming one batch if the candidate identity changes;
 3. run affected delta review; and
 4. run another fresh blind cumulative confirmation.
 
@@ -298,8 +330,9 @@ identity, make closeout focus on:
 - PR-body rendering and read-back validation.
 
 Do not launch another architecture/spec hunt over an unchanged candidate merely
-because closeout begins. Any base, HEAD, snapshot, or artifact change invalidates
-the identity and returns to final confirmation.
+because closeout begins. Any base, HEAD, snapshot, or covered-artifact change
+invalidates the identity, consumes budget under C5, and returns to final
+confirmation.
 
 ### D4. Introduce risk-tiered orchestration last
 
@@ -310,7 +343,7 @@ not prescribe tiers from the selected anecdotal sample.
 
 ## Authoritative dependency order
 
-`A1 mechanical telemetry (#9) → A2 objective closability → A3 instrumented control → B1 severity + behavior-preserving coherence (paired) → B2 comparison → C1 finding identity (#9) → C2 delta topology with #62 preserved and final-confirmation loop-back → C3 comparison → C4 disposition-passing pilot → C5 convergence guard → D1 readiness decision → D2 implementer continuity → D3 closeout reuse → D4 risk tiers`
+`A1 mechanical telemetry (#9) → A2 objective closability → A3 instrumented control → B1 severity + behavior-preserving coherence (paired) → B2 comparison → C1 finding identity (#9) → C2 delta topology with #62 preserved and unified confirmation/budget predicate → C3 comparison → C4 disposition-passing pilot → C5 convergence guard → D1 readiness decision → D2 implementer continuity → D3 closeout reuse → D4 risk tiers`
 
 ## Evaluation metrics
 
@@ -359,6 +392,8 @@ evidence of improvement.
 - Do not reclassify blockers merely to improve telemetry.
 - Do not derive a universal ticket-size threshold from the selected sample.
 - Do not undo #62 or narrow its neighborhood radius when moving to delta review.
+- Do not allow a confirmation-invalidating change outside the convergence
+  budget.
 - Do not merge this investigation into a general `to-tickets` rewrite; ticket
   sizing is a co-factor while #64 is focused on `work-on` execution and
   convergence.
