@@ -314,20 +314,33 @@ branch can be rewritten. Requiring both means an omission has to be performed
 twice, in two systems with different histories, and disagreement between them is
 itself the alarm.
 
-**One long-lived draft results PR, not one PR per record.** After the protocol
-PR merges and before the first eligible run, open a single draft pull request
-titled `A3 results: control window records`, based on the protocol merge commit.
-Every record is one new commit appended to that branch:
+**One long-lived draft results PR, not one PR per record.** Every commit on that
+branch is a record; there is no setup, scaffolding, or placeholder commit, so the
+branch comes into existence with its first record rather than before it:
 
-- **append only** — push the new commit with no rebase, amend, squash, reorder,
+- the branch is cut from the protocol merge commit and named
+  `agent/work-on-a3-results`;
+- **the draft PR is opened by pushing the first record commit** — titled `A3
+  results: control window records` — at that record's export deadline: after the
+  run it describes has ended, and before the next run in any listed repository
+  starts. The first record is whichever comes first in `seq`, counted or
+  attrition;
+- every later record is one further commit appended to the same branch;
+- **append only** — push each new commit with no rebase, amend, squash, reorder,
   or force-push, ever;
-- each record commit's parent is the previous record commit, and the first
-  record commit's parent is the protocol merge commit;
-- the branch is pushed before the matching #64 comment is posted, so the comment
-  can name the commit SHA that already exists; and
+- each record commit's parent is the previous record commit, and the first record
+  commit's parent is the protocol merge commit;
+- the commit is pushed before the matching #64 comment is posted, so the comment
+  can name a SHA that already exists; and
 - **any rewrite of that branch's history invalidates the window** (§9). A
   force-push is not a tidy-up here; it is the one action the surface exists to
   make impossible.
+
+Opening the PR earlier would need a commit that is not a record, which the
+ancestry rule above forbids and which an empty branch cannot supply anyway. The
+window does not wait on the PR: eligibility is decided from telemetry facts (§4),
+so a run that finishes before the branch exists is already in the sequence, and
+its record is what creates the branch.
 
 The results PR stays draft for the whole window and is merged exactly once, at
 close, after the chain verifies (§9). Five records plus attrition do not need
@@ -624,11 +637,11 @@ sed -n '/^<!-- A3-FROZEN-BEGIN -->$/,/^<!-- A3-FROZEN-END -->$/p' \
 
 | Field | Value |
 |---|---|
-| Frozen-region sha256 | `7da8ffca00b3d1f96bf36a9e944210478c8cecd4ef449e6d279af97661d0c325` |
+| Frozen-region sha256 | `468d2321e15273de61a160e0f1e251635f6f92bd1e74736300d0bd8f92a14557` |
 | Protocol merge commit | _recorded by the first record commit_ |
 | Start boundary (UTC) | _recorded by the first record commit_ |
-| A3 results PR | _recorded when opened, before the first eligible run_ |
-| Results branch | _recorded when opened_ |
+| A3 results PR | _recorded when the first record commit opens it_ |
+| Results branch | `agent/work-on-a3-results`, cut from the protocol merge commit |
 
 The digest is stored outside the frozen region so it can be recorded without
 changing what it measures. It is also the genesis link of the record chain (§7).
