@@ -7,9 +7,10 @@ set -euo pipefail
 # untracked by construction and never reaches a published artifact.
 #
 # The recorder stores a closed set of enumerated fields, resolved SHAs,
-# byte/duration counts, and a redacted command identity. It has no field for a
-# prompt, an issue body, a diff, a file's contents, or a command's output, so
-# that material cannot be recorded even by mistake.
+# byte/duration counts, and a caller-supplied validation identifier. It has no
+# field for a prompt, an issue body, a diff, a file's contents, a command's
+# arguments, or a command's output, so that material cannot be recorded even by
+# mistake.
 
 readonly schema_version=1
 readonly roles=(
@@ -36,7 +37,8 @@ usage: run-telemetry.sh <subcommand>
   run-id                                    print the active run id
   launch --role R --phase P --round N [--tokens-in N] [--tokens-out N]
   review --kind K --phase P --round N --base REF (--head REF | --worktree)
-  exec --phase P --round N -- <command...>  run and time a validation command
+  exec --command-id ID --phase P --round N -- <command...>
+                                            run and time a validation command
   finish --outcome (Closes|Progresses|aborted)
   summary [--run ID]                        deterministic aggregate as JSON
 USAGE
@@ -66,6 +68,22 @@ require_count() {
   [[ "$2" =~ ^(0|[1-9][0-9]*)$ ]] || fail "$1 must be a nonnegative integer"
 }
 
+# A validation is named by the caller, never derived from the command it runs.
+# The syntax is deliberately narrow — lowercase letters and digits in
+# hyphen-separated words — so the identifier cannot smuggle a path, an
+# argument, a URL, or a credential into the sink, and so two runs of the same
+# check are recognisably the same check.
+readonly command_id_pattern='^[a-z][a-z0-9]*(-[a-z0-9]+)*$'
+readonly command_id_max_length=48
+
+require_command_id() {
+  [[ -n "$1" ]] || fail "exec requires --command-id"
+  [[ "${#1}" -le "$command_id_max_length" ]] \
+    || fail "command-id must be at most $command_id_max_length characters"
+  [[ "$1" =~ $command_id_pattern ]] \
+    || fail "command-id must be lowercase alphanumeric words joined by single hyphens"
+}
+
 # Milliseconds since the epoch. EPOCHREALTIME avoids a subprocess per event;
 # a shell without it degrades to whole seconds rather than failing.
 now_ms() {
@@ -85,13 +103,27 @@ command -v git >/dev/null 2>&1 || fail "run telemetry requires git"
 command -v jq >/dev/null 2>&1 || fail "run telemetry requires jq"
 command -v flock >/dev/null 2>&1 || fail "run telemetry requires flock"
 
-git rev-parse --show-toplevel >/dev/null 2>&1 \
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" \
   || fail "run telemetry requires a Git-backed target repository"
 telemetry_root="$(git rev-parse --absolute-git-dir)/work-on-telemetry"
 pointer="$telemetry_root/current-run"
 runs_root="$telemetry_root/runs"
 
 readonly run_id_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$'
+
+# The sink records what a workstation's runs did, so it is created for its owner
+# only. The umask closes the window between creation and the chmod; the chmod
+# also tightens a directory an earlier version left readable. The umask is set
+# in a subshell so it never reaches a command `exec` runs.
+create_private_dir() {
+  [[ -d "$1" ]] || (umask 077 && mkdir -p "$1")
+  chmod 700 "$1"
+}
+
+create_private_file() {
+  [[ -e "$1" ]] || (umask 077 && : >"$1")
+  chmod 600 "$1"
+}
 
 active_run() {
   local id
@@ -157,51 +189,38 @@ append_event() {
   close_sink
 }
 
-# A validation's arguments are never stored. They are redacted and then hashed
-# into an opaque `command_id` that only says whether two executions ran the same
-# command. Redacting before hashing keeps a credential out of the digest's input
-# entirely, and keeps the identity stable when a credential is rotated.
-# Redaction is by name, by flag, by position after a secret-shaped flag, and by
-# value shape.
-readonly secret_name_pattern='(TOKEN|SECRET|PASSWORD|PASSWD|APIKEY|API_KEY|_KEY|^KEY$|CREDENTIAL|AUTHORIZATION|AUTH_|_AUTH|^AUTH$|SESSION|COOKIE|SIGNATURE|PRIVATE)'
-readonly secret_flag_pattern='^--?[A-Za-z0-9-]*(token|secret|password|passwd|apikey|api-key|key|credential|auth|bearer)[A-Za-z0-9-]*$'
-readonly secret_value_pattern='^(gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,}|sk-[A-Za-z0-9_-]{16,}|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[A-Z0-9]{12,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|[A-Za-z0-9+/]{40,}={0,2})$'
+# A review's size is the size of one named artifact, produced the same way every
+# time. Presentation configuration — colour, quoted paths, external and textconv
+# drivers, prefixes — is pinned, and every command runs from the repository root,
+# so the same repository state always yields the same bytes no matter which
+# directory the recorder was called from.
+diff_git() {
+  git -C "$repo_root" \
+    -c core.quotePath=false \
+    -c diff.noprefix=false \
+    -c diff.mnemonicPrefix=false \
+    --no-pager diff --no-ext-diff --no-color --no-textconv "$@"
+}
 
-redact_command() {
-  local token name value previous_was_secret_flag=false
-  redacted_command=()
-  for token in "$@"; do
-    if [[ "$previous_was_secret_flag" == true ]]; then
-      redacted_command+=('[redacted]')
-      previous_was_secret_flag=false
-      continue
-    fi
-    if [[ "$token" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
-      name="${BASH_REMATCH[1]}"
-      value="${BASH_REMATCH[2]}"
-      if [[ "${name^^}" =~ $secret_name_pattern || "$value" =~ $secret_value_pattern ]]; then
-        redacted_command+=("$name=[redacted]")
-        continue
-      fi
-    elif [[ "$token" =~ ^(--?[A-Za-z0-9][A-Za-z0-9_-]*)=(.*)$ ]]; then
-      name="${BASH_REMATCH[1]}"
-      value="${BASH_REMATCH[2]}"
-      if [[ "$name" =~ $secret_flag_pattern || "$value" =~ $secret_value_pattern ]]; then
-        redacted_command+=("$name=[redacted]")
-        continue
-      fi
-    fi
-    if [[ "$token" =~ $secret_flag_pattern ]]; then
-      previous_was_secret_flag=true
-      redacted_command+=("$token")
-      continue
-    fi
-    if [[ "$token" =~ $secret_value_pattern ]]; then
-      redacted_command+=('[redacted]')
-      continue
-    fi
-    redacted_command+=("$token")
-  done
+# The worktree-review bundle: exactly what a readiness sweep is told to inspect,
+# in one deterministic order.
+#
+#   1. every tracked change against the base, staged and unstaged alike
+#      (`git diff <base>` compares the working tree to the base commit, so a
+#      staged addition is already a tracked change and is not counted twice);
+#   2. every untracked, non-ignored regular file, as its whole content.
+#
+# `git ls-files` emits its paths sorted and NUL-delimited, so a name holding a
+# space, a quote, or a newline is passed through exactly and the order does not
+# depend on the shell. `--no-index` reports a difference with status 1, which is
+# the expected result here, not a failure.
+worktree_review_bundle() {
+  local base_sha="$1" untracked
+  diff_git "$base_sha"
+  while IFS= read -r -d '' untracked; do
+    [[ -f "$repo_root/$untracked" ]] || continue
+    diff_git --no-index -- /dev/null "$untracked" || true
+  done < <(git -C "$repo_root" ls-files --others --exclude-standard -z)
 }
 
 subcommand="${1:-}"
@@ -211,20 +230,22 @@ shift || true
 case "$subcommand" in
   start)
     [[ "$#" -eq 0 ]] || usage
-    mkdir -p "$runs_root"
+    create_private_dir "$telemetry_root"
+    create_private_dir "$runs_root"
     suffix="$(od -An -tx1 -N4 /dev/urandom 2>/dev/null | tr -d ' \n')"
     [[ "$suffix" =~ ^[0-9a-f]{8}$ ]] \
       || suffix="$(printf '%08x' $(( (RANDOM << 16 | RANDOM) & 0xffffffff )))"
     run_id="$(date -u +%Y%m%dT%H%M%SZ)-$suffix"
     [[ "$run_id" =~ $run_id_pattern ]] || fail "could not mint a run id"
     [[ ! -e "$runs_root/$run_id.jsonl" ]] || fail "run id collision: $run_id"
-    : >"$runs_root/$run_id.jsonl"
+    create_private_file "$runs_root/$run_id.jsonl"
     head_sha="$(git rev-parse --verify HEAD 2>/dev/null || printf '')"
     append_event "$run_id" run_start "$(
       jq -cn --arg head "$head_sha" \
         '{workflow: "work-on"} + (if $head == "" then {} else {head: $head} end)'
     )"
     staged="$pointer.$$"
+    create_private_file "$staged"
     printf '%s\n' "$run_id" >"$staged"
     mv -f "$staged" "$pointer"
     printf '%s\n' "$run_id"
@@ -301,22 +322,16 @@ case "$subcommand" in
       || fail "review --base does not resolve to a commit: $base"
     head_sha="$(git rev-parse --verify "$head_ref^{commit}" 2>/dev/null)" \
       || fail "review --head does not resolve to a commit: $head_ref"
-    # Only the size of the compared material is recorded; the diff itself is
-    # measured and discarded. A worktree sweep reads new files that git does not
-    # track yet, so their content counts toward what the reviewer was given —
-    # measuring only tracked changes would understate a sweep whose whole
-    # subject is new code. Ignored files are not part of the review.
+    # Only the size of the reviewed artifact is recorded; the artifact itself is
+    # measured as it streams and never lands anywhere. A worktree sweep reads
+    # new files that git does not track yet, so their content is part of what
+    # the reviewer was handed — measuring `git diff` alone would report a sweep
+    # whose whole subject is new code as a zero-byte review. Ignored files are
+    # not part of it.
     if [[ "$worktree" == true ]]; then
-      input_bytes="$(
-        {
-          git diff "$base_sha"
-          while IFS= read -r -d '' untracked; do
-            git diff --no-index --no-color -- /dev/null "$untracked" || true
-          done < <(git ls-files --others --exclude-standard -z)
-        } | wc -c | tr -d ' '
-      )"
+      input_bytes="$(worktree_review_bundle "$base_sha" | wc -c | tr -d ' ')"
     else
-      input_bytes="$(git diff "$base_sha...$head_sha" | wc -c | tr -d ' ')"
+      input_bytes="$(diff_git "$base_sha...$head_sha" | wc -c | tr -d ' ')"
     fi
     run_id="$(active_run)"
     append_event "$run_id" review "$(
@@ -330,34 +345,29 @@ case "$subcommand" in
     ;;
 
   exec)
+    command_id=""
     phase=""
     round=""
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
+        --command-id) command_id="${2:?--command-id requires a value}"; shift 2 ;;
         --phase) phase="${2:?--phase requires a value}"; shift 2 ;;
         --round) round="${2:?--round requires a value}"; shift 2 ;;
         --) shift; break ;;
         *) usage ;;
       esac
     done
+    # The identifier is validated before the command runs, so a run cannot
+    # record executions the next run has no name for.
+    require_command_id "$command_id"
     require_enum phase "$phase" "${phases[@]}"
     require_round "$round"
     [[ "$#" -gt 0 ]] || fail "exec requires a command after --"
     run_id="$(active_run)"
 
-    redact_command "$@"
-    # Tokens are hashed as base64 lines so that a token containing any byte
-    # still contributes exactly once, and no token can be confused with the
-    # separator.
-    encoded_command=""
-    for token in "${redacted_command[@]}"; do
-      encoded_command+="$(printf '%s' "$token" | base64 | tr -d '\n')"$'\n'
-    done
-    command_id="$(printf '%s' "$encoded_command" | sha256sum | cut -c1-12)"
-    # The program's own name is legible and cannot carry an argument's secret;
-    # its directory is dropped so no workstation path is recorded either.
-    program="${1##*/}"
-    [[ "$program" =~ ^[A-Za-z0-9._-]{1,64}$ ]] || program=other
+    # Nothing about the command itself is examined, hashed, or stored — not its
+    # arguments, not its program, not its path. A validation is whatever the
+    # caller deliberately named it, and that name is all the sink learns.
     started_ms="$(now_ms)"
 
     # Counting prior executions and writing this one's start happen under a
@@ -373,9 +383,8 @@ case "$subcommand" in
     write_event "$run_id" validation_start "$(
       jq -cn \
         --arg exec_id "$exec_id" --arg command_id "$command_id" \
-        --arg program "$program" \
         --arg phase "$phase" --argjson round "$round" \
-        '{exec_id: $exec_id, command_id: $command_id, program: $program,
+        '{exec_id: $exec_id, command_id: $command_id,
           phase: $phase, round: $round}'
     )"
     close_sink
@@ -387,11 +396,10 @@ case "$subcommand" in
       append_event "$run_id" validation_end "$(
         jq -cn \
           --arg exec_id "$exec_id" --arg command_id "$command_id" \
-          --arg program "$program" \
           --arg phase "$phase" --argjson round "$round" \
           --arg outcome "$outcome" --argjson exit_status "$status" \
           --argjson duration_ms "$(( $(now_ms) - started_ms ))" \
-          '{exec_id: $exec_id, command_id: $command_id, program: $program,
+          '{exec_id: $exec_id, command_id: $command_id,
             phase: $phase, round: $round, outcome: $outcome,
             exit_status: $exit_status, duration_ms: $duration_ms}'
       )"
@@ -427,9 +435,23 @@ case "$subcommand" in
     done
     require_enum outcome "$outcome" "${run_outcomes[@]}"
     run_id="$(active_run)"
-    append_event "$run_id" run_finish "$(
+    # A run resolves its outcome exactly once. Checking for an existing
+    # `run_finish` and writing this one happen under a single lock, so two
+    # closers cannot both find none and both write.
+    open_sink "$run_id"
+    finish_count="$(
+      jq -n -R '[inputs | fromjson? // empty
+        | select(type == "object" and .type == "run_finish")] | length' \
+        <"$sink_run_file"
+    )"
+    if [[ "$finish_count" -ne 0 ]]; then
+      close_sink
+      fail "run $run_id already recorded its final outcome"
+    fi
+    write_event "$run_id" run_finish "$(
       jq -cn --arg outcome "$outcome" '{outcome: $outcome}'
     )"
+    close_sink
     ;;
 
   summary)
@@ -449,6 +471,12 @@ case "$subcommand" in
     fi
     # Aggregation is a pure function of one run's sink: enumerated keys in a
     # fixed order, and lines that are not this run's schema-1 JSON ignored.
+    #
+    # A finished run's summary is final, not a snapshot of the moment it was
+    # asked for. The window closes at `run_finish`, so the same finished run
+    # always summarizes to the same document however often it is rendered, and
+    # anything recorded afterwards is reported as `events_after_finish` rather
+    # than folded into counts the closeout body already published.
     jq -n -R -c \
       --argjson schema "$schema_version" \
       --arg run "$run_id" \
@@ -457,7 +485,12 @@ case "$subcommand" in
       --argjson phases "$(printf '%s\n' "${phases[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" '
       [inputs | select(length > 0)] as $lines
       | [$lines[] | fromjson? // empty] as $parsed
-      | [$parsed[] | select(type == "object" and .run == $run and .schema == $schema)] as $events
+      | [$parsed[] | select(type == "object" and .run == $run and .schema == $schema)] as $recorded
+      | [$recorded[] | select(.type == "run_finish")] as $finishes
+      | ($finishes | first) as $finish
+      | (if $finish == null then null else ($finish.seq // 0) end) as $final_seq
+      | [$recorded[]
+        | select($final_seq == null or (.seq // 0) <= $final_seq)] as $events
       | [$events[] | select(.type == "subagent_launch")] as $launches
       | [$events[] | select(.type == "review")] as $reviews
       | [$events[] | select(.type == "validation_start")] as $starts
@@ -468,10 +501,12 @@ case "$subcommand" in
           schema: $schema,
           run: $run,
           started_at: ([$events[] | select(.type == "run_start") | .at] | first),
-          finished_at: ([$events[] | select(.type == "run_finish") | .at] | last),
+          finished_at: (if $finish == null then null else $finish.at end),
           final_workflow_outcome:
-            ([$events[] | select(.type == "run_finish") | .outcome] | last),
+            (if $finish == null then null else $finish.outcome end),
+          finish_events: ($finishes | length),
           events: ($events | length),
+          events_after_finish: (($recorded | length) - ($events | length)),
           malformed_lines: (($lines | length) - ($parsed | length)),
           subagent_launches: {
             total: ($launches | length),

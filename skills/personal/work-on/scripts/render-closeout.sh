@@ -200,13 +200,28 @@ run_value="$("$script_root/workflow-provenance.sh" verify)" \
 telemetry_summary="$("$script_root/run-telemetry.sh" summary)" \
   || fail "run telemetry summary failed"
 
-# The run records its own outcome. A body claiming one thing while the run
-# recorded another is a contradiction of the same kind as the two facts fields
-# disagreeing, and is refused rather than published.
+# A closeout body reports a finished run. The run resolves its own outcome at
+# the closure gate, before any body is rendered, so the three statements of that
+# outcome — the issue mapping, the observed telemetry field, and the run's own
+# record — must be one statement. A run that never finished has nothing to
+# report; a run that finished twice does not have an outcome at all; and a run
+# that recorded a different outcome contradicts the body rather than supporting
+# it. Each is refused before anything is published.
+recorded_finishes="$(jq -r '.finish_events // 0' <<<"$telemetry_summary")"
+[[ "$recorded_finishes" =~ ^[0-9]+$ ]] \
+  || fail "run telemetry did not report how the run finished"
+[[ "$recorded_finishes" -ne 0 ]] \
+  || fail "the run has not finished; record run-telemetry.sh finish at the closure gate"
+[[ "$recorded_finishes" -eq 1 ]] \
+  || fail "the run recorded $recorded_finishes final outcomes; exactly one is allowed"
 recorded_outcome="$(jq -r '.final_workflow_outcome // empty' \
   <<<"$telemetry_summary")"
-[[ -z "$recorded_outcome" || "$recorded_outcome" == "$outcome" ]] \
+[[ -n "$recorded_outcome" ]] \
+  || fail "the run recorded no final outcome"
+[[ "$recorded_outcome" == "$outcome" ]] \
   || fail "outcome $outcome contradicts recorded run outcome $recorded_outcome"
+[[ "$recorded_outcome" == "$telemetry_outcome" ]] \
+  || fail "telemetry outcome $telemetry_outcome contradicts recorded run outcome $recorded_outcome"
 
 summary_value() {
   jq -r "($1) | tostring"' | gsub("\\|"; "&#124;") | gsub("\\r?\\n"; "<br>")' \

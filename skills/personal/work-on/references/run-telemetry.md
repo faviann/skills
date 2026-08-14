@@ -24,9 +24,13 @@ Every line carries `schema`, `run`, `seq`, `at`, `epoch_ms`, and `type`. The
 current schema version is **1**; the rendered pull-request body names it.
 
 Several subagents and validation wrappers may record at the same time, so
-sequence numbers, execution ids, and the append itself are allocated under an
-exclusive lock on the run's file. Two writers can never be handed the same
-number, and no append can land inside another.
+sequence numbers, execution ids, the single final outcome, and the append itself
+are allocated under an exclusive lock on the run's file. Two writers can never
+be handed the same number, and no append can land inside another.
+
+The directory, the pointer, and every sink are created for their owner only —
+`0700` and `0600`. A run's record of a workstation's work is not group- or
+world-readable.
 
 ## Recording a run
 
@@ -38,7 +42,7 @@ buffered, so an abandoned run leaves exactly what it had recorded.
 | Once, when the run begins | `run-telemetry.sh start` |
 | Every top-level subagent launch | `run-telemetry.sh launch --role R --phase P --round N [--tokens-in N --tokens-out N]` |
 | Every review handed to a subagent | `run-telemetry.sh review --kind K --phase P --round N --base REF (--head REF \| --worktree)` |
-| Every top-level validation command | `run-telemetry.sh exec --phase P --round N -- <command>` |
+| Every top-level validation command | `run-telemetry.sh exec --command-id ID --phase P --round N -- <command>` |
 | Once, when the closure gate resolves the outcome | `run-telemetry.sh finish --outcome (Closes\|Progresses\|aborted)` |
 
 - `--role` is one of `implementation`, `readiness`, `review-standards`,
@@ -48,21 +52,58 @@ buffered, so an abandoned run leaves exactly what it had recorded.
 - `--kind` is one of `readiness`, `full`, `delta`. `delta` exists in the schema
   so the recorder does not need changing later; the current workflow never
   emits it.
-- `review` resolves both refs to full SHAs itself and measures the compared
-  diff's byte count itself. Use `--worktree` for a sweep that reads uncommitted
-  work, which measures the working tree against `--base` **including files git
-  does not track yet** — a readiness sweep whose whole subject is new code is
-  not a zero-byte review. Ignored files are not part of it.
+- `review` resolves both refs to full SHAs itself and measures the reviewed
+  artifact's byte count itself. Use `--worktree` for a sweep that reads
+  uncommitted work; the [worktree-review bundle](#the-worktree-review-bundle)
+  below defines exactly what is measured.
+- `--command-id` names the validation: lowercase alphanumeric words joined by
+  single hyphens, at most 48 characters — `work-on-tests`, `lint`,
+  `npm-check-plugin-version`. Give the same check the same id every time, so
+  repeated executions of one check are recognisable as one check. It is the
+  only thing the sink learns about a command, so choose a name that is safe to
+  keep: never derive it from a path, a URL, an argument, or a credential.
 - `exec` runs the command, passes its stdout, stderr, and exit status straight
   through, and records the execution around it. Wrap the top-level command, not
   its child processes.
-- `finish` is recorded when the closure gate resolves the outcome, before the
-  body is rendered. The renderer refuses a body whose outcome contradicts the
-  outcome the run recorded.
+- `finish` is recorded once, when the closure gate resolves the outcome, before
+  the body is rendered. See [The run's outcome](#the-runs-outcome).
 
 Token counts are optional. A runtime that does not expose them records launches
 without `--tokens-in`/`--tokens-out`; the summary then reports token coverage as
 `none` or `partial` and nothing fails. Never estimate a token count.
+
+## The worktree-review bundle
+
+`--worktree` measures one deterministic bundle — exactly the material a
+readiness sweep is told to inspect, assembled the same way every time:
+
+1. every tracked change against `--base`, staged and unstaged alike; then
+2. every untracked, non-ignored regular file, whole, in git's sorted path order.
+
+A staged addition is already a tracked change, so it is counted once, not twice.
+Files the repository ignores are not part of the review and are not counted.
+Paths needing quoting are passed through exactly, and the presentation
+configuration that would otherwise vary the bytes — colour, quoted paths,
+external and textconv drivers, prefixes — is pinned. The bundle is measured as
+it streams and is never written anywhere.
+
+Measuring `git diff` alone would report a readiness sweep whose whole subject is
+new code as a zero-byte review, which is the opposite of what it cost.
+
+## The run's outcome
+
+A run resolves its outcome exactly once. `finish` refuses a second call, so a
+run cannot hold two answers, and the summary of a finished run is **final**: the
+aggregation window closes at `run_finish`. The same finished run therefore
+summarizes identically however often the body is re-rendered, and every
+validation counted in a published body ran before the gate that closed the run.
+Anything recorded after `finish` is reported separately as `events_after_finish`
+and is not folded into counts an already-published body reported.
+
+Rendering a closeout requires a finished run. `render-closeout.sh` refuses a
+body when the run never finished, when it recorded more than one final outcome,
+or when the recorded outcome differs from either the issue mapping's outcome or
+the observed `Final workflow outcome` field.
 
 ## Interruption
 
@@ -81,24 +122,25 @@ earlier event.
 ## What is deliberately not recorded
 
 The recorder has a closed set of fields — enumerated roles, phases and kinds,
-resolved SHAs, integers, and a redacted command identity. There is no field for
-free-form text, so none of the following can be stored even by mistake:
+resolved SHAs, integers, and a supplied validation identifier. There is no field
+for free-form text, so none of the following can be stored even by mistake:
 
 - prompts, contracts, briefs, or subagent reports;
 - issue bodies, comments, or repository documentation;
 - diffs, file contents, or test output — a review records only how many bytes
   were compared, and `exec` records only an exit status and a duration;
 - environment variables, credentials, or raw untrusted diagnostics;
-- **a validation's arguments** — no argument of any kind is stored.
+- **a validation's command line** — neither its arguments nor its program.
 
-A validation is identified by `program`, the basename of the command being run,
-and `command_id`, an opaque digest that only says whether two executions ran the
-same command. A program name cannot carry an argument's secret, and dropping its
-directory keeps workstation paths out too. The digest is taken over the
-arguments *after* redacting anything whose name, flag, position, or value shape
-looks like a credential, so a secret is not an input to it — which also keeps
-the identity stable when a credential is rotated. Keep secrets in the
-environment rather than on the command line anyway.
+A validation is identified only by the `--command-id` its caller supplied. The
+command text is never stored, never inspected, and never hashed: a digest of it
+would still be a secret-bearing argument list processed for an analytics
+purpose, and would name the execution with something nobody can read back. A
+deliberately chosen, validated identifier is inspectable, is stable when a
+credential is rotated, and is the whole of what the sink knows.
+
+The command's own behaviour is untouched: it receives its exact arguments, and
+its stdout, stderr, and exit status pass straight through.
 
 ## Bounded closeout summaries
 

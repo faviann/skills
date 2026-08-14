@@ -59,6 +59,28 @@ second_summary="$(telemetry summary --run "$second_run")"
 [[ -z "$(git -C "$target" status --porcelain)" ]]
 [[ -d "$sink_root" ]]
 
+# The sink records what this workstation's runs did, so nothing under it is
+# readable or writable by anyone else.
+assert_private() {
+  local path mode
+  for path in "$@"; do
+    mode="$(stat -c '%a' "$path")"
+    if [[ ! "$mode" =~ ^[0-7]00$ ]]; then
+      printf 'FAIL[sink-permissions]: %s is mode %s\n' "$path" "$mode" >&2
+      exit 1
+    fi
+  done
+}
+assert_private "$sink_root" "$sink_root/runs" "$sink_root/current-run" \
+  "$sink_root/runs/$first_run.jsonl" "$sink_root/runs/$second_run.jsonl"
+
+# A directory an earlier version left readable is tightened rather than reused
+# as it is.
+chmod 755 "$sink_root" "$sink_root/runs"
+loose_run="$(telemetry start)"
+assert_private "$sink_root" "$sink_root/runs" "$sink_root/current-run" \
+  "$sink_root/runs/$loose_run.jsonl"
+
 # 2. A launch retains its role, phase, and round.
 work_run="$(telemetry start)"
 telemetry launch --role implementation --phase implementation --round 1
@@ -120,19 +142,48 @@ readiness_review="$(jq -c 'select(.type == "review" and .kind == "readiness")' "
 [[ "$(jq -r '.input_bytes' <<<"$readiness_review")" -eq "$worktree_bytes" ]]
 
 # A file git does not track yet is still material the sweep reads, so it counts
-# toward the compared bytes; a file the repository ignores does not.
+# toward the measured bundle; a file the repository ignores does not.
 review_bytes() {
   telemetry review --kind readiness --phase checkpoint --round 1 \
     --base "$head_sha" --worktree
   jq -r '[.[] | select(.type == "review" and .kind == "readiness")][-1]
     | .input_bytes' -s "$sink"
 }
+# What one untracked file contributes to the bundle, computed independently of
+# the recorder.
+untracked_bundle_bytes() {
+  # `--no-index` reports a difference with status 1, which is the expected
+  # result here rather than a failure.
+  { git -C "$target" -c core.quotePath=false --no-pager diff --no-ext-diff \
+    --no-color --no-textconv --no-index -- /dev/null "$1" || true; } \
+    | wc -c | tr -d ' '
+}
 tracked_only_bytes="$(review_bytes)"
 printf 'SYNTHETIC-UNTRACKED-CONTENT-MARKER\n' >"$target/untracked.txt"
 with_untracked_bytes="$(review_bytes)"
-[[ "$with_untracked_bytes" -gt "$tracked_only_bytes" ]]
-[[ $(( with_untracked_bytes - tracked_only_bytes )) -ge \
-  $(wc -c <"$target/untracked.txt") ]]
+# The file is genuinely untracked at the moment it is measured — the recorder
+# does not stage or commit anything to make it countable.
+[[ "$(git -C "$target" status --porcelain -- untracked.txt)" == '?? untracked.txt' ]]
+[[ $(( with_untracked_bytes - tracked_only_bytes )) \
+  -eq "$(untracked_bundle_bytes untracked.txt)" ]]
+[[ "$(untracked_bundle_bytes untracked.txt)" \
+  -gt "$(wc -c <"$target/untracked.txt")" ]]
+
+# A name needing quoting is passed through exactly, not skipped and not
+# mismeasured.
+quoted_name='needs "quoting" and spaces.txt'
+printf 'SYNTHETIC-QUOTED-NAME-CONTENT-MARKER\n' >"$target/$quoted_name"
+with_quoted_bytes="$(review_bytes)"
+[[ $(( with_quoted_bytes - with_untracked_bytes )) \
+  -eq "$(untracked_bundle_bytes "$quoted_name")" ]]
+
+# A tracked change counts whether it is staged or not, and staging an existing
+# change does not change what the sweep is measured to have read.
+printf 'SYNTHETIC-WORKTREE-CONTENT-MARKER\n' >>"$target/first.txt"
+unstaged_bytes="$(review_bytes)"
+[[ "$unstaged_bytes" -gt "$with_quoted_bytes" ]]
+git -C "$target" add first.txt
+[[ "$(review_bytes)" -eq "$unstaged_bytes" ]]
 
 printf 'ignored.txt\n' >"$target/.gitignore"
 printf 'SYNTHETIC-IGNORED-CONTENT-MARKER\n' >"$target/ignored.txt"
@@ -143,6 +194,25 @@ tracked_only_bytes="$(review_bytes)"
 printf 'SYNTHETIC-IGNORED-CONTENT-MARKER\n' >>"$target/ignored.txt"
 [[ "$(review_bytes)" -eq "$tracked_only_bytes" ]]
 
+# The whole measurement is the defined bundle and nothing else: tracked changes
+# against the base, then every untracked, non-ignored file.
+expected_bundle=$(git -C "$target" -c core.quotePath=false --no-pager diff \
+  --no-ext-diff --no-color --no-textconv "$head_sha" | wc -c)
+while IFS= read -r -d '' candidate; do
+  expected_bundle=$(( expected_bundle + $(untracked_bundle_bytes "$candidate") ))
+done < <(git -C "$target" ls-files --others --exclude-standard -z)
+[[ "$(review_bytes)" -eq "$expected_bundle" ]]
+
+# The bundle is the repository's, not the caller's working directory's: a review
+# recorded from a subdirectory measures the same artifact.
+mkdir -p "$target/nested"
+printf 'SYNTHETIC-NESTED-CONTENT-MARKER\n' >"$target/nested/nested.txt"
+nested_bytes="$(review_bytes)"
+(cd "$target/nested" && "$command_under_test" review \
+  --kind readiness --phase checkpoint --round 1 --base "$head_sha" --worktree)
+[[ "$(jq -r '[.[] | select(.type == "review" and .kind == "readiness")][-1]
+  | .input_bytes' -s "$sink")" -eq "$nested_bytes" ]]
+
 # `delta` is recordable even though the workflow does not yet run delta review.
 telemetry review --kind delta --phase remediation --round 2 \
   --base "$base_sha" --head "$head_sha"
@@ -150,11 +220,11 @@ telemetry review --kind delta --phase remediation --round 2 \
 
 # 4. A validation execution gets a stable execution id, a duration, and an
 # outcome, and the wrapper is transparent to the command's status and output.
-telemetry exec --phase gate --round 1 -- \
+telemetry exec --command-id emit-stdout --phase gate --round 1 -- \
   bash -c "$emit_stdout_marker" >"$fixture/passed.out"
 grep -Fqx "$stdout_marker" "$fixture/passed.out"
 
-if telemetry exec --phase gate --round 1 -- \
+if telemetry exec --command-id emit-stderr --phase gate --round 1 -- \
     bash -c "$emit_stderr_marker; exit 3" \
     >"$fixture/failed.out" 2>"$fixture/failed.err"; then
   printf 'FAIL[exec-status]: a failing command reported success\n' >&2
@@ -174,27 +244,46 @@ failed_id="$(jq -r 'select(.type == "validation_end" and .outcome == "failed")
   | .exit_status" "$sink")" -eq 3 ]]
 jq -e 'select(.type == "validation_end")
   | .duration_ms | type == "number" and . >= 0' "$sink" >/dev/null
-# The same command text keeps one command identity across executions, and a
-# different command gets a different one.
-telemetry exec --phase gate --round 1 -- \
+# The supplied identifier is what makes two executions the same validation: the
+# same id twice is one identity, a different id is a different one.
+telemetry exec --command-id emit-stdout --phase gate --round 1 -- \
   bash -c "$emit_stdout_marker" >/dev/null
 [[ "$(jq -r 'select(.type == "validation_start") | .exec_id' "$sink" \
   | sort -u | wc -l)" -eq 3 ]]
 [[ "$(jq -r 'select(.type == "validation_start") | .command_id' "$sink" \
   | sort -u | wc -l)" -eq 2 ]]
 
+# An identifier outside the narrow supplied syntax is refused before the command
+# runs, so a path, a URL, an argument, or a credential cannot become one.
+refuse missing-command-id exec --phase gate --round 1 -- true
+rejected_index=0
+for rejected_id in 'Work-On-Tests' 'work_on_tests' './scripts/test.sh' \
+    'ghp_EXAMPLENOTAREALTOKEN0000000000' 'https://example.invalid/x' \
+    'trailing-' '-leading' '1st-check' 'double--hyphen' 'has space' \
+    'aaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeff'; do
+  refuse "command-id-$rejected_index" exec --command-id "$rejected_id" \
+    --phase gate --round 1 -- true
+  rejected_index=$((rejected_index + 1))
+done
+for accepted_id in a lint work-on-tests npm-check-plugin-version check2 \
+    aaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeee; do
+  telemetry exec --command-id "$accepted_id" --phase gate --round 1 -- true
+done
+[[ "$(jq -r 'select(.type == "validation_start") | .command_id' "$sink" \
+  | sort -u | wc -l)" -eq 8 ]]
+
 # 5. An interrupted validation leaves a controlled, machine-readable record.
-telemetry exec --phase gate --round 1 -- \
+telemetry exec --command-id self-terminating --phase gate --round 1 -- \
   bash -c 'kill -TERM $PPID; exit 0' >/dev/null 2>&1 || true
 [[ "$(jq -r '.validations.interrupted' <<<"$(telemetry summary)")" -eq 1 ]]
 
 # A wrapper killed outright cannot write its own end record; aggregation must
 # still report a controlled `incomplete` execution instead of failing.
-telemetry exec --phase gate --round 1 -- \
+telemetry exec --command-id self-killing --phase gate --round 1 -- \
   bash -c 'kill -9 $PPID' >/dev/null 2>&1 || true
 interrupted_summary="$(telemetry summary)"
 [[ "$(jq -r '.validations.incomplete' <<<"$interrupted_summary")" -eq 1 ]]
-[[ "$(jq -r '.validations.total' <<<"$interrupted_summary")" -eq 5 ]]
+[[ "$(jq -r '.validations.total' <<<"$interrupted_summary")" -eq 11 ]]
 [[ "$(jq -r '.malformed_lines' <<<"$interrupted_summary")" -eq 0 ]]
 
 # The sink survives the interruption: every line is still one JSON event and
@@ -225,56 +314,84 @@ token_free_summary="$(telemetry summary)"
 [[ "$(jq -r '.tokens.coverage' <<<"$token_free_summary")" == none ]]
 [[ "$(jq -r '.run' <<<"$token_free_summary")" == "$token_free_run" ]]
 
-# 7/8. Secrets, command output, and repository content stay out of the sink.
-telemetry exec --phase gate --round 1 -- \
+# 7/8. Secrets, command output, and repository content stay out of the sink,
+# while the command itself is unaffected by being wrapped.
+argv_echo="$fixture/argv-echo.sh"
+cat >"$argv_echo" <<'EOF'
+#!/usr/bin/env bash
+printf 'ARGV:%s\n' "$@"
+printf 'SYNTHETIC-%s-MARKER\n' DIAGNOSTIC >&2
+exit 7
+EOF
+chmod +x "$argv_echo"
+
+# Every shape the wrapper must never persist: a header value, a bearer token in
+# a script's arguments, an environment assignment, a filesystem path, and
+# source-shaped text.
+sensitive_argv=(
+  --header "Authorization: Bearer $fake_token"
+  --bearer "$fake_token"
+  "AWS_SECRET_ACCESS_KEY=$fake_password"
+  /home/example/.config/credential-store.yml
+  'const apiKey = "SYNTHETIC-SOURCE-SHAPED-SECRET";'
+)
+argv_status=0
+telemetry exec --command-id argv-passthrough --phase gate --round 1 -- \
+  "$argv_echo" "${sensitive_argv[@]}" \
+  >"$fixture/argv.out" 2>"$fixture/argv.err" || argv_status=$?
+
+# The command received its arguments exactly, and its stdout, stderr, and exit
+# status reached the caller unchanged.
+printf 'ARGV:%s\n' "${sensitive_argv[@]}" >"$fixture/argv.expected"
+diff -u "$fixture/argv.expected" "$fixture/argv.out"
+grep -Fqx "$stderr_marker" "$fixture/argv.err"
+[[ "$argv_status" -eq 7 ]]
+
+# Arbitrary inline shell, an environment-assignment prefix, and a command that
+# reads repository files are all recorded the same way: by name only.
+telemetry exec --command-id shell-inline --phase gate --round 1 -- \
+  bash -c 'printf "SYNTHETIC-%s-MARKER\n" INLINE-SHELL; cat first.txt' \
+  >/dev/null 2>&1 || true
+telemetry exec --command-id prefixed-assignment --phase gate --round 1 -- \
   env "GH_TOKEN=$fake_token" bash -c "$emit_stdout_marker; $emit_stderr_marker" \
   >/dev/null 2>&1
-telemetry exec --phase gate --round 1 -- \
-  ./login.sh --password "$fake_password" >/dev/null 2>&1 || true
-telemetry exec --phase gate --round 1 -- \
-  ./login.sh "--api-key=$fake_token" >/dev/null 2>&1 || true
-telemetry exec --phase gate --round 1 -- \
-  ./login.sh "$fake_token" >/dev/null 2>&1 || true
-telemetry exec --phase gate --round 1 -- \
+telemetry exec --command-id repository-reader --phase gate --round 1 -- \
   cat first.txt second.txt third.txt >/dev/null 2>&1 || true
 
 for secret in "$fake_token" "$fake_password" "$stdout_marker" \
-    "$stderr_marker" SYNTHETIC-FILE-CONTENT-MARKER \
+    "$stderr_marker" SYNTHETIC-INLINE-SHELL-MARKER \
+    SYNTHETIC-SOURCE-SHAPED-SECRET SYNTHETIC-FILE-CONTENT-MARKER \
     SYNTHETIC-DIFF-CONTENT-MARKER SYNTHETIC-WORKTREE-CONTENT-MARKER \
-    SYNTHETIC-UNTRACKED-CONTENT-MARKER SYNTHETIC-IGNORED-CONTENT-MARKER; do
+    SYNTHETIC-UNTRACKED-CONTENT-MARKER SYNTHETIC-IGNORED-CONTENT-MARKER \
+    SYNTHETIC-QUOTED-NAME-CONTENT-MARKER SYNTHETIC-NESTED-CONTENT-MARKER \
+    'needs "quoting" and spaces.txt'; do
   if grep -Fqr -- "$secret" "$sink_root"; then
     printf 'FAIL[sink-secrets]: %s reached the telemetry sink\n' "$secret" >&2
     exit 1
   fi
 done
 
-# No argument reaches the sink at all — not the secret ones, and not the
-# innocuous ones either. Only the program's own name is legible.
+# Nothing of the command line reaches the sink: not an argument, not a flag, not
+# a path, and not the program either. Only the supplied identifier is stored.
 secret_sink="$sink_root/runs/$(telemetry run-id).jsonl"
-for argument in GH_TOKEN --password --api-key ./login.sh \
-    first.txt second.txt third.txt redacted; do
-  if grep -Fq -- "$argument" "$secret_sink"; then
-    printf 'FAIL[sink-argv]: argument %s reached the telemetry sink\n' \
-      "$argument" >&2
+for fragment in Authorization Bearer --header --bearer \
+    AWS_SECRET_ACCESS_KEY GH_TOKEN /home/example apiKey \
+    first.txt second.txt third.txt argv-echo.sh \
+    bash env cat redacted; do
+  if grep -Fq -- "$fragment" "$secret_sink"; then
+    printf 'FAIL[sink-argv]: command material %s reached the telemetry sink\n' \
+      "$fragment" >&2
     exit 1
   fi
 done
-for program in '"program":"cat"' '"program":"env"' '"program":"login.sh"'; do
-  grep -Fq "$program" "$secret_sink"
+for identifier in argv-passthrough shell-inline prefixed-assignment \
+    repository-reader; do
+  grep -Fq "\"command_id\":\"$identifier\"" "$secret_sink"
 done
 
-# A secret is not in the identifier's input either: the same command run with
-# two different credentials keeps one command identity.
-telemetry exec --phase gate --round 1 -- \
-  ./login.sh --password 'SYNTHETIC-FIRST-NOT-A-REAL-PASSWORD' >/dev/null 2>&1 || true
-telemetry exec --phase gate --round 1 -- \
-  ./login.sh --password 'SYNTHETIC-SECOND-NOT-A-REAL-PASSWORD' >/dev/null 2>&1 || true
-[[ "$(jq -r 'select(.type == "validation_start" and .program == "login.sh")
-  | .command_id' "$secret_sink" | tail -2 | sort -u | wc -l)" -eq 1 ]]
-
-# The recorder has no field for a prompt, a diff, a file body, or output: every
-# recorded key comes from this closed set.
-readonly allowed_keys='["at","base","command_id","duration_ms","epoch_ms","exec_id","exit_status","head","head_is_worktree","input_bytes","kind","outcome","phase","program","role","round","run","schema","seq","tokens_in","tokens_out","type","workflow"]'
+# The recorder has no field for a prompt, a diff, a file body, a command line,
+# or output: every recorded key comes from this closed set.
+readonly allowed_keys='["at","base","command_id","duration_ms","epoch_ms","exec_id","exit_status","head","head_is_worktree","input_bytes","kind","outcome","phase","role","round","run","schema","seq","tokens_in","tokens_out","type","workflow"]'
 for run_sink in "$sink_root"/runs/*.jsonl; do
   unexpected="$(jq -r -R --argjson allowed "$allowed_keys" '
     fromjson? // empty | keys[]
@@ -305,6 +422,28 @@ phase_keys="$(jq -r '.phase_elapsed_ms | keys_unsorted | join(",")' \
   <<<"$(telemetry summary)")"
 [[ "$phase_keys" == implementation,gate ]]
 
+# A run resolves its outcome exactly once. A second `finish` is refused rather
+# than leaving the run holding two answers.
+finished_summary="$(telemetry summary)"
+[[ "$(jq -r '.finish_events' <<<"$finished_summary")" -eq 1 ]]
+[[ "$(jq -r '.events_after_finish' <<<"$finished_summary")" -eq 0 ]]
+refuse second-finish finish --outcome Closes
+grep -Fq 'already recorded its final outcome' "$fixture/second-finish.err"
+[[ "$(telemetry summary)" == "$finished_summary" ]]
+
+# A finished run's summary is final, not a snapshot: work recorded afterwards is
+# reported separately instead of changing counts a published body already
+# carried.
+telemetry launch --role other --phase closeout --round 9
+telemetry exec --command-id after-finish --phase closeout --round 9 -- true
+after_finish_summary="$(telemetry summary)"
+[[ "$(jq -r '.events_after_finish' <<<"$after_finish_summary")" -eq 3 ]]
+for unchanged in .subagent_launches.total .validations.total .events \
+    .final_workflow_outcome .finished_at .phase_elapsed_ms; do
+  [[ "$(jq -c "$unchanged" <<<"$after_finish_summary")" \
+    == "$(jq -c "$unchanged" <<<"$finished_summary")" ]]
+done
+
 # 10. Concurrent writers do not lose, fuse, or duplicate events. Several
 # subagents and validation wrappers recording at once is the ordinary case.
 concurrent_run="$(telemetry start)"
@@ -312,7 +451,8 @@ concurrent_sink="$sink_root/runs/$concurrent_run.jsonl"
 readonly writers=12
 for ((writer = 0; writer < writers; writer++)); do
   telemetry launch --role implementation --phase gate --round 1 &
-  telemetry exec --phase gate --round 1 -- true >/dev/null &
+  telemetry exec --command-id concurrent-check --phase gate --round 1 -- true \
+    >/dev/null &
 done
 wait
 
@@ -324,13 +464,25 @@ concurrent_summary="$(telemetry summary --run "$concurrent_run")"
 [[ "$(jq -r '.validations.incomplete' <<<"$concurrent_summary")" -eq 0 ]]
 # One run_start, one launch per writer, and a start plus an end per execution.
 [[ "$(wc -l <"$concurrent_sink")" -eq $((1 + writers * 3)) ]]
-# Every line parsed, so no append landed inside another.
+# Every retained line is one whole JSON event, so no append landed inside
+# another and nothing was lost.
+jq -e . "$concurrent_sink" >/dev/null
 [[ "$(jq -r '.events' <<<"$concurrent_summary")" -eq $((1 + writers * 3)) ]]
 # Sequence numbers and execution ids are allocated exactly once each.
 [[ "$(jq -r '.seq' "$concurrent_sink" | sort -u | wc -l)" \
   -eq $((1 + writers * 3)) ]]
 [[ "$(jq -r 'select(.type == "validation_start") | .exec_id' "$concurrent_sink" \
   | sort -u | wc -l)" -eq "$writers" ]]
+# Every start is closed by exactly one end carrying the same execution id, and
+# no end belongs to a start that was never written.
+[[ "$(jq -r 'select(.type == "validation_end") | .exec_id' "$concurrent_sink" \
+  | sort -u | wc -l)" -eq "$writers" ]]
+[[ "$(jq -r 'select(.type | startswith("validation_")) | .exec_id' \
+  "$concurrent_sink" | sort | uniq -c | awk '$1 != 2' | wc -l)" -eq 0 ]]
+[[ "$(jq -r 'select(.type == "validation_start") | .exec_id' "$concurrent_sink" \
+  | sort)" == "$(jq -r 'select(.type == "validation_end") | .exec_id' \
+  "$concurrent_sink" | sort)" ]]
+assert_private "$concurrent_sink"
 
 # 11. A writer killed mid-append leaves a line with no terminator. The next
 # append closes it off rather than fusing with it, so one torn line costs one
