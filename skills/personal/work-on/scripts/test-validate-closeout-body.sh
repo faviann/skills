@@ -33,6 +33,11 @@ Readable narrative stays readable.
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
+| Telemetry run | 20260813T101500Z-0123abcd (schema 1) |
+| Subagent launches | 4 (implementation=2, review-standards=1, review-spec=1) |
+| Reviews recorded | 2 (readiness=1, full=1, delta=0) |
+| Validation executions recorded | 3 (passed=3, failed=0) |
+| Measured phase elapsed | implementation=120s, gate=60s |
 | Workflow provenance | 1 run |
 
 Run 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
@@ -117,6 +122,11 @@ cat >>"$fixture/pr-162.md" <<'EOF'
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
+| Telemetry run | 20260813T101500Z-0123abcd (schema 1) |
+| Subagent launches | 4 (implementation=2, review-standards=1, review-spec=1) |
+| Reviews recorded | 2 (readiness=1, full=1, delta=0) |
+| Validation executions recorded | 3 (passed=3, failed=0) |
+| Measured phase elapsed | implementation=120s, gate=60s |
 | Workflow provenance | 1 run |
 
 Run 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
@@ -165,9 +175,48 @@ done
 "$command_under_test" 164 "$fixture/unknown-counts.md"
 
 sed -e '/| Workflow provenance |/d' -e '/^Run 1: /d' "$fixture/canonical.md" \
-  >"$fixture/nine-telemetry-rows.md"
-expect_failure nine-telemetry-rows \
-  "workflow telemetry must contain ten canonical rows"
+  >"$fixture/short-telemetry-table.md"
+expect_failure short-telemetry-table \
+  "workflow telemetry must contain fifteen canonical rows"
+
+# The sink-derived rows are mechanically rendered, so a hand-written value in
+# any of them is rejected rather than published as observed telemetry.
+sink_rows=(
+  "Telemetry run|not-a-run-id (schema 1)"
+  "Telemetry run|20260813T101500Z-0123abcd"
+  "Subagent launches|four"
+  "Subagent launches|4 (implementation=2"
+  "Reviews recorded|2 (readiness=1, full=1)"
+  "Reviews recorded|several"
+  "Validation executions recorded|3"
+  "Validation executions recorded|3 (passed=3, failed=0, flaky=1)"
+  "Measured phase elapsed|implementation=120"
+  "Measured phase elapsed|about two minutes"
+)
+for ((index = 0; index < ${#sink_rows[@]}; index++)); do
+  field="${sink_rows[$index]%%|*}"
+  value="${sink_rows[$index]#*|}"
+  awk -v field="$field" -v value="$value" -F'|' '
+    {
+      cell = $2
+      gsub(/^[ \t]+|[ \t]+$/, "", cell)
+      if (cell == field) { printf "| %s | %s |\n", field, value; next }
+      print
+    }
+  ' "$fixture/canonical.md" >"$fixture/malformed-sink-$index.md"
+  expect_failure "malformed-sink-$index" \
+    "workflow telemetry $field is malformed"
+done
+
+# A run that recorded nothing in any phase still renders a valid row.
+sed 's/| Measured phase elapsed | [^|]* |/| Measured phase elapsed | unknown |/' \
+  "$fixture/canonical.md" >"$fixture/unmeasured-phases.md"
+"$command_under_test" 164 "$fixture/unmeasured-phases.md"
+
+# A run with no launches renders a bare zero rather than an empty breakdown.
+sed 's/| Subagent launches | [^|]* |/| Subagent launches | 0 |/' \
+  "$fixture/canonical.md" >"$fixture/no-launches.md"
+"$command_under_test" 164 "$fixture/no-launches.md"
 
 sed 's/work-on:111111111111/work-on:NOT-A-DIGEST/' \
   "$fixture/canonical.md" >"$fixture/malformed-provenance.md"

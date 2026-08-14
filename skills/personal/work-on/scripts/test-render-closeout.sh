@@ -38,6 +38,24 @@ provenance="$(
   "$(dirname "$command_under_test")/workflow-provenance.sh" verify
 )"
 
+# The bounded telemetry rows come from the run-scoped sink, so the renderer
+# needs a finished run. One event per phase keeps the rendered elapsed values
+# deterministic without pinning the fixture to a clock.
+telemetry() {
+  (cd "$target_checkout" && \
+    "$(dirname "$command_under_test")/run-telemetry.sh" "$@")
+}
+telemetry_dir="$target_checkout/.git/work-on-telemetry"
+telemetry_sink() {
+  printf '%s/runs/%s.jsonl\n' "$telemetry_dir" "$1"
+}
+telemetry_run="$(telemetry start)"
+telemetry launch --role implementation --phase implementation --round 1
+telemetry launch --role review-standards --phase gate --round 1
+telemetry review --kind full --phase gate --round 1 \
+  --base HEAD --head HEAD
+telemetry finish --outcome Closes
+
 run_new() {
   (
     cd "$target_checkout"
@@ -135,12 +153,17 @@ No findings required adjudication.
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
+| Telemetry run | TELEMETRY_RUN (schema 1) |
+| Subagent launches | 2 (implementation=1, review-standards=1) |
+| Reviews recorded | 1 (readiness=0, full=1, delta=0) |
+| Validation executions recorded | 0 (passed=0, failed=0) |
+| Measured phase elapsed | implementation=0s, gate=0s |
 | Workflow provenance | 1 run |
 
 Run 1: PROVENANCE
 EOF
-awk -v provenance="$provenance" \
-  '{ sub(/PROVENANCE/, provenance); print }' \
+awk -v provenance="$provenance" -v telemetry_run="$telemetry_run" \
+  '{ sub(/PROVENANCE/, provenance); sub(/TELEMETRY_RUN/, telemetry_run); print }' \
   "$fixture/expected.md" >"$fixture/expected.with-provenance.md"
 mv "$fixture/expected.with-provenance.md" "$fixture/expected.md"
 
@@ -151,6 +174,172 @@ diff -u "$fixture/expected.md" "$fixture/actual.md"
 # stdin is the other documented input mode.
 run_new - "$fixture/narrative.md" <"$fixture/facts.json" >"$fixture/stdin.md"
 diff -u "$fixture/expected.md" "$fixture/stdin.md"
+
+# The pull-request body carries bounded summaries of the run-scoped sink, never
+# its individual events. Growing the sink changes the summarized values and
+# leaves the section's shape alone.
+telemetry_section() {
+  awk '
+    $0 == "## Workflow telemetry" { found = 1; next }
+    found && /^## / { exit }
+    found { print }
+  ' "$1" | sed '/^[[:space:]]*$/d'
+}
+[[ "$(telemetry_section "$fixture/actual.md" | wc -l)" -eq 18 ]]
+
+grown_run="$(telemetry start)"
+telemetry launch --role implementation --phase implementation --round 1
+telemetry launch --role review-standards --phase gate --round 1
+telemetry launch --role review-spec --phase gate --round 1
+telemetry launch --role closure-sweep --phase closeout --round 1
+telemetry review --kind full --phase gate --round 1 --base HEAD --head HEAD
+telemetry review --kind readiness --phase checkpoint --round 1 \
+  --base HEAD --worktree
+telemetry exec --command-id passing-check --phase closeout --round 1 -- true
+telemetry exec --command-id failing-check --phase closeout --round 1 -- false \
+  || true
+telemetry finish --outcome Closes
+run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/grown.md"
+[[ "$(telemetry_section "$fixture/grown.md" | wc -l)" -eq 18 ]]
+grep -Fqx '| Subagent launches | 4 (implementation=1, review-standards=1, review-spec=1, closure-sweep=1) |' \
+  "$fixture/grown.md"
+grep -Fqx '| Reviews recorded | 2 (readiness=1, full=1, delta=0) |' \
+  "$fixture/grown.md"
+grep -Fqx '| Validation executions recorded | 2 (passed=1, failed=1) |' \
+  "$fixture/grown.md"
+grep -Fqx "| Telemetry run | $grown_run (schema 1) |" "$fixture/grown.md"
+
+# No per-launch or per-command event material reaches the body.
+target_head="$(git -C "$target_checkout" rev-parse HEAD)"
+for leaked in exec_id command_id validation_start subagent_launch epoch_ms \
+    passing-check failing-check "$grown_run-e001" "$target_head"; do
+  if grep -Fq -- "$leaked" "$fixture/grown.md"; then
+    printf 'FAIL[bounded-body]: %s reached the pull-request body\n' "$leaked" >&2
+    exit 1
+  fi
+done
+
+# Facts cannot hand-compose the mechanically owned run-telemetry rows.
+for supplied in run_telemetry telemetry_summary; do
+  jq --arg key "$supplied" '.[$key] = "supplied by facts"' \
+    "$fixture/facts.json" >"$fixture/sink-$supplied.json"
+  if run_new "$fixture/sink-$supplied.json" "$fixture/narrative.md" \
+      >"$fixture/sink-$supplied.out" 2>"$fixture/sink-$supplied.err"; then
+    printf 'FAIL[sink-%s]: facts supplied run telemetry\n' "$supplied" >&2
+    exit 1
+  fi
+  [[ ! -s "$fixture/sink-$supplied.out" ]]
+  grep -Fqx 'closeout invalid: run telemetry comes from the run-scoped telemetry sink' \
+    "$fixture/sink-$supplied.err"
+done
+for supplied in telemetry_run subagent_launches reviews validation_outcomes \
+    phase_elapsed; do
+  jq --arg key "$supplied" '.telemetry[$key] = "supplied by facts"' \
+    "$fixture/facts.json" >"$fixture/sink-field-$supplied.json"
+  if run_new "$fixture/sink-field-$supplied.json" "$fixture/narrative.md" \
+      >"$fixture/sink-field-$supplied.out" 2>"$fixture/sink-field-$supplied.err"; then
+    printf 'FAIL[sink-field-%s]: facts supplied run telemetry\n' "$supplied" >&2
+    exit 1
+  fi
+  [[ ! -s "$fixture/sink-field-$supplied.out" ]]
+  grep -Fqx 'closeout invalid: run telemetry comes from the run-scoped telemetry sink' \
+    "$fixture/sink-field-$supplied.err"
+done
+
+# Closeout requires a run-scoped sink, the same way it requires a frozen ledger.
+mv "$telemetry_dir" "$fixture/saved-telemetry"
+if run_new "$fixture/facts.json" "$fixture/narrative.md" \
+    >"$fixture/no-telemetry.out" 2>"$fixture/no-telemetry.err"; then
+  printf 'FAIL[no-telemetry]: renderer accepted a closeout without a run\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/no-telemetry.out" ]]
+grep -Fq 'no active telemetry run' "$fixture/no-telemetry.err"
+
+# A closeout body reports a finished run whose recorded outcome is the body's
+# outcome. Anything else — no outcome, two outcomes, or a different one — is
+# refused before a body is published.
+expect_run_failure() {
+  local label="$1" diagnostic="$2" facts="${3:-$fixture/facts.json}"
+  if run_new "$facts" "$fixture/narrative.md" \
+      >"$fixture/$label.out" 2>"$fixture/$label.err"; then
+    printf 'FAIL[%s]: renderer accepted a closeout it should refuse\n' \
+      "$label" >&2
+    exit 1
+  fi
+  [[ ! -s "$fixture/$label.out" ]]
+  if ! grep -Fqx "$diagnostic" "$fixture/$label.err"; then
+    printf 'FAIL[%s]: expected diagnostic: %s\n' "$label" "$diagnostic" >&2
+    cat "$fixture/$label.err" >&2
+    exit 1
+  fi
+}
+
+seed_finish() {
+  jq -cn --arg run "$1" --argjson extra "$2" \
+    '{schema: 1, run: $run, seq: 99, at: "2026-08-14T00:00:00Z",
+      epoch_ms: 1755000000000, type: "run_finish"} + $extra' \
+    >>"$(telemetry_sink "$1")"
+}
+
+jq '.outcome = "Progresses" | .telemetry.final_workflow_outcome = "Progresses"' \
+  "$fixture/facts.json" >"$fixture/progresses-facts.json"
+
+# A run that never finished has nothing to report.
+unfinished_run="$(telemetry start)"
+expect_run_failure unfinished \
+  'closeout invalid: the run has not finished; record run-telemetry.sh finish at the closure gate'
+
+# The sink says Progresses while the facts say Closes.
+telemetry finish --outcome Progresses
+expect_run_failure sink-progresses \
+  'closeout invalid: outcome Closes contradicts recorded run outcome Progresses'
+
+# The sink says Closes while the facts say Progresses.
+telemetry start >/dev/null
+telemetry finish --outcome Closes
+expect_run_failure sink-closes \
+  'closeout invalid: outcome Progresses contradicts recorded run outcome Closes' \
+  "$fixture/progresses-facts.json"
+
+# Two recorded outcomes are not an outcome.
+duplicate_run="$(telemetry run-id)"
+seed_finish "$duplicate_run" '{"outcome": "Closes"}'
+expect_run_failure duplicate-finish \
+  'closeout invalid: the run recorded 2 final outcomes; exactly one is allowed'
+
+# A finish record with no outcome in it leaves the run without one.
+telemetry start >/dev/null
+seed_finish "$(telemetry run-id)" '{}'
+expect_run_failure outcomeless-finish \
+  'closeout invalid: the run recorded no final outcome'
+
+# A finish record carrying something outside the outcome enum contradicts the
+# body rather than being read as agreement.
+telemetry start >/dev/null
+seed_finish "$(telemetry run-id)" '{"outcome": "merged"}'
+expect_run_failure unrecognized-finish \
+  'closeout invalid: outcome Closes contradicts recorded run outcome merged'
+
+# A finished run whose recorded outcome matches renders.
+matching_run="$(telemetry start)"
+telemetry launch --role implementation --phase implementation --round 1
+telemetry finish --outcome Closes
+run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/matching.md"
+grep -Fqx "| Telemetry run | $matching_run (schema 1) |" "$fixture/matching.md"
+grep -Fqx '| Final workflow outcome | Closes |' "$fixture/matching.md"
+
+# The rendered rows are the run's final summary, not a snapshot of the moment
+# the body was rendered: work recorded after the gate cannot change a body the
+# run already published.
+telemetry launch --role other --phase closeout --round 2
+telemetry exec --command-id after-the-gate --phase closeout --round 2 -- true
+run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/re-rendered.md"
+diff -u "$fixture/matching.md" "$fixture/re-rendered.md"
+[[ "$unfinished_run" != "$matching_run" ]]
+
+rm -rf "$telemetry_dir"
+mv "$fixture/saved-telemetry" "$telemetry_dir"
 
 # A paragraph-first narrative must be placed behind a renderer-owned H2
 # boundary so it remains outside the mechanically owned Issues section.

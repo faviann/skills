@@ -50,6 +50,10 @@ _Avoid_: taxonomy gate, counted shape
 The `work-on` telemetry fingerprint hashes the declared `work-on`, `tdd`, and `code-review` instruction files plus the selected workflow file that governed a run. This is runtime attribution, not the risk-shapes provenance record that maps production examples to their sources.
 _Avoid_: instruction version, risk-shapes provenance
 
+**Run telemetry sink**:
+The run-scoped, untracked JSON-lines file in the target repository's git-dir where one `work-on` run appends its subagent launches, reviews, and validation executions. It holds the events; the pull-request body holds only bounded summaries aggregated from it. Distinct from **Workflow provenance**, which fingerprints the instructions that governed the run rather than what the run did.
+_Avoid_: event log, analytics store, telemetry ledger
+
 **Correctness contract**:
 A coherent set of outcomes and invariants that must remain correct as one unit. `to-tickets`'s risk rule counts independent correctness contracts.
 _Avoid_: production contract
@@ -64,6 +68,7 @@ _Avoid_: model kind, model family
 - An **Issue** carries one **Triage role** at a time
 - A **Correctness contract** has one or more **Responsibilities**, and several **Correctness contracts** may share one **Responsibility**
 - A **Risk shape** helps locate **Correctness contracts** but does not determine how many a slice contains
+- A `work-on` run has one **Run telemetry sink** and one **Workflow provenance** value
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
 - A **Map** holds many **Decision tickets** and one **Not yet specified** section
