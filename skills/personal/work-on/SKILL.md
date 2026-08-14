@@ -29,15 +29,19 @@ Authority invariants (bind regardless of workflow):
   adoption.
 - Reuse that snapshot for delegation, review, and evidence. Change requirements
   only through an explicit trusted-maintainer contract change.
+- Record every top-level subagent launch, review, and validation command in the
+  run's telemetry sink as it happens, following `references/run-telemetry.md`.
+  Telemetry observes the run; it never decides what the run does.
 
 Procedure:
 1. Continue only in a fresh or issue-focused context; otherwise require user
    approval. Done when fresh, issue-focused, or explicitly approved.
 2. Resolve the input above. Done with exactly one in-repo issue.
-3. Check the current worktree status, record the telemetry start time, fetch
-   the remote default branch, and update the current branch. Abort if unrelated
-   changes cannot be avoided or the update is unsafe. Done on a safely updated
-   branch.
+3. Check the current worktree status, record the telemetry start time, start
+   this run's telemetry sink with this skill's `scripts/run-telemetry.sh start`,
+   fetch the remote default branch, and update the current branch. Abort if
+   unrelated changes cannot be avoided or the update is unsafe. Done on a safely
+   updated branch.
 4. Build the trusted snapshot through GitHub's REST comments endpoint
    (`gh issue view` omits association). Done when no untrusted body/link is in
    context, the omitted count is reported, and every contract source has

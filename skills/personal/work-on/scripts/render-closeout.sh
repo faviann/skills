@@ -46,6 +46,13 @@ jq -e '
     or has("runs") or has("phases")) | not
 ' "$facts" >/dev/null \
   || fail "workflow provenance comes from the run ledger and previous PR body"
+jq -e '
+  (has("run_telemetry") or has("telemetry_summary")
+    or ((.telemetry // {} | if type == "object" then . else {} end)
+      | has("telemetry_run") or has("subagent_launches") or has("reviews")
+        or has("validation_outcomes") or has("phase_elapsed"))) | not
+' "$facts" >/dev/null \
+  || fail "run telemetry comes from the run-scoped telemetry sink"
 
 jq -e '.issue_number | type == "number" and . > 0 and floor == .' \
   "$facts" >/dev/null || fail "issue_number must be a positive integer"
@@ -187,6 +194,41 @@ fi
 run_value="$("$script_root/workflow-provenance.sh" verify)" \
   || fail "workflow provenance verification failed"
 
+# The bounded run-telemetry rows are aggregated from the run-scoped sink, never
+# from the facts file. run-telemetry.sh owns the sink, its schema, and the
+# aggregation; this renderer only formats the summary it returns.
+telemetry_summary="$("$script_root/run-telemetry.sh" summary)" \
+  || fail "run telemetry summary failed"
+
+summary_value() {
+  jq -r "($1) | tostring"' | gsub("\\|"; "&#124;") | gsub("\\r?\\n"; "<br>")' \
+    <<<"$telemetry_summary"
+}
+
+telemetry_run_value="$(summary_value '"\(.run) (schema \(.schema))"')"
+subagent_launches_value="$(summary_value '
+  if .subagent_launches.total == 0 then "0"
+  else "\(.subagent_launches.total) ("
+    + ([.subagent_launches.by_role | to_entries[]
+        | select(.value > 0) | "\(.key)=\(.value)"] | join(", "))
+    + ")"
+  end')"
+reviews_value="$(summary_value '
+  "\(.reviews.total) (readiness=\(.reviews.by_kind.readiness), "
+  + "full=\(.reviews.by_kind.full), delta=\(.reviews.by_kind.delta))"')"
+validations_value="$(summary_value '
+  "\(.validations.total) (passed=\(.validations.passed), "
+  + "failed=\(.validations.failed)"
+  + (if .validations.interrupted > 0
+     then ", interrupted=\(.validations.interrupted)" else "" end)
+  + (if .validations.incomplete > 0
+     then ", incomplete=\(.validations.incomplete)" else "" end)
+  + ")"')"
+phase_elapsed_value="$(summary_value '
+  ([.phase_elapsed_ms | to_entries[] | "\(.key)=\(.value / 1000 | floor)s"]
+    | join(", ")) as $measured
+  | if $measured == "" then "unknown" else $measured end')"
+
 runs=()
 if [[ "$closeout_mode" == previous ]]; then
   mapfile -t runs < <(sed 's/\r$//' "$previous_body" | awk '
@@ -258,6 +300,11 @@ candidate="$fixture/candidate.md"
   printf '| Blocking findings resolved | %s |\n' "$(telemetry_value blocking_findings_resolved)"
   printf '| Findings rejected at adjudication | %s |\n' "$(telemetry_value findings_rejected_at_adjudication)"
   printf '| Final workflow outcome | %s |\n' "$telemetry_outcome"
+  printf '| Telemetry run | %s |\n' "$telemetry_run_value"
+  printf '| Subagent launches | %s |\n' "$subagent_launches_value"
+  printf '| Reviews recorded | %s |\n' "$reviews_value"
+  printf '| Validation executions recorded | %s |\n' "$validations_value"
+  printf '| Measured phase elapsed | %s |\n' "$phase_elapsed_value"
   printf '| Workflow provenance | %s |\n\n' "$provenance_value"
   for ((index = 0; index < ${#runs[@]}; index++)); do
     printf 'Run %s: %s\n' "$((index + 1))" "${runs[$index]}"

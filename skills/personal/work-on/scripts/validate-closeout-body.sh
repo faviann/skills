@@ -157,11 +157,23 @@ telemetry_fields=(
   "Blocking findings resolved"
   "Findings rejected at adjudication"
   "Final workflow outcome"
+  "Telemetry run"
+  "Subagent launches"
+  "Reviews recorded"
+  "Validation executions recorded"
+  "Measured phase elapsed"
   "Workflow provenance"
 )
+# The sink-derived rows follow the facts-supplied counts, so the count-field
+# offset into telemetry_fields is unchanged.
+readonly telemetry_run_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8} \(schema [1-9][0-9]*\)$'
+readonly subagent_launches_pattern='^(0|[1-9][0-9]* \([a-z-]+=[1-9][0-9]*(, [a-z-]+=[1-9][0-9]*)*\))$'
+readonly reviews_pattern='^[0-9]+ \(readiness=[0-9]+, full=[0-9]+, delta=[0-9]+\)$'
+readonly validations_pattern='^[0-9]+ \(passed=[0-9]+, failed=[0-9]+(, interrupted=[1-9][0-9]*)?(, incomplete=[1-9][0-9]*)?\)$'
+readonly phase_elapsed_pattern='^(unknown|[a-z-]+=[0-9]+s(, [a-z-]+=[0-9]+s)*)$'
 telemetry_count_values=()
-[[ "${#telemetry_lines[@]}" -ge 12 ]] \
-  || fail "workflow telemetry must contain ten canonical rows"
+[[ "${#telemetry_lines[@]}" -ge 17 ]] \
+  || fail "workflow telemetry must contain fifteen canonical rows"
 
 for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
   row="${telemetry_lines[$((index + 2))]}"
@@ -186,6 +198,26 @@ for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
       [[ "$value" == unknown || "$value" =~ ^[0-9]+$ ]] \
         || fail "workflow telemetry $field must be a nonnegative integer or unknown"
       telemetry_count_values+=("$value")
+      ;;
+    "Telemetry run")
+      [[ "$value" =~ $telemetry_run_pattern ]] \
+        || fail "workflow telemetry $field is malformed"
+      ;;
+    "Subagent launches")
+      [[ "$value" =~ $subagent_launches_pattern ]] \
+        || fail "workflow telemetry $field is malformed"
+      ;;
+    "Reviews recorded")
+      [[ "$value" =~ $reviews_pattern ]] \
+        || fail "workflow telemetry $field is malformed"
+      ;;
+    "Validation executions recorded")
+      [[ "$value" =~ $validations_pattern ]] \
+        || fail "workflow telemetry $field is malformed"
+      ;;
+    "Measured phase elapsed")
+      [[ "$value" =~ $phase_elapsed_pattern ]] \
+        || fail "workflow telemetry $field is malformed"
       ;;
   esac
   if [[ "$field" == "Final workflow outcome" ]]; then
@@ -212,12 +244,12 @@ else
   [[ "$provenance_value" == "$run_count runs" ]] \
     || fail "workflow provenance is malformed"
 fi
-[[ "${#telemetry_lines[@]}" -eq $((12 + run_count)) ]] \
+[[ "${#telemetry_lines[@]}" -eq $((17 + run_count)) ]] \
   || fail "workflow provenance run count does not match run lines"
 
 provenance_runs=()
 for ((index = 1; index <= run_count; index++)); do
-  run_line="${telemetry_lines[$((11 + index))]}"
+  run_line="${telemetry_lines[$((16 + index))]}"
   run_prefix="Run $index: "
   [[ "$run_line" == "$run_prefix"* ]] \
     || fail "workflow provenance run $index is malformed or out of order"
