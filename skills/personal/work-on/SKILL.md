@@ -49,10 +49,17 @@ Procedure:
 5. Use `docs/workflow.md` when present and announce it; otherwise use this
    skill's `references/default-workflow.md`. Read the selected source and treat
    it as binding. Done when read and, for a repo workflow, announced.
-6. Immediately before delegating implementation, run this skill's
+6. Before capturing provenance, and before any implementation delegation, edit,
+   commit, or pull request, apply this skill's `references/closability-gate.md`
+   to the trusted snapshot and the selected workflow. Done when every
+   acceptance criterion has an available direct validation seam, every blocking
+   prerequisite is complete, the required commands are executable, and the
+   trusted contract is consistent; otherwise finish the run's telemetry with
+   outcome `aborted` and hand back as that reference requires.
+7. Immediately before delegating implementation, run this skill's
    `scripts/workflow-provenance.sh capture` to freeze the governing
    instructions this run read. Abort if it fails. Done when capture succeeds.
-7. Follow it without broadening the issue. When code changes are ready for a
+8. Follow it without broadening the issue. When code changes are ready for a
    pull request, read and follow `references/github-closeout.md`. Build the
    closeout through `scripts/render-closeout.sh`; never hand-compose its Issues,
    Closure gate, or Workflow telemetry sections. Done when the workflow's

@@ -43,7 +43,7 @@ buffered, so an abandoned run leaves exactly what it had recorded.
 | Every top-level subagent launch | `run-telemetry.sh launch --role R --phase P --round N [--tokens-in N --tokens-out N]` |
 | Every review handed to a subagent | `run-telemetry.sh review --kind K --phase P --round N --base REF (--head REF \| --worktree)` |
 | Every top-level validation command | `run-telemetry.sh exec --command-id ID --phase P --round N -- <command>` |
-| Once, when the closure gate resolves the outcome | `run-telemetry.sh finish --outcome (Closes\|Progresses\|aborted)` |
+| Once, when the run's outcome resolves | `run-telemetry.sh finish --outcome (Closes\|Progresses\|aborted)` |
 
 - `--role` is one of `implementation`, `readiness`, `review-standards`,
   `review-spec`, `closure-sweep`, `other`.
@@ -65,8 +65,10 @@ buffered, so an abandoned run leaves exactly what it had recorded.
 - `exec` runs the command, passes its stdout, stderr, and exit status straight
   through, and records the execution around it. Wrap the top-level command, not
   its child processes.
-- `finish` is recorded once, when the closure gate resolves the outcome, before
-  the body is rendered. See [The run's outcome](#the-runs-outcome).
+- `finish` is recorded once, when the run's outcome resolves: at the closure
+  gate before the body is rendered, or as `aborted` when the pre-implementation
+  closability gate hands the issue back. See
+  [The run's outcome](#the-runs-outcome).
 
 Token counts are optional. A runtime that does not expose them records launches
 without `--tokens-in`/`--tokens-out`; the summary then reports token coverage as

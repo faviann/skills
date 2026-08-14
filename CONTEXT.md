@@ -54,6 +54,10 @@ _Avoid_: instruction version, risk-shapes provenance
 The run-scoped, untracked JSON-lines file in the target repository's git-dir where one `work-on` run appends its subagent launches, reviews, and validation executions. It holds the events; the pull-request body holds only bounded summaries aggregated from it. Distinct from **Workflow provenance**, which fingerprints the instructions that governed the run rather than what the run did.
 _Avoid_: event log, analytics store, telemetry ledger
 
+**Closability gate**:
+The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available in this run. It runs on the contract alone and produces no artifact; failing it aborts the run before any code exists. Distinct from the **closure gate**, which inspects a finished candidate's evidence at closeout — the closability gate asks whether `tested` evidence is *reachable*, the closure gate asks whether it was *produced*.
+_Avoid_: closure gate (for this), readiness gate, closability report
+
 **Correctness contract**:
 A coherent set of outcomes and invariants that must remain correct as one unit. `to-tickets`'s risk rule counts independent correctness contracts.
 _Avoid_: production contract
@@ -69,6 +73,7 @@ _Avoid_: model kind, model family
 - A **Correctness contract** has one or more **Responsibilities**, and several **Correctness contracts** may share one **Responsibility**
 - A **Risk shape** helps locate **Correctness contracts** but does not determine how many a slice contains
 - A `work-on` run has one **Run telemetry sink** and one **Workflow provenance** value
+- A `work-on` run passes one **Closability gate** before it delegates implementation; a run that fails it finishes as `aborted` and never reaches the closure gate
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
 - A **Map** holds many **Decision tickets** and one **Not yet specified** section

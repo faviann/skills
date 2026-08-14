@@ -17,8 +17,9 @@ Read the issue, trusted comments, linked parent/spec, and relevant repo docs.
 Preserve unrelated user changes.
 
 Record scope, non-scope, acceptance criteria, validation seams, required
-commands, and open questions. Done when every criterion has a seam, or its
-missing seam is flagged for the closure gate.
+commands, and open questions. Done when the pre-implementation closability gate
+in `references/closability-gate.md` passes. A missing seam aborts there; it is
+never carried into implementation for the closure gate to discover.
 
 ## 2. Delegate implementation
 

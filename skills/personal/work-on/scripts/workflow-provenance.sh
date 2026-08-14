@@ -12,6 +12,7 @@ skills_checkout="$(cd -P -- "$work_on_root/../../.." && pwd -P)"
 
 work_on_inputs=(
   skills/personal/work-on/SKILL.md
+  skills/personal/work-on/references/closability-gate.md
   skills/personal/work-on/references/github-closeout.md
   skills/personal/work-on/references/run-telemetry.md
 )
