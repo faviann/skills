@@ -16,8 +16,8 @@ which runs count and what would make the control fail.
 
 It is written before any prospective run exists precisely so the sampling rule
 cannot be chosen after the numbers are known. The protocol below is frozen at
-merge; the results area is empty and is populated later by a separate PR that
-must prove the frozen text is unchanged.
+merge; the results area is empty and is filled in one record at a time, by
+append-only PRs, as the window runs.
 
 This is a pre-registration for one control window, not an experiment framework.
 Nothing here generalises to B2, C3, or any later comparison window; each of those
@@ -41,19 +41,25 @@ rather than asserted. It measures resource use and review behaviour — launches
 reviews and reviewed bytes, validation executions, phase elapsed, remediation —
 not quality of outcome.
 
-### 2. Start boundary
+### 2. Window boundaries
 
-The window opens at the merge commit of the A3 protocol PR on `origin/main`. A
-run is inside the window when its telemetry run id is **strictly greater** than
-that commit's UTC commit time, formatted as a run-id timestamp prefix:
+**Opens** at the merge commit of the A3 protocol PR on `origin/main`. A run
+enters the window when its telemetry run id is **strictly greater** than that
+commit's UTC commit time, formatted as a run-id timestamp prefix:
 
 ```bash
 TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%dT%H%M%SZ \
   <protocol-merge-sha>
 ```
 
-Run ids are `YYYYMMDDTHHMMSSZ-<8 hex>`, so this is a string comparison and needs
+Run ids are `YYYYMMDDTHHMMSSZ-<8 hex>`, so entry is a string comparison and needs
 no clock reasoning beyond UTC.
+
+**Closes** at the instant the fifth counted run records `run_finish` — its
+summary's `finished_at`. That instant is irreversible. Any run that records
+`run_finish` after it is outside the window whatever its start time, and any run
+still unfinished at that instant is `incomplete` (§8) with no further judgement
+required. There is no abandonment decision to make and none to defer.
 
 Explicitly outside the window, and never samples:
 
@@ -62,7 +68,8 @@ Explicitly outside the window, and never samples:
   `/work-on`, and both predate this protocol.
 - The A3 protocol run that produced this file.
 - Every run started before the protocol merge, whatever its outcome.
-- Any run that changes this protocol, including a results or extension PR.
+- Any run that changes this protocol, including a record, results, or extension
+  PR.
 - Any B1-or-later workflow-change implementation.
 
 No run started before the merge may be admitted retroactively, even if its sink
@@ -70,16 +77,34 @@ survives and its record looks clean.
 
 ### 3. Population, unit, and order
 
-**Population.** Every repository in which the installed `work-on` skill runs,
-**except `faviann/skills`**. The expected sources are `faviann/overmind`,
-`faviann/homelab-iac`, and `faviann/dotfiles`; the population is not that closed
-list, so an ordinary run in another downstream repository is eligible on the
-same terms.
+**Population — a closed list, frozen here:**
 
-`faviann/skills` is excluded as a whole repository rather than per run. A run
-there can edit the very instruction files under measurement — including this
-protocol — and #64's own stages land there. A bright line needs no judgement
-call at selection time, which is the property that matters for a control.
+| Repository |
+|---|
+| `faviann/overmind` |
+| `faviann/homelab-iac` |
+| `faviann/dotfiles` |
+
+A run in any other repository is out of the window. Adding, removing, or
+substituting a repository requires a **new pre-registration merged before any
+further eligible run is observed** — it is a change to the sampling rule, not an
+administrative detail. A list that could grow after the protocol merged would
+make population completeness unauditable and would let the choice of where to
+work decide which runs became samples.
+
+`faviann/skills` is deliberately absent: a run there can edit the very
+instruction files under measurement, including this protocol, and #64's own
+stages land there.
+
+Completeness is therefore mechanically auditable. In each listed repository:
+
+```bash
+ls "$(git rev-parse --absolute-git-dir)/work-on-telemetry/runs/"
+```
+
+Every run id in that listing that falls inside the window (§2) must appear in
+the results as counted or as one attrition class (§8). That enumeration is the
+audit; it is run per repository at closeout and its output is recorded.
 
 **Unit.** One **finished telemetry run** — one `<run-id>.jsonl` sink that
 recorded `run_finish`. That is the unit A1 measures: a run is what spends
@@ -87,28 +112,51 @@ launches, reviews, and validations. An issue or a PR can span several runs whose
 sinks cannot be summed, so neither is the unit.
 
 **One counted run per issue.** At most one run is counted per `(repository,
-issue)` pair: the first finished eligible run for that issue in chronological
-order. This deviates from #64's recommended "first eligible finished runs"
-boundary, deliberately: a second run against an already-implemented candidate
-inherits work it did not do, so its launch and review counts are not comparable
-to a run that started from nothing, and one pathological issue could otherwise
-supply most of a five-run control. Later runs on the same issue are recorded in
-full as `continuation` attrition, so nothing is discarded — only re-scoped.
+issue)` pair: the first finished run for that issue in the order below. This
+deviates from #64's recommended "first eligible finished runs" boundary,
+deliberately: a second run against an already-implemented candidate inherits work
+it did not do, so its launch and review counts are not comparable to a run that
+started from nothing, and one pathological issue could otherwise supply most of a
+five-run control. Later runs on the same issue are recorded in full as
+`continuation` attrition, so nothing is discarded — only re-scoped.
 
-**Order.** Run ids sort lexicographically into UTC chronological order across
-every repository. Ties within one second break by the full run id string. No
-other ordering — not merge time, not PR number, not repository — is used.
+**Order — by completion, not by start.** Eligible runs are sequenced by their
+summary's `finished_at` (UTC, `YYYY-MM-DDTHH:MM:SSZ`, lexicographic = chronological)
+across every listed repository, ties broken by the full run id string.
+
+Start time governs *entry* into the window; completion time governs *sequence*
+and *closure*. Ordering by start would let a long-running run that started
+earlier finish later and retroactively displace a run already counted, which
+would make the sample a function of when work happens to end. Under completion
+order a run takes its place only once it has one, and closure at the fifth
+`run_finish` cannot be reopened.
+
+No other ordering — not merge time, not PR number, not repository, not export
+order — decides the sequence.
 
 ### 4. Eligibility
 
-A run is **counted** when all of the following hold:
+Eligibility is decided **only from telemetry facts**. A run is **counted** when
+all of the following hold:
 
-1. it started inside the window (§2) in a repository in the population (§3);
+1. it entered the window (§2) in a listed repository (§3);
 2. its sink records `run_finish` with outcome `Closes` **or** `Progresses`;
 3. its summary reports `schema: 1`;
-4. it is the first finished eligible run for its `(repository, issue)` pair; and
-5. a bounded record for it was exported durably (§7) before the next eligible
-   run started anywhere in the population.
+4. it is the first run satisfying 1–3 for its `(repository, issue)` pair in
+   completion order (§3); and
+5. it is among the first five runs satisfying 1–4, in completion order.
+
+Condition 5 is what closes the window: the fifth such run's `run_finish` is the
+boundary in §2, and every run finishing after it fails condition 5. The sequence
+is therefore a function of the sinks alone — sort, deduplicate by issue, take
+five — and cannot be reopened by a later finish.
+
+Nothing about bookkeeping appears in this list. Exporting a run's record is an
+**obligation** (§7), not a qualifying condition: a run that satisfies 1–5 is
+counted and holds its chronological position, and a missing, deleted, or
+unreproducible required record invalidates the window (§9) rather than removing
+the run from it. Eligibility that depended on the record would let an
+inconvenient run be dropped by simply not writing one down.
 
 `Closes` and `Progresses` both count. Filtering to `Closes` would keep only the
 runs that converged, which is the churn the control exists to observe.
@@ -140,13 +188,13 @@ Why five is proportionate and what it does not buy:
   this control and must say so.
 
 **Selection is not a choice.** The five counted runs are the first five eligible
-runs in the order defined in §3. No run may be skipped, deferred, re-run, or
+runs in completion order (§3). No run may be skipped, deferred, re-run, or
 substituted because it was unusually cheap, unusually expensive, unusually
-clean, embarrassing, atypical, or "not a fair test". A run that is eligible when
-it finishes is in the sample. The per-run export in §7 happens before the next
-eligible run starts, so the sequence is fixed while the set is still incomplete.
+clean, embarrassing, atypical, or "not a fair test". A run that satisfies §4 is
+in the sample from the moment it finishes, whether or not anyone has written it
+down yet.
 
-**Stopping.** The window closes when the fifth counted run has been exported.
+**Stopping.** The window closes at the fifth counted run's `run_finish` (§2).
 Elapsed time is not a stopping condition: the window does not expire, and it
 does not end early because enough time has passed or enough remediation has been
 seen.
@@ -178,10 +226,7 @@ remediation on their own. The PR body's `Remediation rounds` and
 - **Telemetry has no remediation phase, body claims rounds ≥ 1** → **not**
   remediation-bearing. The run stays a counted sample; record the flag
   `remediation-unattributed`. A primary-supplied number is not a mechanical
-  observation, and the completion condition in §9 requires a mechanically
-  established one.
-- **No summary obtainable at all** → the run is not counted; it is
-  `unattributable` attrition (§8).
+  observation, and §9's completion condition requires a mechanical one.
 
 Events recorded after `run_finish` are outside the summary window by
 construction, so they never contribute to this classification. Their count is
@@ -191,61 +236,87 @@ recorded (§7).
 
 #### The record
 
-One record per run — counted **or** attrition. Every field is either mechanical
-(copied from `run-telemetry.sh summary`, which is deterministic for a finished
-run) or a small bounded envelope:
+One record per run in the window — counted **and** attrition. Every field is
+either mechanical (copied from `run-telemetry.sh summary`, which is
+deterministic for a finished run) or a small bounded envelope:
 
-| Field | Source |
-|---|---|
-| `repository` | `owner/repo` slug |
-| `issue` | issue number |
-| `pr` | PR number, or `none` |
-| `run`, `schema` | summary `run`, `schema` |
-| `provenance` | the PR body's `Run N:` provenance line, verbatim |
-| `started_at`, `finished_at` | summary |
-| `final_workflow_outcome` | summary |
-| `subagent_launches` | summary `total` and `by_role` |
-| `reviews` | summary `total`, `by_kind`, `input_bytes` |
-| `validations` | summary `total`, `passed`, `failed`, `interrupted`, `incomplete`, `duration_ms` |
-| `phase_elapsed_ms` | summary, per recorded phase |
-| `tokens` | summary `input`, `output`, `coverage` |
-| `remediation` | `yes` / `no` by §6, plus any flag |
-| `malformed_lines`, `events_after_finish` | summary |
-| `disposition` | `counted`, or an attrition class from §8, with its reason |
-| `summary_sha256` | `sha256sum` of the exact summary JSON |
+| Field | Source | Nullable |
+|---|---|---|
+| `seq` | position in export order, from 1 | no |
+| `prev_record_sha256` | §7's chain | no |
+| `repository` | `owner/repo` slug from §3's list | no |
+| `issue` | issue number the run targeted | no |
+| `pr` | PR number, or `null` | per §8 |
+| `run`, `schema` | summary `run`, `schema` | no |
+| `provenance` | the PR body's `Run N:` provenance line, verbatim | per §8 |
+| `runtime_digests` | §10's runtime-script digest table, captured at export | no |
+| `started_at`, `finished_at` | summary | `finished_at` per §8 |
+| `final_workflow_outcome` | summary | per §8 |
+| `subagent_launches` | summary `total` and `by_role` | no |
+| `reviews` | summary `total`, `by_kind`, `input_bytes` | no |
+| `validations` | summary `total`, `passed`, `failed`, `interrupted`, `incomplete`, `duration_ms` | no |
+| `phase_elapsed_ms` | summary, per recorded phase | no |
+| `tokens` | summary `input`, `output`, `coverage` | no |
+| `remediation` | `yes` / `no` by §6, plus any flag | counted runs only |
+| `malformed_lines`, `events_after_finish` | summary | no |
+| `disposition` | `counted`, or an attrition class (§8), with its reason | no |
+| `summary_sha256` | `sha256sum` of the exact summary JSON | no |
 
 Never estimate an unavailable value. A field the runtime did not expose is
 recorded as the summary reports it — `tokens.coverage: "none"` is a result, an
-invented token count is a fabrication.
+invented token count is a fabrication. A field this table marks nullable for the
+run's class is `null`, never filled in from memory or inference.
 
-#### The surface
+#### Two surfaces, both required
 
-**The primary durable surface is a structured comment on issue #64**, one per
-run, posted at that run's closeout and before the next eligible run starts
-anywhere in the population.
+A record is durable only if losing or deleting one copy is visible. Each record
+is published to **both** of these before the next run in any listed repository
+starts:
 
-Why the issue thread and not only a committed file: it is durable independently
-of any workstation, sink, branch, or unmerged PR; it is timestamped by the
-tracker and carries an edit history the author cannot erase; it sits in the
-issue that owns the investigation; and it exists *before* the results PR, so a
-lost checkout costs nothing already exported. The committed results table in
-this file is the **secondary** copy, transcribed later, and its values must
-match the comments.
+1. **A structured comment on issue #64** — immediate, timestamped, with an edit
+   history, independent of any workstation, sink, or branch, and available long
+   before a results PR exists.
+2. **An append to the Results area of this file**, landing on `main` as its own
+   small PR titled `A3 record: run <run-id>`. Git history orders it and makes a
+   later rewrite a force-push rather than an edit.
 
-A record is posted as:
+Neither alone is sufficient. A GitHub comment can be deleted by its author; a
+commit can be amended. Requiring both means an omission has to be performed
+twice, in two systems with different histories, and disagreement between them is
+itself the alarm.
+
+**A3 adds no step to `work-on`.** Both exports are operator steps performed after
+the run, outside the workflow, because instrumenting the workflow to export its
+own record would change the thing being measured.
+
+#### The chain
+
+Records are chained so that removing, reordering, or replacing one is
+mechanically detectable. Each record carries `seq` (export order, from 1) and
+`prev_record_sha256`, both inside the digested JSON:
+
+```bash
+# a record's digest: canonical JSON, sorted keys, compact
+jq -S -c . record.json | sha256sum
+```
+
+- `seq: 1` carries `prev_record_sha256` = the frozen-protocol digest recorded
+  under **Protocol identity**.
+- every later record carries the digest of the record at `seq - 1`.
+
+Verification walks the chain from the protocol digest and recomputes every link.
+A deleted record breaks it at that point; a rewritten record breaks every link
+after it; and reproducing a doctored chain requires rewriting both surfaces.
+
+The comment header repeats the same values for greppability:
 
 ````text
-A3-RECORD run=<run-id>
+A3-RECORD run=<run-id> seq=<n> prev=<prev-record-sha256>
 
 ```json
 { …the record fields above… }
 ```
 ````
-
-**A3 adds no step to `work-on`.** The export is an operator step performed after
-the run, outside the workflow, because adding it to the workflow would change
-the thing being measured. That is the whole reason it is written here and not in
-a skill.
 
 #### Duplicates, corrections, tampering
 
@@ -260,16 +331,17 @@ gh issue view 64 -R faviann/skills --json comments \
 ```
 
 Check that list before posting. **A posted record is never edited.** A wrong
-record is superseded by a new comment headed
-`A3-CORRECTION run=<run-id> supersedes=<comment-id>` stating what was wrong and
-why; both comments survive and the results table cites both.
+record is superseded by a new record at the next `seq`, headed
+`A3-CORRECTION run=<run-id> seq=<n> prev=<...> supersedes=<comment-id>`, stating
+what was wrong and why. Both survive, the chain stays intact, and the results
+table cites both.
 
-Tampering is detectable three ways, and the closeout applies all three:
-`summary_sha256` is recomputed from the surviving sink; the committed results
-table and the issue comments are two independent copies that must agree; and
-GitHub's comment edit history shows any rewrite. Where a sink no longer exists,
-only the two-copy check and the edit history apply — that is a weaker guarantee
-and is recorded as such rather than papered over.
+Tampering is detectable four ways, and the closeout applies all four: the chain
+is recomputed end to end; `summary_sha256` is recomputed from the surviving
+sink; the two surfaces are compared record by record; and GitHub's comment edit
+history is inspected. Where a sink no longer exists the `summary_sha256` check is
+unavailable — that is a weaker guarantee, is recorded as such rather than
+papered over, and does not excuse a missing record (§9).
 
 #### What is never exported
 
@@ -277,32 +349,55 @@ Full prompts, briefs, or subagent reports; issue or PR bodies; source files;
 diffs; command lines; command output; credentials; raw diagnostics; and raw sink
 events exported wholesale for analytics. A1's schema has no free-form field, so
 the mechanical part of a record cannot carry them; the envelope is a slug,
-integers, one enum, and one provenance string. Raw JSONL sinks stay untracked in
-each target repository's git-dir and are never committed.
+integers, one enum, one provenance string, and digests. Raw JSONL sinks stay
+untracked in each target repository's git-dir and are never committed.
 
-### 8. Attrition and separate reporting
+### 8. Attrition: ordered precedence, fields, and triggers
 
-These are recorded with the same record shape and the same durable export. They
-are **never** counted toward the five, and they are never silently dropped:
+Every run in the window is classified by the **first** matching rule below. The
+order is the classification: a run is never assigned a class by choosing among
+several that fit.
 
-| Class | When |
-|---|---|
-| `preflight-aborted` | A2 closability gate aborted the run (`finish --outcome aborted`). Preflight attrition — reported, not review-churn evidence. |
-| `no-candidate` | The run created no PR and so could not resolve `Closes`/`Progresses`. Reported with whatever the sink holds. |
-| `incomplete` | The run never recorded `run_finish` — interrupted, abandoned, or killed. Setup and environmental failures that prevent finishing land here, named as such. |
-| `continuation` | A later finished run for a `(repository, issue)` pair already counted (§3), including a resumed `/work-on` invocation. |
-| `unattributable` | No summary is obtainable: the sink is gone, or no record was exported before the next eligible run started. |
-| `out-of-window` | Started before the merge boundary, in `faviann/skills`, or is itself a protocol, results, or B1-or-later run. Listed so it is not mistaken for attrition: these runs are outside the window and need no record. |
+| # | Class | Test | Export trigger |
+|---|---|---|---|
+| 1 | `out-of-window` | Entered outside §2's boundaries, or ran in a repository not on §3's list | none — no record required |
+| 2 | `preflight-aborted` | Sink records `run_finish` with outcome `aborted` (A2 closability hand-back) | at the hand-back |
+| 3 | `incomplete` | Sink records no `run_finish`, including a run still unfinished when the window closed | when the run stops, or at window close |
+| 4 | `no-candidate` | Finished `Closes`/`Progresses`, but no pull request exists | at the run's end |
+| 5 | `continuation` | Finished `Closes`/`Progresses`, and `(repository, issue)` already has a counted run | at that run's closeout |
+| 6 | `counted` | §4 holds | at that run's closeout |
 
-Notes that are deliberately *not* attrition:
+Every class from 2 to 6 is exported to both surfaces (§7) before the next run in
+any listed repository starts. `out-of-window` runs are listed here only so they
+are not mistaken for attrition; they are outside the window and are not recorded.
 
-- Validation failures during a run that still finished. A `failed` validation is
-  part of what the control measures.
-- `malformed_lines > 0`. The sink is append-only and a torn line costs exactly
-  one ignored event; the count is recorded as a data-quality flag.
-- `events_after_finish > 0`. The summary window closed at `run_finish`, so the
-  counted values are the published ones; the count is recorded.
-- `validations.incomplete > 0`. Recorded as reported.
+**Fields available per class.** The A2 gate aborts before workflow-provenance
+capture and before any pull request exists, and an unfinished run has no
+`run_finish` event, so those records are complete when they carry what exists:
+
+| Class | `pr` | `provenance` | `finished_at`, `final_workflow_outcome` | `remediation` |
+|---|---|---|---|---|
+| `preflight-aborted` | `null` | `null` | `finished_at` from the `run_finish` event; outcome `aborted` | omitted |
+| `incomplete` | PR number if one exists, else `null` | provenance line if a PR body carries one, else `null` | `null` | omitted |
+| `no-candidate` | `null` | `null` | present | omitted |
+| `continuation` | present | present | present | present |
+| `counted` | present | present | present | present |
+
+A `null` here is a fact about the class, not a gap to fill by inference. Every
+other field in §7's table is mechanical and is present for every class, because
+the summary produces it from whatever the sink holds.
+
+**Environmental and setup failures are a reason, not a class.** A run that died
+in setup is `incomplete` with that reason recorded; a run that hit environmental
+trouble and still finished is classified by rules 4–6 like any other, with the
+failure visible in its validation counts. There is no separate environmental
+class to select into.
+
+**Deliberately not attrition**, recorded instead as data-quality flags on an
+otherwise normal record: failed validations in a finished run, `malformed_lines
+> 0` (the sink is append-only; a torn line costs exactly one ignored event),
+`events_after_finish > 0` (the summary window closed at `run_finish`, so the
+counted values are the published ones), and `validations.incomplete > 0`.
 
 ### 9. Completion decision rules
 
@@ -311,15 +406,16 @@ A3 is **complete** only when every one of these holds:
 1. exactly five counted runs, per §4 and §5;
 2. at least one is remediation-bearing by §6's mechanical test — a
    `remediation-unattributed` run does not satisfy this;
-3. every eligible run was included in chronological order, with no skip,
+3. the per-repository sink enumeration (§3) accounts for every run id in the
+   window as counted or as one class from §8, in completion order, with no skip,
    substitution, or retrospective selection;
-4. every non-counted run in the window is recorded with an attrition class and
-   a reason;
-5. every counted and attrition run has a durable bounded record, with duplicates
-   and corrections resolved per §7;
+4. every run of class 2–6 has a record on **both** surfaces, and the two agree
+   field for field;
+5. the record chain verifies end to end from the frozen-protocol digest, with
+   corrections superseded rather than edited;
 6. the frozen protocol identity verifies (see **Protocol identity**); and
-7. no post-A2 workflow semantic changed during the window (§10), evidenced by
-   the provenance check there.
+7. no post-A2 workflow semantic or governing runtime file changed during the
+   window (§10).
 
 A3 is **insufficient** when the five counted runs are collected and complete but
 none is remediation-bearing. Then: B1 stays blocked; the control is recorded as
@@ -329,13 +425,13 @@ own fixed count and its own failure outcome. Continuing to observe runs under
 this protocol until a remediation appears is prohibited.
 
 A3 is **invalid** when a frozen-protocol byte changed after the start boundary,
-when an eligible run was skipped, when counted runs do not share one telemetry
-schema version, when a frozen semantic changed mid-window, or when more than one
-eligible run was lost to `unattributable`. One lost record is an accident and is
-recorded as one; a second is a bookkeeping failure that makes the sequence
-unverifiable, and an unverifiable sequence is exactly how an inconvenient run
-would disappear. An invalid window is not repaired by argument; it is recorded
-and re-registered.
+when an eligible run was skipped or displaced, when counted runs do not share one
+telemetry schema version, when a frozen semantic or runtime file changed
+mid-window, when the chain does not verify, or when **any** required record is
+missing, deleted, or unreproducible — including a record lost because its sink
+was destroyed before export. A missing record is not attrition and never removes
+its run from the sequence: the run stays eligible and the window is invalid. An
+invalid window is not repaired by argument; it is recorded and re-registered.
 
 **B1 remains blocked until a separate results/adjudication step accepts this
 control.** Completion of the five runs is not acceptance. No stage may be
@@ -368,11 +464,12 @@ A1 observation and A2 closability are part of this baseline and stay active.
 No `work-on`, `tdd`, `code-review`, or closeout runtime instruction changes as
 part of A3. A3 changes nothing that runs.
 
-**Mechanical check.** `scripts/workflow-provenance.sh` fingerprints the governing
-instruction files, and each counted run's PR body carries the result on its
-`Run N:` line. The `work-on:`, `tdd:`, and `review:` components are computed from
-the skills checkout and are therefore identical across repositories; at the
-protocol merge they are:
+#### Frozen instructions
+
+`scripts/workflow-provenance.sh` fingerprints the governing instruction files,
+and each counted run's PR body carries the result on its `Run N:` line. The
+`work-on:`, `tdd:`, and `review:` components are computed from the skills
+checkout and so are identical across repositories. At the protocol merge:
 
 | Component | Digest |
 |---|---|
@@ -381,15 +478,61 @@ protocol merge they are:
 | `review` | `1aebe11f115e` |
 | `workflow` (default) | `87087d1136ae` |
 
-Every counted run must show these three repository-independent digests, with no
+Every counted run must show these three repository-independent digests with no
 `*` suffix — a star means a governing file differed from its committed bytes
 during the run. The `workflow:` component may legitimately differ per repository
 (a target repository's own `docs/workflow.md` is the selected input), so it is
 recorded per repository and must be constant *within* each repository across the
 window.
 
-A digest mismatch on `work-on`, `tdd`, or `review` means the measured
-instructions changed: the window is invalid from that run onward under §9.
+#### Frozen runtime scripts
+
+Provenance hashes instruction Markdown only. The scripts that *measure* the run
+and *render* its closeout are equally capable of changing what a number means, so
+they are frozen here too — sha256, first 16 hex, of each file's bytes:
+
+| Digest | File (under `skills/personal/work-on/scripts/`) |
+|---|---|
+| `63142a42ec65e069` | `run-telemetry.sh` |
+| `166d163837f139ea` | `render-closeout.sh` |
+| `d6d62761f2dd959b` | `validate-closeout-body.sh` |
+| `294ad32e787c3b8b` | `workflow-provenance.sh` |
+
+Reproduce from a skills checkout:
+
+```bash
+for f in run-telemetry.sh render-closeout.sh validate-closeout-body.sh \
+         workflow-provenance.sh; do
+  printf '%s  %s\n' \
+    "$(sha256sum <"skills/personal/work-on/scripts/$f" | cut -c1-16)" "$f"
+done
+```
+
+Two checks use them. Each record captures this table from the live skills
+checkout at export time (`runtime_digests`, §7). And each counted run's
+provenance line ends with `(faviann/skills@<sha12>)`, so the commit it names is
+checked directly:
+
+```bash
+for f in run-telemetry.sh render-closeout.sh validate-closeout-body.sh \
+         workflow-provenance.sh; do
+  printf '%s  %s\n' \
+    "$(git show "<sha12>:skills/personal/work-on/scripts/$f" \
+       | sha256sum | cut -c1-16)" "$f"
+done
+```
+
+Any mismatch — in a record, or against a run's recorded commit — means the
+measurement or closeout behaviour changed mid-window, and the window is invalid
+from that run onward under §9.
+
+**Known limit.** The commit check proves which committed revision a run pointed
+at; provenance's `*` marker covers the instruction files, not these scripts, so
+an *uncommitted* edit to a script in the live checkout is not detectable after
+the fact. The operator's obligation is that no such edit exists during the
+window, and `runtime_digests` captures the live checkout at each export so a
+drift that persists is caught. A drift introduced and reverted between exports
+would not be. This is stated rather than papered over.
 
 <!-- A3-FROZEN-END -->
 
@@ -405,46 +548,54 @@ sed -n '/^<!-- A3-FROZEN-BEGIN -->$/,/^<!-- A3-FROZEN-END -->$/p' \
 
 | Field | Value |
 |---|---|
-| Frozen-region sha256 | `e1cf42b1cbdb31ec4f410d1b6cb2d37f383d67c454e92bbe63fa8fa4202fe864` |
-| Protocol merge commit | _recorded by the results PR_ |
-| Start boundary (UTC) | _recorded by the results PR_ |
+| Frozen-region sha256 | `a45802ee254c969021ecf6f00259c2991ff16fc15d2ea9f17b2fd6270a5a0373` |
+| Protocol merge commit | _recorded by the first record PR_ |
+| Start boundary (UTC) | _recorded by the first record PR_ |
 
 The digest is stored outside the frozen region so it can be recorded without
-changing what it measures. The results closeout must:
+changing what it measures. It is also the genesis link of the record chain (§7).
+
+Every record PR and the closeout must:
 
 1. recompute the digest above and confirm it equals the value in this table;
-2. record the protocol merge commit SHA and the derived start boundary; and
-3. confirm `git diff <protocol-merge-sha>..HEAD -- <this file>` touches no line
-   inside the markers.
+2. confirm `git diff <protocol-merge-sha>..HEAD -- <this file>` touches no line
+   inside the markers; and
+3. at closeout, walk the chain from this digest through every record.
 
-A results PR that cannot reproduce the digest has not populated this protocol —
-it has replaced it, and the window is invalid under §9.
+A PR that cannot reproduce the digest has not populated this protocol — it has
+replaced it, and the window is invalid under §9.
 
 ## Results
 
 **Empty. The window has not started. No run has been observed, selected, or
 counted.**
 
-Populated only by a later PR, append-only, using the templates below.
+Filled in append-only, one record PR per run (§7), using the templates below.
 
 ### Counted runs
 
-| # | Run id | Repository | Issue | PR | Outcome | Launches | Reviews (kinds) | Reviewed bytes | Validations (p/f/i/inc) | Phase elapsed | Tokens | Remediation | Record |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | | | | | | | | | | | | | |
-| 2 | | | | | | | | | | | | | |
-| 3 | | | | | | | | | | | | | |
-| 4 | | | | | | | | | | | | | |
-| 5 | | | | | | | | | | | | | |
+| # | Run id | Repository | Issue | PR | Finished (UTC) | Outcome | Launches | Reviews (kinds) | Reviewed bytes | Validations (p/f/i/inc) | Phase elapsed | Tokens | Remediation | `seq` | Record |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | | | | | | | | | | | | | | | |
+| 2 | | | | | | | | | | | | | | | |
+| 3 | | | | | | | | | | | | | | | |
+| 4 | | | | | | | | | | | | | | | |
+| 5 | | | | | | | | | | | | | | | |
 
 `Record` links the issue-#64 comment holding that run's exported record, and any
 correction superseding it.
 
 ### Attrition and separately reported runs
 
-| Run id | Repository | Issue | Class | Reason | Record |
+| Run id | Repository | Issue | Class | Reason | `seq` | Record |
+|---|---|---|---|---|---|---|
+| | | | | | | |
+
+### Record chain
+
+| `seq` | Run id | `prev_record_sha256` | Record sha256 | Comment | Commit |
 |---|---|---|---|---|---|
-| | | | | | |
+| 1 | | _frozen-protocol digest_ | | | |
 
 ### Data-quality flags
 
@@ -455,11 +606,22 @@ correction superseding it.
 Flags: `telemetry-body-mismatch`, `remediation-unattributed`,
 `malformed-lines`, `events-after-finish`, `incomplete-validations`.
 
-### Provenance check
+### Population enumeration
 
-| Run id | Repository | `work-on` | `tdd` | `review` | `workflow` | Matches frozen |
-|---|---|---|---|---|---|---|
-| | | | | | | |
+Per repository, the in-window run ids from §3's listing and where each is
+accounted for.
+
+| Repository | In-window run ids | Counted | Attrition | Unaccounted |
+|---|---|---|---|---|
+| `faviann/overmind` | | | | |
+| `faviann/homelab-iac` | | | | |
+| `faviann/dotfiles` | | | | |
+
+### Frozen-file check
+
+| Run id | Repository | `work-on` | `tdd` | `review` | `workflow` | Runtime scripts | Matches frozen |
+|---|---|---|---|---|---|---|---|
+| | | | | | | | |
 
 ### Closeout decision
 
@@ -467,11 +629,11 @@ Flags: `telemetry-body-mismatch`, `remediation-unattributed`,
 |---|---|---|
 | Five counted runs | | |
 | At least one remediation-bearing | | |
-| Chronological, no skips | | |
-| Attrition fully accounted | | |
-| Durable records for every run | | |
+| Enumeration complete, order preserved | | |
+| Records on both surfaces, agreeing | | |
+| Chain verifies | | |
 | Frozen identity verified | | |
-| No frozen semantic changed | | |
+| No frozen semantic or runtime file changed | | |
 
 **Verdict:** _complete_ / _insufficient_ / _invalid_ — with the reason, and an
 explicit statement of whether B1 is unblocked. B1 is unblocked only by a
