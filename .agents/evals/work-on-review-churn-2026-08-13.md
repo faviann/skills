@@ -23,3 +23,7 @@ Confidence is **high** that the current topology repeats work. Confidence is **m
 - [Staged experiment plan, metrics, and guardrails](work-on-review-churn-2026-08-13-plan.md)
 
 Together these files preserve the source artifacts, representative PR telemetry, direct observations, inferences, limitations, suspicious workflow elements, current causal hypothesis, proposed experiments, success metrics, open questions, and non-goals. A fresh session should begin with this index and issue #64 rather than depending on the originating conversation.
+
+## Stage artifacts
+
+- [A3 instrumented control window](work-on-a3-control-window.md) — the pre-registered protocol fixing which runs count, how many are collected, and what would make the control insufficient or invalid. Frozen before the window starts; B1 stays blocked until its results are accepted.
