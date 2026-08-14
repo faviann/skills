@@ -246,6 +246,22 @@ if run_new "$fixture/facts.json" "$fixture/narrative.md" \
 fi
 [[ ! -s "$fixture/no-telemetry.out" ]]
 grep -Fq 'no active telemetry run' "$fixture/no-telemetry.err"
+
+# The run records its own outcome. A body claiming a different one contradicts
+# the run that produced it and is refused before anything is published.
+telemetry start >/dev/null
+telemetry finish --outcome Progresses
+if run_new "$fixture/facts.json" "$fixture/narrative.md" \
+    >"$fixture/outcome-clash.out" 2>"$fixture/outcome-clash.err"; then
+  printf 'FAIL[outcome-clash]: renderer accepted a contradicted outcome\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/outcome-clash.out" ]]
+grep -Fqx \
+  'closeout invalid: outcome Closes contradicts recorded run outcome Progresses' \
+  "$fixture/outcome-clash.err"
+
+rm -rf "$telemetry_dir"
 mv "$fixture/saved-telemetry" "$telemetry_dir"
 
 # A paragraph-first narrative must be placed behind a renderer-owned H2

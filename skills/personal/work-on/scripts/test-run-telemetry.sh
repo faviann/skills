@@ -119,6 +119,30 @@ readiness_review="$(jq -c 'select(.type == "review" and .kind == "readiness")' "
 [[ "$(jq -r '.head_is_worktree' <<<"$readiness_review")" == true ]]
 [[ "$(jq -r '.input_bytes' <<<"$readiness_review")" -eq "$worktree_bytes" ]]
 
+# A file git does not track yet is still material the sweep reads, so it counts
+# toward the compared bytes; a file the repository ignores does not.
+review_bytes() {
+  telemetry review --kind readiness --phase checkpoint --round 1 \
+    --base "$head_sha" --worktree
+  jq -r '[.[] | select(.type == "review" and .kind == "readiness")][-1]
+    | .input_bytes' -s "$sink"
+}
+tracked_only_bytes="$(review_bytes)"
+printf 'SYNTHETIC-UNTRACKED-CONTENT-MARKER\n' >"$target/untracked.txt"
+with_untracked_bytes="$(review_bytes)"
+[[ "$with_untracked_bytes" -gt "$tracked_only_bytes" ]]
+[[ $(( with_untracked_bytes - tracked_only_bytes )) -ge \
+  $(wc -c <"$target/untracked.txt") ]]
+
+printf 'ignored.txt\n' >"$target/.gitignore"
+printf 'SYNTHETIC-IGNORED-CONTENT-MARKER\n' >"$target/ignored.txt"
+git -C "$target" add .gitignore
+git -C "$target" commit -qm 'ignore fixture'
+head_sha="$(git -C "$target" rev-parse HEAD)"
+tracked_only_bytes="$(review_bytes)"
+printf 'SYNTHETIC-IGNORED-CONTENT-MARKER\n' >>"$target/ignored.txt"
+[[ "$(review_bytes)" -eq "$tracked_only_bytes" ]]
+
 # `delta` is recordable even though the workflow does not yet run delta review.
 telemetry review --kind delta --phase remediation --round 2 \
   --base "$base_sha" --head "$head_sha"
@@ -216,23 +240,41 @@ telemetry exec --phase gate --round 1 -- \
 
 for secret in "$fake_token" "$fake_password" "$stdout_marker" \
     "$stderr_marker" SYNTHETIC-FILE-CONTENT-MARKER \
-    SYNTHETIC-DIFF-CONTENT-MARKER SYNTHETIC-WORKTREE-CONTENT-MARKER; do
+    SYNTHETIC-DIFF-CONTENT-MARKER SYNTHETIC-WORKTREE-CONTENT-MARKER \
+    SYNTHETIC-UNTRACKED-CONTENT-MARKER SYNTHETIC-IGNORED-CONTENT-MARKER; do
   if grep -Fqr -- "$secret" "$sink_root"; then
     printf 'FAIL[sink-secrets]: %s reached the telemetry sink\n' "$secret" >&2
     exit 1
   fi
 done
+
+# No argument reaches the sink at all — not the secret ones, and not the
+# innocuous ones either. Only the program's own name is legible.
 secret_sink="$sink_root/runs/$(telemetry run-id).jsonl"
-grep -Fq '"GH_TOKEN=[redacted]"' "$secret_sink"
-grep -Fq '"--password","[redacted]"' "$secret_sink"
-grep -Fq '"--api-key=[redacted]"' "$secret_sink"
-grep -Fq '"./login.sh","[redacted]"' "$secret_sink"
-# The command a run validates is still identifiable after redaction.
-grep -Fq '"cat","first.txt","second.txt","third.txt"' "$secret_sink"
+for argument in GH_TOKEN --password --api-key ./login.sh \
+    first.txt second.txt third.txt redacted; do
+  if grep -Fq -- "$argument" "$secret_sink"; then
+    printf 'FAIL[sink-argv]: argument %s reached the telemetry sink\n' \
+      "$argument" >&2
+    exit 1
+  fi
+done
+for program in '"program":"cat"' '"program":"env"' '"program":"login.sh"'; do
+  grep -Fq "$program" "$secret_sink"
+done
+
+# A secret is not in the identifier's input either: the same command run with
+# two different credentials keeps one command identity.
+telemetry exec --phase gate --round 1 -- \
+  ./login.sh --password 'SYNTHETIC-FIRST-NOT-A-REAL-PASSWORD' >/dev/null 2>&1 || true
+telemetry exec --phase gate --round 1 -- \
+  ./login.sh --password 'SYNTHETIC-SECOND-NOT-A-REAL-PASSWORD' >/dev/null 2>&1 || true
+[[ "$(jq -r 'select(.type == "validation_start" and .program == "login.sh")
+  | .command_id' "$secret_sink" | tail -2 | sort -u | wc -l)" -eq 1 ]]
 
 # The recorder has no field for a prompt, a diff, a file body, or output: every
 # recorded key comes from this closed set.
-readonly allowed_keys='["at","base","command","command_id","duration_ms","epoch_ms","exec_id","exit_status","head","head_is_worktree","input_bytes","kind","outcome","phase","role","round","run","schema","seq","tokens_in","tokens_out","type","workflow"]'
+readonly allowed_keys='["at","base","command_id","duration_ms","epoch_ms","exec_id","exit_status","head","head_is_worktree","input_bytes","kind","outcome","phase","program","role","round","run","schema","seq","tokens_in","tokens_out","type","workflow"]'
 for run_sink in "$sink_root"/runs/*.jsonl; do
   unexpected="$(jq -r -R --argjson allowed "$allowed_keys" '
     fromjson? // empty | keys[]
@@ -262,6 +304,53 @@ telemetry finish --outcome Progresses
 phase_keys="$(jq -r '.phase_elapsed_ms | keys_unsorted | join(",")' \
   <<<"$(telemetry summary)")"
 [[ "$phase_keys" == implementation,gate ]]
+
+# 10. Concurrent writers do not lose, fuse, or duplicate events. Several
+# subagents and validation wrappers recording at once is the ordinary case.
+concurrent_run="$(telemetry start)"
+concurrent_sink="$sink_root/runs/$concurrent_run.jsonl"
+readonly writers=12
+for ((writer = 0; writer < writers; writer++)); do
+  telemetry launch --role implementation --phase gate --round 1 &
+  telemetry exec --phase gate --round 1 -- true >/dev/null &
+done
+wait
+
+concurrent_summary="$(telemetry summary --run "$concurrent_run")"
+[[ "$(jq -r '.malformed_lines' <<<"$concurrent_summary")" -eq 0 ]]
+[[ "$(jq -r '.subagent_launches.total' <<<"$concurrent_summary")" -eq "$writers" ]]
+[[ "$(jq -r '.validations.total' <<<"$concurrent_summary")" -eq "$writers" ]]
+[[ "$(jq -r '.validations.passed' <<<"$concurrent_summary")" -eq "$writers" ]]
+[[ "$(jq -r '.validations.incomplete' <<<"$concurrent_summary")" -eq 0 ]]
+# One run_start, one launch per writer, and a start plus an end per execution.
+[[ "$(wc -l <"$concurrent_sink")" -eq $((1 + writers * 3)) ]]
+# Every line parsed, so no append landed inside another.
+[[ "$(jq -r '.events' <<<"$concurrent_summary")" -eq $((1 + writers * 3)) ]]
+# Sequence numbers and execution ids are allocated exactly once each.
+[[ "$(jq -r '.seq' "$concurrent_sink" | sort -u | wc -l)" \
+  -eq $((1 + writers * 3)) ]]
+[[ "$(jq -r 'select(.type == "validation_start") | .exec_id' "$concurrent_sink" \
+  | sort -u | wc -l)" -eq "$writers" ]]
+
+# 11. A writer killed mid-append leaves a line with no terminator. The next
+# append closes it off rather than fusing with it, so one torn line costs one
+# malformed line and nothing else.
+torn_run="$(telemetry start)"
+torn_sink="$sink_root/runs/$torn_run.jsonl"
+printf '{"schema":1,"run":"%s","seq":2,"type":"subagent_lau' "$torn_run" \
+  >>"$torn_sink"
+telemetry launch --role other --phase closeout --round 1
+torn_summary="$(telemetry summary --run "$torn_run")"
+[[ "$(jq -r '.malformed_lines' <<<"$torn_summary")" -eq 1 ]]
+[[ "$(jq -r '.subagent_launches.total' <<<"$torn_summary")" -eq 1 ]]
+[[ "$(jq -r '.subagent_launches.by_role.other' <<<"$torn_summary")" -eq 1 ]]
+# The recovered event is a whole line of its own, and the torn one still ends
+# where it was cut.
+[[ "$(wc -l <"$torn_sink")" -eq 3 ]]
+grep -Fqx '{"schema":1,"run":"'"$torn_run"'","seq":2,"type":"subagent_lau' \
+  "$torn_sink"
+[[ "$(jq -R -r 'fromjson? // empty
+  | select(.type == "subagent_launch") | .seq' "$torn_sink")" -eq 3 ]]
 
 # Recording outside a started run is refused rather than silently dropped.
 bare="$fixture/bare"

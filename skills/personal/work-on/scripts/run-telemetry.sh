@@ -83,6 +83,7 @@ now_iso() {
 
 command -v git >/dev/null 2>&1 || fail "run telemetry requires git"
 command -v jq >/dev/null 2>&1 || fail "run telemetry requires jq"
+command -v flock >/dev/null 2>&1 || fail "run telemetry requires flock"
 
 git rev-parse --show-toplevel >/dev/null 2>&1 \
   || fail "run telemetry requires a Git-backed target repository"
@@ -101,13 +102,43 @@ active_run() {
   printf '%s\n' "$id"
 }
 
-# Appends exactly one line. `extra` is a compact JSON object supplying the
-# event's own fields; the envelope is identical for every event type.
-append_event() {
-  local run_id="$1" type="$2" extra="${3:-}" run_file sequence
+# Recording is concurrent: several subagents and validation wrappers may append
+# to one run at the same time. Sequence numbers, execution ids, and the append
+# itself are therefore allocated under an exclusive lock on the sink, so no two
+# writers can read the same state and then both act on it.
+sink_lock_fd=""
+sink_run_file=""
+
+# A writer killed mid-append leaves a line with no terminator. Under the lock,
+# before anything is allocated or written, that torn line is closed off: it
+# becomes one line the aggregator counts as malformed and ignores, instead of
+# fusing with the next event and destroying both.
+repair_partial_line() {
+  [[ -s "$sink_run_file" ]] || return 0
+  [[ "$(tail -c 1 "$sink_run_file" | od -An -tx1 | tr -d ' \n')" == 0a ]] \
+    || printf '\n' >&"$sink_lock_fd"
+}
+
+open_sink() {
+  sink_run_file="$runs_root/$1.jsonl"
+  exec {sink_lock_fd}>>"$sink_run_file"
+  flock -x "$sink_lock_fd" \
+    || fail "could not lock the telemetry sink: $sink_run_file"
+  repair_partial_line
+}
+
+close_sink() {
+  exec {sink_lock_fd}>&-
+  sink_lock_fd=""
+}
+
+# Writes exactly one line through the held lock. `extra` is a compact JSON
+# object supplying the event's own fields; the envelope is identical for every
+# event type.
+write_event() {
+  local run_id="$1" type="$2" extra="${3:-}" sequence
   [[ -n "$extra" ]] || extra='{}'
-  run_file="$runs_root/$run_id.jsonl"
-  sequence=$(( $(wc -l <"$run_file" | tr -d ' ') + 1 ))
+  sequence=$(( $(wc -l <"$sink_run_file" | tr -d ' ') + 1 ))
   jq -cn \
     --argjson schema "$schema_version" \
     --arg run "$run_id" \
@@ -117,12 +148,21 @@ append_event() {
     --arg type "$type" \
     --argjson extra "$extra" \
     '{schema: $schema, run: $run, seq: $seq, at: $at, epoch_ms: $epoch_ms, type: $type}
-      + $extra' >>"$run_file"
+      + $extra' >&"$sink_lock_fd"
 }
 
-# A command token is kept only when it is neither a secret-shaped value nor the
-# value of a secret-shaped name. Redaction is by name, by flag, by position
-# after a secret-shaped flag, and by value shape.
+append_event() {
+  open_sink "$1"
+  write_event "$@"
+  close_sink
+}
+
+# A validation's arguments are never stored. They are redacted and then hashed
+# into an opaque `command_id` that only says whether two executions ran the same
+# command. Redacting before hashing keeps a credential out of the digest's input
+# entirely, and keeps the identity stable when a credential is rotated.
+# Redaction is by name, by flag, by position after a secret-shaped flag, and by
+# value shape.
 readonly secret_name_pattern='(TOKEN|SECRET|PASSWORD|PASSWD|APIKEY|API_KEY|_KEY|^KEY$|CREDENTIAL|AUTHORIZATION|AUTH_|_AUTH|^AUTH$|SESSION|COOKIE|SIGNATURE|PRIVATE)'
 readonly secret_flag_pattern='^--?[A-Za-z0-9-]*(token|secret|password|passwd|apikey|api-key|key|credential|auth|bearer)[A-Za-z0-9-]*$'
 readonly secret_value_pattern='^(gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,}|sk-[A-Za-z0-9_-]{16,}|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[A-Z0-9]{12,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|[A-Za-z0-9+/]{40,}={0,2})$'
@@ -262,9 +302,19 @@ case "$subcommand" in
     head_sha="$(git rev-parse --verify "$head_ref^{commit}" 2>/dev/null)" \
       || fail "review --head does not resolve to a commit: $head_ref"
     # Only the size of the compared material is recorded; the diff itself is
-    # measured and discarded.
+    # measured and discarded. A worktree sweep reads new files that git does not
+    # track yet, so their content counts toward what the reviewer was given —
+    # measuring only tracked changes would understate a sweep whose whole
+    # subject is new code. Ignored files are not part of the review.
     if [[ "$worktree" == true ]]; then
-      input_bytes="$(git diff "$base_sha" | wc -c | tr -d ' ')"
+      input_bytes="$(
+        {
+          git diff "$base_sha"
+          while IFS= read -r -d '' untracked; do
+            git diff --no-index --no-color -- /dev/null "$untracked" || true
+          done < <(git ls-files --others --exclude-standard -z)
+        } | wc -c | tr -d ' '
+      )"
     else
       input_bytes="$(git diff "$base_sha...$head_sha" | wc -c | tr -d ' ')"
     fi
@@ -294,35 +344,41 @@ case "$subcommand" in
     require_round "$round"
     [[ "$#" -gt 0 ]] || fail "exec requires a command after --"
     run_id="$(active_run)"
-    run_file="$runs_root/$run_id.jsonl"
 
     redact_command "$@"
-    # Command tokens travel as base64 lines so a token that looks like one of
-    # jq's own options cannot be swallowed by jq's argument parser, and so a
-    # token containing any byte still round-trips exactly.
+    # Tokens are hashed as base64 lines so that a token containing any byte
+    # still contributes exactly once, and no token can be confused with the
+    # separator.
     encoded_command=""
     for token in "${redacted_command[@]}"; do
       encoded_command+="$(printf '%s' "$token" | base64 | tr -d '\n')"$'\n'
     done
     command_id="$(printf '%s' "$encoded_command" | sha256sum | cut -c1-12)"
+    # The program's own name is legible and cannot carry an argument's secret;
+    # its directory is dropped so no workstation path is recorded either.
+    program="${1##*/}"
+    [[ "$program" =~ ^[A-Za-z0-9._-]{1,64}$ ]] || program=other
+    started_ms="$(now_ms)"
+
+    # Counting prior executions and writing this one's start happen under a
+    # single lock, so two wrappers starting at once cannot be handed the same
+    # execution id.
+    open_sink "$run_id"
     execution_index="$(
       jq -n -R '[inputs | fromjson? // empty
         | select(type == "object" and .type == "validation_start")] | length' \
-        <"$run_file"
+        <"$sink_run_file"
     )"
     exec_id="$(printf '%s-e%03d' "$run_id" "$((execution_index + 1))")"
-    started_ms="$(now_ms)"
-
-    append_event "$run_id" validation_start "$(
+    write_event "$run_id" validation_start "$(
       jq -cn \
         --arg exec_id "$exec_id" --arg command_id "$command_id" \
+        --arg program "$program" \
         --arg phase "$phase" --argjson round "$round" \
-        --arg encoded_command "$encoded_command" \
-        '{exec_id: $exec_id, command_id: $command_id, phase: $phase,
-          round: $round,
-          command: ($encoded_command | split("\n")
-            | map(select(length > 0) | @base64d))}'
+        '{exec_id: $exec_id, command_id: $command_id, program: $program,
+          phase: $phase, round: $round}'
     )"
+    close_sink
 
     validation_ended=false
     record_end() {
@@ -331,12 +387,13 @@ case "$subcommand" in
       append_event "$run_id" validation_end "$(
         jq -cn \
           --arg exec_id "$exec_id" --arg command_id "$command_id" \
+          --arg program "$program" \
           --arg phase "$phase" --argjson round "$round" \
           --arg outcome "$outcome" --argjson exit_status "$status" \
           --argjson duration_ms "$(( $(now_ms) - started_ms ))" \
-          '{exec_id: $exec_id, command_id: $command_id, phase: $phase,
-            round: $round, outcome: $outcome, exit_status: $exit_status,
-            duration_ms: $duration_ms}'
+          '{exec_id: $exec_id, command_id: $command_id, program: $program,
+            phase: $phase, round: $round, outcome: $outcome,
+            exit_status: $exit_status, duration_ms: $duration_ms}'
       )"
     }
     # An interrupted wrapper still closes its own execution, so the sink holds

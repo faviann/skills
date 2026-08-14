@@ -200,6 +200,14 @@ run_value="$("$script_root/workflow-provenance.sh" verify)" \
 telemetry_summary="$("$script_root/run-telemetry.sh" summary)" \
   || fail "run telemetry summary failed"
 
+# The run records its own outcome. A body claiming one thing while the run
+# recorded another is a contradiction of the same kind as the two facts fields
+# disagreeing, and is refused rather than published.
+recorded_outcome="$(jq -r '.final_workflow_outcome // empty' \
+  <<<"$telemetry_summary")"
+[[ -z "$recorded_outcome" || "$recorded_outcome" == "$outcome" ]] \
+  || fail "outcome $outcome contradicts recorded run outcome $recorded_outcome"
+
 summary_value() {
   jq -r "($1) | tostring"' | gsub("\\|"; "&#124;") | gsub("\\r?\\n"; "<br>")' \
     <<<"$telemetry_summary"

@@ -145,9 +145,10 @@ For an existing pull request, first save its live body, then render with
 `--previous-body <old-body.md>` in place of `--new-pr`. Exactly one mode is
 required. The renderer accepts `-` instead of the facts path to read facts from
 stdin. It fails before writing any body when the run's frozen provenance cannot
-be verified, the run has no telemetry sink, the facts are malformed, the
-authoritative criteria and closure rows do not match exactly once, a required
-acceptance row or telemetry value is absent, a status is outside
+be verified, the run has no telemetry sink, the run recorded a different
+outcome, the facts are malformed, the authoritative criteria and closure rows do
+not match exactly once, a required acceptance row or telemetry value is absent,
+a status is outside
 `tested`/`failing`/`inferred`/`unverified`, a `Closes` row is not `tested`, the
 two outcome fields contradict each other, or the shipped read-back validator
 rejects the rendered candidate. Inspect the rendered Markdown as the actual PR
@@ -219,7 +220,8 @@ report every shard and the sum. The outcome must match the issue mapping.
 The renderer aggregates those five rows itself and rejects facts that try to
 supply them; see `references/run-telemetry.md`. Individual launches, reviews,
 and validation executions stay in the sink. Record the run's outcome there with
-`scripts/run-telemetry.sh finish` once the pull request exists.
+`scripts/run-telemetry.sh finish` as soon as the gate resolves it; rendering
+fails when the body's outcome contradicts the outcome the run recorded.
 
 Create or update the pull request, then read back its final body and validate
 the exact content returned by GitHub:
