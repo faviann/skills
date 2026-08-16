@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Record and aggregate one work-on run's mechanical telemetry. Events are
 # appended as JSON lines to a run-scoped sink inside the target repository's
-# git-dir, beside the provenance ledger and adjudication log, so the sink is
-# untracked by construction and never reaches a published artifact.
+# absolute Git common directory, providing durable storage that is untracked
+# by construction and never reaches a published artifact.
 #
 # The recorder stores a closed set of enumerated fields, resolved SHAs,
 # byte/duration counts, and a caller-supplied validation identifier. It has no
