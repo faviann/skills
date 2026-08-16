@@ -80,6 +80,12 @@ reader sees one version or the other, never a half-written one.
 no events. It is idempotent for a run already registered, and refuses a retry
 whose repository, issue, sink, or binding disagrees with the recorded one.
 
+Applicability is part of that identity. A retry recomputes it through the
+observer interface and must find exactly what the record already holds:
+governance cannot be retrofitted onto a run that did its work under none,
+removed from one that owes an obligation, or moved to another observer or
+control. Only an unchanged answer is an idempotent retry.
+
 For a **governed** run, first registration must be provably before
 implementation, and the sink is the only admissible evidence of that. A sink
 that already records a subagent launch, a reviewer delegation, a validation
@@ -108,7 +114,12 @@ observer=<token>
 control=<token>
 ```
 
-or exits `3` when the run is not governed. A token is lowercase alphanumeric
+or exits `3` when the run is not governed. The answer is captured as bytes into
+an owner-only temporary file — never straight into command substitution, which
+would silently discard a NUL and let material escape the grammar before it could
+be rejected — and any NUL byte is rejected before parsing. The capture is
+removed on success, on failure, and on interruption, and is never written into
+the registry or the telemetry sink. A token is lowercase alphanumeric
 words joined by *single* hyphens — `[a-z0-9]+(-[a-z0-9]+)*` — at most 64
 characters. Anything else is a policy error and the run is refused rather than
 guessed at: an extra line, a bare line, a repeated or unknown key, a missing
@@ -129,6 +140,13 @@ immutable bound identity and the transition being finalized — the handle,
 repository, issue, resolved outcome, and canonical summary hash. It is written
 into the record **before** the observer is called and replayed verbatim on every
 retry, including after a crash.
+
+The obligation belongs to the observer and control the run registered with.
+Before the notification, applicability is re-established through the same closed
+interface and must name exactly that stored pair; an absent, unreachable, or
+differently identified policy leaves the obligation outstanding
+(`OBSERVER_FAILED`, `OBSERVER_IDENTITY_MISMATCH`) instead of discharging it. The
+stored pair is never rewritten during finalization or recovery.
 
 The guarantee is therefore **at-least-once delivery of one stable transition
 identity**, and an observer must treat a repeated identity as the same
@@ -176,6 +194,10 @@ guard's printed command executable in every state it can report:
 - `recover --outcome X` **offers** X, and only for a run that resolved no
   outcome of its own. A run that already resolved one is finished as it is.
 
+A finalized run answers the assertion too: repeating the same `finalize` is
+idempotent, and asserting a different outcome is refused rather than
+acknowledged. Recovery keeps its offer-only meaning there as well.
+
 `Closes`, `Progresses`, and `preflight-aborted` reach finalization through the
 ordinary hand-backs in [`github-closeout.md`](./github-closeout.md) and
 [`closability-gate.md`](./closability-gate.md). `abandoned` and `failed` are
@@ -183,8 +205,8 @@ honest endings too: finalize or recover the run with that `--outcome`.
 
 Bounded failure codes: `OUTCOME_UNRESOLVED`, `OUTCOME_CONFLICT`,
 `RESOLVE_FAILED`, `SEAL_FAILED`, `INTEGRITY_INCOMPLETE`, `INTEGRITY_INVALID`,
-`SUMMARY_FAILED`, `IDENTITY_MISMATCH`, `OBSERVER_FAILED`, `SINK_MISSING`,
-`REPOSITORY_MISSING`.
+`SUMMARY_FAILED`, `IDENTITY_MISMATCH`, `OBSERVER_FAILED`,
+`OBSERVER_IDENTITY_MISMATCH`, `SINK_MISSING`, `REPOSITORY_MISSING`.
 
 ## The next-run guard
 
@@ -253,7 +275,10 @@ diagnostic rather than losing the evidence.
 An ordinary run is never blocked by control-support pressure: admission says so,
 the run continues **unregistered**, and its hand-back still completes — with no
 registry row, `finalize` performs #71's own resolve/seal directly and reports
-`finalized <run-id> unregistered`. A *governed* run that reaches hand-back with
+`finalized <run-id> unregistered`. Skipping the registry is all that path skips:
+it rereads the sink afterwards and requires the same run identity, the same
+asserted outcome, a sealed lifecycle, and `integrity=valid` before reporting
+success, so it is never a weaker substitute for #71's contract. A *governed* run that reaches hand-back with
 no record is the failure this mechanism exists to surface, and is refused.
 
 `prune --older-than-days N` applies the same safe-to-drop rule by age.

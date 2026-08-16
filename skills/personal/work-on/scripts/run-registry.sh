@@ -30,7 +30,7 @@ readonly run_outcomes=(Closes Progresses preflight-aborted abandoned failed)
 readonly failure_codes=(
   OUTCOME_UNRESOLVED OUTCOME_CONFLICT RESOLVE_FAILED SEAL_FAILED
   INTEGRITY_INCOMPLETE INTEGRITY_INVALID SUMMARY_FAILED IDENTITY_MISMATCH
-  OBSERVER_FAILED SINK_MISSING REPOSITORY_MISSING
+  OBSERVER_FAILED OBSERVER_IDENTITY_MISMATCH SINK_MISSING REPOSITORY_MISSING
 )
 readonly default_capacity=512
 readonly default_retention_days=30
@@ -249,7 +249,22 @@ remove_staged_record_file() {
   [[ -z "$staged_record_file" ]] || rm -f "$staged_record_file"
   staged_record_file=""
 }
-trap remove_staged_record_file EXIT
+
+# The observer's answer is captured outside the registry and the telemetry sink,
+# and never outlives the command that asked for it.
+observer_capture_file=""
+remove_observer_capture_file() {
+  [[ -z "$observer_capture_file" ]] || rm -f "$observer_capture_file"
+  observer_capture_file=""
+}
+
+remove_temporary_artifacts() {
+  remove_staged_record_file
+  remove_observer_capture_file
+}
+trap remove_temporary_artifacts EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 write_record() {
   local key="$1" body="$2"
@@ -403,22 +418,58 @@ parse_applicability_answer() {
 
 observer_id=""
 control_id=""
-resolve_observer_applicability() {
-  local repository="$1" issue="$2" output status
+observer_applicability_error=""
+
+# The answer is captured as bytes, not as shell text. Command substitution
+# silently discards a NUL, which would let material outside the closed grammar
+# disappear before it could be rejected, so the program writes to an owner-only
+# temporary file that is inspected for NUL first and removed on every exit path.
+probe_observer_applicability() {
+  local repository="$1" issue="$2" status=0 raw_bytes text_bytes
   observer_id=""
   control_id=""
+  observer_applicability_error=""
   resolve_observer_program
   [[ -n "$observer_program" ]] || return 0
-  status=0
-  output="$("$observer_program" applies --repository "$repository" \
-    --issue "$issue" 2>/dev/null)" || status=$?
+
+  observer_capture_file="$( (umask 077 && mktemp "${TMPDIR:-/tmp}/work-on-applies.XXXXXX") )" \
+    || { observer_applicability_error="could not capture the observer's answer"
+      return 1; }
+  chmod 600 "$observer_capture_file"
+  "$observer_program" applies --repository "$repository" --issue "$issue" \
+    >"$observer_capture_file" 2>/dev/null || status=$?
   case "$status" in
     0) ;;
-    3) return 0 ;;
-    *) fail "observer policy could not decide whether this run is governed" ;;
+    3) remove_observer_capture_file; return 0 ;;
+    *)
+      remove_observer_capture_file
+      observer_applicability_error="observer policy could not decide whether this run is governed"
+      return 1
+      ;;
   esac
-  parse_applicability_answer "$output" \
-    || fail "observer policy returned a malformed applicability answer"
+  raw_bytes="$(wc -c <"$observer_capture_file")"
+  text_bytes="$(tr -d '\0' <"$observer_capture_file" | wc -c)"
+  if [[ "$raw_bytes" -ne "$text_bytes" ]]; then
+    remove_observer_capture_file
+    observer_applicability_error="observer policy returned a malformed applicability answer"
+    return 1
+  fi
+  if ! parse_applicability_answer "$(cat "$observer_capture_file")"; then
+    remove_observer_capture_file
+    observer_id=""
+    control_id=""
+    observer_applicability_error="observer policy returned a malformed applicability answer"
+    return 1
+  fi
+  remove_observer_capture_file
+  return 0
+}
+
+# Admission cannot proceed on an undecided policy, so it turns a probe failure
+# into a refusal. Finalization records the outstanding obligation instead, and
+# therefore probes directly.
+resolve_observer_applicability() {
+  probe_observer_applicability "$1" "$2" || fail "$observer_applicability_error"
 }
 
 # The transition identity an observer deduplicates on. It is derived from the
@@ -429,6 +480,16 @@ finalization_identity() {
   local key="$1" repository="$2" issue="$3" outcome="$4" summary_sha256="$5"
   printf 'work-on-finalize\0%s\0%s\0%s\0%s\0%s' \
     "$key" "$repository" "$issue" "$outcome" "$summary_sha256" | sha256_of_stdin
+}
+
+# The obligation belongs to the observer and control the run registered with,
+# not to whichever program happens to be configured now. Applicability is
+# re-established through the same closed interface and must name that exact
+# pair; anything else leaves the original obligation outstanding.
+observer_identity_matches_record() {
+  local repository="$1" issue="$2" stored_observer="$3" stored_control="$4"
+  probe_observer_applicability "$repository" "$issue" || return 1
+  [[ "$observer_id" == "$stored_observer" && "$control_id" == "$stored_control" ]]
 }
 
 # Delivery is at-least-once: the intended transition is recorded durably before
@@ -622,21 +683,40 @@ halt_finalization() {
 
 # An ordinary run that registry admission deliberately skipped still hands back
 # through #71's own resolve/seal path, so nothing about it depends on a row that
-# was never created.
+# was never created. Omitting the registry is all this path omits: the outcome
+# assertion, the run's identity, the seal, and schema-2 integrity are required
+# here exactly as they are for a registered run, because a caller may not be
+# told a hand-back succeeded on weaker terms than #71's.
 finalize_unregistered_run() {
-  local handle="$1" run_id="$2" requested_outcome="$3" workdir="$4"
+  local handle="$1" run_id="$2" requested_outcome="$3" workdir="$4" integrity
+  if [[ -n "$sink_outcome" && -n "$requested_outcome" \
+    && "$requested_outcome" != "$sink_outcome" ]]; then
+    fail "run $run_id already resolved $sink_outcome; refusing to finalize as $requested_outcome"
+  fi
   if [[ -z "$sink_outcome" ]]; then
     [[ -n "$requested_outcome" ]] \
       || fail "run $run_id is not registered and has resolved no outcome; supply --outcome"
     (cd "$workdir" && "$telemetry_script" resolve --run "$handle" \
       --outcome "$requested_outcome") >/dev/null \
       || fail "run $run_id could not resolve outcome $requested_outcome"
+    read_summary "$workdir" "$handle" \
+      || fail "run $run_id has no readable schema-2 summary after resolving"
   fi
-  read_summary "$workdir" "$handle" || fail "run $run_id has no readable summary"
   if [[ "$sink_lifecycle" != sealed ]]; then
     (cd "$workdir" && "$telemetry_script" seal --run "$handle") >/dev/null \
       || fail "run $run_id could not be sealed"
   fi
+  read_summary "$workdir" "$handle" \
+    || fail "run $run_id has no readable schema-2 summary after sealing"
+  [[ "$(jq -r '.run' <<<"$summary_json")" == "$run_id" \
+    && -n "$(jq -r '.repository // ""' <<<"$summary_json")" ]] \
+    || fail "run $run_id does not match the sink its handle selects"
+  [[ -z "$requested_outcome" || "$requested_outcome" == "$sink_outcome" ]] \
+    || fail "run $run_id resolved $sink_outcome; refusing to finalize as $requested_outcome"
+  [[ "$sink_lifecycle" == sealed ]] || fail "run $run_id is not sealed"
+  integrity="$(jq -r '.integrity.state' <<<"$summary_json")"
+  [[ "$integrity" == valid ]] \
+    || fail "run $run_id is sealed but its telemetry integrity is $integrity"
   printf 'finalized %s unregistered\n' "$run_id"
 }
 
@@ -664,6 +744,7 @@ finalize_without_record() {
 drive_finalization() {
   local key="$1" requested_outcome="$2" outcome_is_assertion="$3"
   local current sink worktree binding run_id handle transition summary_sha256
+  local stored_observer stored_control
 
   run_id="${key%@*}"
   binding="${key#*@}"
@@ -677,7 +758,17 @@ drive_finalization() {
   current="$(read_record "$key")" \
     || fail "registry record $key disappeared before it could be locked"
 
+  # Only an identical retry is idempotent. A finalized run still answers a
+  # caller's assertion about it, so a contradictory outcome is refused here
+  # rather than acknowledged as success.
   if [[ "$(record_field "$current" finalization)" == finalized ]]; then
+    printf '%s' "$current" | validate_record \
+      || fail "the finalized record for run $run_id is not internally valid"
+    if [[ "$outcome_is_assertion" == true && -n "$requested_outcome" \
+      && "$requested_outcome" != "$(record_field "$current" outcome)" ]]; then
+      unlock_record
+      fail "run $run_id already finalized as $(record_field "$current" outcome); refusing to finalize as $requested_outcome"
+    fi
     unlock_record
     printf 'finalized %s\n' "$run_id"
     return 0
@@ -777,6 +868,26 @@ drive_finalization() {
     "$summary_sha256" "$transition")"
   current="$(read_record "$key")"
 
+  # The obligation is owed to the pair this run registered with. Whatever
+  # program is configured now must still identify itself as that pair before it
+  # is allowed to discharge it.
+  if [[ -n "$control_id" ]]; then
+    stored_observer="$observer_id"
+    stored_control="$control_id"
+    if [[ -z "$observer_program" ]]; then
+      halt_finalization "$key" "$current" failed OBSERVER_FAILED \
+        "run $run_id is owed to $stored_observer/$stored_control, and no observer policy is reachable"
+    fi
+    if ! observer_identity_matches_record \
+      "$(record_field "$current" repository)" \
+      "$(record_field "$current" issue)" "$stored_observer" "$stored_control"; then
+      observer_id="$stored_observer"
+      control_id="$stored_control"
+      halt_finalization "$key" "$current" failed OBSERVER_IDENTITY_MISMATCH \
+        "run $run_id is owed to $stored_observer/$stored_control, which the configured observer policy does not identify as"
+    fi
+  fi
+
   notify_observer_finalized "$key" "$transition" \
     || halt_finalization "$key" "$current" failed OBSERVER_FAILED \
       "run $run_id was sealed but its observer did not accept the finalization"
@@ -846,6 +957,16 @@ case "$subcommand" in
         && "$(record_field "$existing" sink)" == "$sink" \
         && "$(record_field "$existing" repository_binding)" == "$record_binding" ]] \
         || fail "run $run_id is already registered with a different identity"
+      # Applicability is part of that identity. Governance cannot be retrofitted
+      # onto a run that already did work under none, nor removed from one that
+      # owes an obligation, nor moved to another observer or control.
+      registered_observer="$(record_field "$existing" observer)"
+      registered_control="$(record_field "$existing" control_id)"
+      if [[ "$registered_observer" != "$observer_id" \
+        || "$registered_control" != "$control_id" ]]; then
+        unlock_registry
+        fail "run $run_id is registered to ${registered_observer:-no observer}/${registered_control:-no control}; refusing a retry under ${observer_id:-no observer}/${control_id:-no control}"
+      fi
     else
       if [[ -n "$control_id" ]]; then
         # A governed run may not begin while a prior run under the same control

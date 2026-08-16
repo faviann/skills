@@ -171,7 +171,30 @@ case "${1:-}" in
       esac
     done
     [[ ! -e "$flags/policy-error" ]] || exit 9
+    if [[ -e "$flags/report-capture" ]]; then
+      # fd 1 must be duplicated first: inside command substitution it would be
+      # the substitution's pipe rather than the observer's own stdout.
+      exec 9>&1
+      capture="$(readlink /proc/self/fd/9)"
+      printf '%s %s\n' "$capture" "$(stat -c '%a' "$capture")" \
+        >>"$flags/capture-report"
+    fi
     [[ "$repository" == example/telemetry ]] || exit 3
+    if [[ -e "$flags/applies-nul" ]]; then
+      printf 'observer=nul-observer\ncontrol=nul-control\n'
+      printf '\0'
+      exit 0
+    fi
+    if [[ -e "$flags/applies-embedded-nul" ]]; then
+      printf 'observer=nul-observer\n'
+      printf '\0'
+      printf 'control=nul-control\n'
+      exit 0
+    fi
+    if [[ -e "$flags/applies-identity" ]]; then
+      cat "$flags/applies-identity"
+      exit 0
+    fi
     if [[ -e "$flags/applies-output" ]]; then
       cat "$flags/applies-output"
       exit 0
@@ -185,9 +208,10 @@ case "${1:-}" in
   finalize)
     shift
     transition=""
+    record=""
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
-        --record) shift 2 ;;
+        --record) record="$2"; shift 2 ;;
         --transition) transition="$2"; shift 2 ;;
         *) shift ;;
       esac
@@ -198,8 +222,11 @@ case "${1:-}" in
       exit 0
     fi
     if [[ -e "$flags/wait-for-release" ]]; then
-      : >"$flags/observer-entered"
-      while [[ ! -e "$flags/release" ]]; do sleep 0.05; done
+      held="$(cat "$flags/wait-for-release")"
+      if [[ -z "$held" || "$record" == *"$held"* ]]; then
+        : >"$flags/observer-entered"
+        while [[ ! -e "$flags/release" ]]; do sleep 0.05; done
+      fi
     fi
     # A repeated transition identity is the same transition, not a new one.
     if [[ -e "$flags/accepted" ]] && grep -Fqx "$transition" "$flags/accepted"; then
@@ -854,40 +881,54 @@ wait
 [[ "$(record_count)" -eq 1 ]] \
   || fail "a refused competing start still left a registry record"
 
-scenario concurrent-finalizations-do-not-cross-contaminate
+scenario same-record-finalizations-arbitrate-and-unrelated-ones-progress
+enable_observer
+: >"$OBSERVER_FLAGS/per-issue-controls"
 repo="$fixture/concurrent"
 new_repo "$repo" 'git@github.com:Example/Telemetry.git'
 linked="$fixture/concurrent-linked"
 git -C "$repo" worktree add -q -b concurrent "$linked" >/dev/null
-main_handle="$(telemetry "$repo" start --issue 72)"
-linked_handle="$(telemetry "$linked" start --issue 73)"
-same_handle="$(telemetry "$repo" start --issue 74)"
-registry_in "$repo" register --run "$main_handle" >/dev/null
-registry_in "$linked" register --run "$linked_handle" >/dev/null
-registry_in "$repo" register --run "$same_handle" >/dev/null
-hold_registry_lock -x
-launch_competitor concurrent-main "$repo" "$registry_script" finalize \
-  --run "$main_handle" --outcome Closes
-launch_competitor concurrent-linked "$linked" "$registry_script" finalize \
-  --run "$linked_handle" --outcome Progresses
+held_handle="$(telemetry "$repo" start --issue 72)"
+unrelated_handle="$(telemetry "$linked" start --issue 73)"
+registry_in "$repo" register --run "$held_handle" >/dev/null
+registry_in "$linked" register --run "$unrelated_handle" >/dev/null
+# One finalization is held inside its observer, so it owns the shared registry
+# lock and its own record lock for as long as the fixture wants. Only that
+# record is held: the unrelated one must be free to finish meanwhile.
+printf '%s' "${held_handle%@*}" >"$OBSERVER_FLAGS/wait-for-release"
+launch_competitor concurrent-held "$repo" "$registry_script" finalize \
+  --run "$held_handle" --outcome Closes
+wait_for_file "$OBSERVER_FLAGS/observer-entered"
+# A. Same record: a second finalization cannot cross the record boundary.
 launch_competitor concurrent-same "$repo" "$registry_script" finalize \
-  --run "$same_handle" --outcome abandoned
-for label in concurrent-main concurrent-linked concurrent-same; do
-  assert_blocked_and_live "$label"
-done
-release_registry_lock
-for label in concurrent-main concurrent-linked concurrent-same; do
-  [[ "$(competitor_result "$label")" == granted ]] \
-    || fail "$label did not complete after the boundary was released"
-done
+  --run "$held_handle" --outcome Closes
+assert_blocked_and_live concurrent-same
+# B. Unrelated record: finalization completes while A is still held, which a
+# globally serialized implementation could not do. It is launched the same way,
+# so a serialized implementation fails the bounded wait instead of passing.
+launch_competitor concurrent-unrelated "$linked" "$registry_script" finalize \
+  --run "$unrelated_handle" --outcome Progresses
+[[ "$(competitor_result concurrent-unrelated)" == granted ]] \
+  || fail "an unrelated record could not finalize during a live transition"
+assert_field "$unrelated_handle" finalization finalized
+assert_field "$unrelated_handle" outcome Progresses
+[[ ! -e "$fixture/concurrent-held.result" ]] \
+  || fail "the held finalization completed before its boundary was released"
+[[ ! -e "$fixture/concurrent-same.result" ]] \
+  || fail "the same-record competitor crossed the boundary before release"
+: >"$OBSERVER_FLAGS/release"
+[[ "$(competitor_result concurrent-held)" == granted ]] \
+  || fail "the held finalization did not complete"
+[[ "$(competitor_result concurrent-same)" == granted ]] \
+  || fail "the same-record retry did not resolve idempotently after release"
 wait
-assert_field "$main_handle" outcome Closes
-assert_field "$linked_handle" outcome Progresses
-assert_field "$same_handle" outcome abandoned
-for handle in "$main_handle" "$linked_handle" "$same_handle"; do
-  assert_field "$handle" finalization finalized
-done
-[[ "$(record_count)" -eq 3 ]] || fail "concurrent finalization lost or added records"
+rm -f "$OBSERVER_FLAGS/wait-for-release" "$OBSERVER_FLAGS/release" \
+  "$OBSERVER_FLAGS/observer-entered"
+assert_field "$held_handle" finalization finalized
+assert_field "$held_handle" outcome Closes
+[[ "$(observer_acceptances)" -eq 2 ]] \
+  || fail "the two records did not produce exactly one transition each"
+[[ "$(record_count)" -eq 2 ]] || fail "concurrent finalization lost or added records"
 
 scenario prune-cannot-run-during-a-live-transition
 enable_observer
@@ -1091,5 +1132,235 @@ for forbidden in '"type"' 'subagent_launch' 'validation_start' 'epoch_ms' \
   ! grep -rqF "$forbidden" "$(registry_root)" \
     || fail "the registry stored prohibited material: $forbidden"
 done
+
+# --- final-confirmation regressions -----------------------------------------
+
+scenario unregistered-fallback-enforces-sink-truth
+enable_observer
+: >"$OBSERVER_FLAGS/per-issue-controls"
+export WORK_ON_REGISTRY_CAPACITY=1
+governed="$fixture/fallback-truth-governed"
+ordinary="$fixture/fallback-truth"
+new_repo "$governed" 'git@github.com:Example/Telemetry.git'
+new_repo "$ordinary" 'git@github.com:Example/Other.git'
+governed_handle="$(telemetry "$governed" start --issue 72)"
+registry_in "$governed" register --run "$governed_handle" >/dev/null
+# Every run below is admitted as "continues unregistered", so each exercises the
+# fallback rather than a registry row.
+unregistered_run() {
+  local handle
+  handle="$(telemetry "$ordinary" start --issue "$1")"
+  registry_in "$ordinary" register --run "$handle" >/dev/null 2>&1
+  [[ -z "$(record_of "$handle")" ]] || fail "the fallback fixture registered a row"
+  printf '%s\n' "$handle"
+}
+# An invalid sink cannot be reported as finalized.
+invalid_handle="$(unregistered_run 81)"
+printf 'not json\n' >>"$(sink_of "$ordinary" "$invalid_handle")"
+! registry_in "$ordinary" finalize --run "$invalid_handle" --outcome Closes \
+  >"$fixture/fallback-invalid.out" 2>&1 \
+  || fail "the unregistered fallback finalized an invalid sink"
+! grep -Fq 'finalized' "$fixture/fallback-invalid.out" \
+  || fail "the unregistered fallback claimed success for an invalid sink"
+grep -Fq 'integrity is invalid' "$fixture/fallback-invalid.out" \
+  || fail "the unregistered refusal does not name the integrity state"
+# A contradictory assertion cannot be accepted, and must not seal the run.
+conflict_handle="$(unregistered_run 82)"
+telemetry "$ordinary" resolve --run "$conflict_handle" --outcome Progresses
+! registry_in "$ordinary" finalize --run "$conflict_handle" --outcome Closes \
+  >"$fixture/fallback-conflict.out" 2>&1 \
+  || fail "the unregistered fallback accepted a contradictory outcome"
+! grep -Fq 'finalized' "$fixture/fallback-conflict.out" \
+  || fail "the unregistered fallback claimed a false outcome assertion succeeded"
+[[ "$(telemetry "$ordinary" summary --run "$conflict_handle" | jq -r '.sealed_at')" == null ]] \
+  || fail "a refused unregistered assertion still sealed the run"
+registry_in "$ordinary" finalize --run "$conflict_handle" --outcome Progresses >/dev/null \
+  || fail "the honest unregistered assertion was refused"
+# The ordinary happy paths still complete for both closing outcomes.
+for outcome in Closes Progresses; do
+  happy_handle="$(unregistered_run 83)"
+  telemetry "$ordinary" launch --run "$happy_handle" --role implementation \
+    --phase implementation --round 1
+  [[ "$(registry_in "$ordinary" finalize --run "$happy_handle" --outcome "$outcome")" \
+    == "finalized ${happy_handle%@*} unregistered" ]] \
+    || fail "the ordinary unregistered $outcome hand-back did not complete"
+  summary="$(telemetry "$ordinary" summary --run "$happy_handle")"
+  [[ "$(jq -r '.integrity.state' <<<"$summary")" == valid ]] \
+    || fail "the unregistered $outcome hand-back left an invalid sink"
+  [[ "$(jq -r '.final_workflow_outcome' <<<"$summary")" == "$outcome" ]] \
+    || fail "the unregistered hand-back lost its $outcome outcome"
+done
+unset WORK_ON_REGISTRY_CAPACITY
+
+scenario re-registration-refuses-governance-drift
+enable_observer
+repo="$fixture/drift"
+new_repo "$repo" 'git@github.com:Example/Telemetry.git'
+# The reproduced sequence: an ungoverned run does work, then an observer starts
+# applying, and the retry must not claim a governance the record does not hold.
+ungoverned="$(telemetry "$repo" start --issue 72)"
+( cd "$repo" && env -u WORK_ON_OBSERVER "$registry_script" register --run "$ungoverned" ) >/dev/null
+assert_field "$ungoverned" control_id null
+telemetry "$repo" launch --run "$ungoverned" --role implementation \
+  --phase implementation --round 1
+printf 'observer=late-observer\ncontrol=shared-token\n' >"$OBSERVER_FLAGS/applies-identity"
+! registry_in "$repo" register --run "$ungoverned" >"$fixture/drift-late.out" 2>&1 \
+  || fail "an ungoverned record was re-registered as governed"
+grep -Fq 'refusing a retry' "$fixture/drift-late.out" \
+  || fail "the drift refusal is not the governance-drift diagnostic"
+assert_field "$ungoverned" control_id null
+assert_field "$ungoverned" observer null
+# ungoverned -> same ungoverned is idempotent.
+rm -f "$OBSERVER_FLAGS/applies-identity"
+( cd "$repo" && env -u WORK_ON_OBSERVER "$registry_script" register --run "$ungoverned" ) >/dev/null \
+  || fail "an unchanged ungoverned retry was refused"
+# governed A/X -> same A/X is idempotent; every drift is refused.
+printf 'observer=observer-a\ncontrol=control-x\n' >"$OBSERVER_FLAGS/applies-identity"
+governed="$(telemetry "$repo" start --issue 73)"
+registry_in "$repo" register --run "$governed" >/dev/null
+assert_field "$governed" observer observer-a
+assert_field "$governed" control_id control-x
+registry_in "$repo" register --run "$governed" >/dev/null \
+  || fail "an unchanged governed retry was refused"
+assert_drift_refused() {
+  local label="$1" answer="$2"
+  if [[ "$answer" == none ]]; then
+    rm -f "$OBSERVER_FLAGS/applies-identity"
+  else
+    printf '%s' "$answer" >"$OBSERVER_FLAGS/applies-identity"
+  fi
+  ! registry_in "$repo" register --run "$governed" >/dev/null 2>&1 \
+    || fail "governance drift '$label' was accepted"
+  assert_field "$governed" observer observer-a
+  assert_field "$governed" control_id control-x
+}
+assert_drift_refused governed-to-ungoverned none
+assert_drift_refused observer-change 'observer=observer-b
+control=control-x
+'
+assert_drift_refused control-change 'observer=observer-a
+control=control-y
+'
+rm -f "$OBSERVER_FLAGS/applies-identity"
+
+scenario stored-observer-identity-is-immutable
+enable_observer
+repo="$fixture/observer-identity"
+new_repo "$repo" 'git@github.com:Example/Telemetry.git'
+printf 'observer=original-observer\ncontrol=shared-token\n' \
+  >"$OBSERVER_FLAGS/applies-identity"
+handle="$(telemetry "$repo" start --issue 72)"
+registry_in "$repo" register --run "$handle" >/dev/null
+assert_field "$handle" observer original-observer
+# A replacement executable that answers with a different identity, and whose
+# finalize would happily succeed, cannot discharge this obligation.
+replacement="$fixture/replacement-observer"
+cat >"$replacement" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+case "\$1" in
+  applies) printf 'observer=replacement-observer\ncontrol=replacement-control\n' ;;
+  finalize) : >"$fixture/replacement-finalized" ;;
+esac
+EOF
+chmod +x "$replacement"
+! ( cd "$repo" && WORK_ON_OBSERVER="$replacement" "$registry_script" finalize \
+  --run "$handle" --outcome Closes ) >/dev/null 2>&1 \
+  || fail "a replacement observer discharged another observer's obligation"
+[[ ! -e "$fixture/replacement-finalized" ]] \
+  || fail "the replacement observer was called at all"
+assert_field "$handle" finalization failed
+assert_field "$handle" failure_code OBSERVER_IDENTITY_MISMATCH
+[[ "$(observer_acceptances)" -eq 0 ]] || fail "the obligation was discharged"
+# A different token or control from the configured policy is refused the same way.
+assert_identity_refused() {
+  local label="$1" answer="$2"
+  printf '%s' "$answer" >"$OBSERVER_FLAGS/applies-identity"
+  ! registry_in "$repo" recover --run "$handle" >/dev/null 2>&1 \
+    || fail "observer identity '$label' discharged the obligation"
+  assert_field "$handle" failure_code OBSERVER_IDENTITY_MISMATCH
+  assert_field "$handle" observer original-observer
+  assert_field "$handle" control_id shared-token
+}
+assert_identity_refused observer-token 'observer=other-observer
+control=shared-token
+'
+assert_identity_refused control-id 'observer=original-observer
+control=other-token
+'
+# An unreachable observer leaves the obligation outstanding.
+! ( cd "$repo" && env -u WORK_ON_OBSERVER XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
+  "$registry_script" recover --run "$handle" ) >/dev/null 2>&1 \
+  || fail "a missing observer discharged the obligation"
+assert_field "$handle" failure_code OBSERVER_FAILED
+assert_field "$handle" finalization failed
+# The stored pair still finalizes, reusing the exact transition identity.
+printf 'observer=original-observer\ncontrol=shared-token\n' \
+  >"$OBSERVER_FLAGS/applies-identity"
+transition_before="$(record_of "$handle" | jq -r '.finalization_id')"
+registry_in "$repo" recover --run "$handle" >/dev/null
+assert_field "$handle" finalization finalized
+assert_field "$handle" finalization_id "$transition_before"
+[[ "$(observer_acceptances)" -eq 1 ]] || fail "the stored observer did not discharge once"
+rm -f "$OBSERVER_FLAGS/applies-identity"
+
+scenario observer-answers-with-nul-bytes-fail-closed
+enable_observer
+repo="$fixture/nul"
+new_repo "$repo" 'git@github.com:Example/Telemetry.git'
+for flag in applies-nul applies-embedded-nul; do
+  : >"$OBSERVER_FLAGS/$flag"
+  nul_handle="$(telemetry "$repo" start --issue 72)"
+  ! registry_in "$repo" register --run "$nul_handle" >/dev/null 2>&1 \
+    || fail "an applicability answer containing a NUL byte was accepted"
+  [[ -z "$(record_of "$nul_handle")" ]] \
+    || fail "a NUL-bearing answer still produced a record"
+  rm -f "$OBSERVER_FLAGS/$flag"
+done
+# The documented shape still succeeds, and its capture is owner-only and gone.
+: >"$OBSERVER_FLAGS/report-capture"
+handle="$(telemetry "$repo" start --issue 72)"
+registry_in "$repo" register --run "$handle" >/dev/null
+assert_field "$handle" control_id demo-control
+[[ "$(count_lines "$OBSERVER_FLAGS/capture-report")" -ge 1 ]] \
+  || fail "the observer did not report its capture artifact"
+while read -r capture_path capture_mode; do
+  [[ "$capture_mode" == 600 ]] \
+    || fail "the applicability capture was mode $capture_mode"
+  [[ ! -e "$capture_path" ]] \
+    || fail "the applicability capture survived the command"
+  [[ "$capture_path" != "$(registry_root)"/* ]] \
+    || fail "the applicability capture was written into the registry"
+done <"$OBSERVER_FLAGS/capture-report"
+rm -f "$OBSERVER_FLAGS/report-capture"
+
+scenario finalized-runs-still-validate-outcome-assertions
+enable_observer
+: >"$OBSERVER_FLAGS/per-issue-controls"
+repo="$fixture/finalized-assertions"
+new_repo "$repo" 'git@github.com:Example/Telemetry.git'
+handle="$(telemetry "$repo" start --issue 72)"
+registry_in "$repo" register --run "$handle" >/dev/null
+registry_in "$repo" finalize --run "$handle" --outcome Closes >/dev/null
+registry_in "$repo" finalize --run "$handle" --outcome Closes >/dev/null \
+  || fail "an identical finalize retry was refused"
+registry_in "$repo" finalize --run "$handle" >/dev/null \
+  || fail "a finalize retry with no assertion was refused"
+! registry_in "$repo" finalize --run "$handle" --outcome Progresses \
+  >"$fixture/finalized-conflict.out" 2>&1 \
+  || fail "a contradictory assertion was acknowledged on a finalized run"
+grep -Fq 'already finalized as Closes' "$fixture/finalized-conflict.out" \
+  || fail "the refusal does not name the durable outcome"
+assert_field "$handle" outcome Closes
+other="$(telemetry "$repo" start --issue 73)"
+registry_in "$repo" register --run "$other" >/dev/null
+registry_in "$repo" finalize --run "$other" --outcome abandoned >/dev/null
+! registry_in "$repo" finalize --run "$other" --outcome failed >/dev/null 2>&1 \
+  || fail "a contradictory assertion was acknowledged for abandoned"
+assert_field "$other" outcome abandoned
+# Recovery keeps its offer-only semantics on a finalized run.
+registry_in "$repo" recover --run "$handle" --outcome Progresses >/dev/null \
+  || fail "recovery stopped being an offer on a finalized run"
+assert_field "$handle" outcome Closes
 
 printf 'run registry scenarios passed\n'
