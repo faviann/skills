@@ -55,11 +55,11 @@ The run-scoped, untracked JSON-lines file in the target repository's Git common 
 _Avoid_: event log, analytics store, telemetry ledger
 
 **Run registry**:
-The owner-only, bounded, user-level record of every `work-on` run's lifecycle, kept under the XDG state directory so a run stays visible after its worktree, branch, or clone is gone. It holds enumerated lifecycle and finalization states, repository/issue identity, a sink locator, and a hash of the sink's own summary — never the events themselves, which stay in the **Run telemetry sink**.
+The owner-only, bounded, user-level index of every `work-on` run's lifecycle, kept under an absolute XDG state directory so a run stays visible after its worktree, branch, or clone is gone. Each record is keyed by the run's repository-bound handle, and holds enumerated lifecycle and finalization states, repository/issue identity, a sink locator, and a hash of the sink's own summary — never the events themselves, which stay in the **Run telemetry sink**, and never a fact contradicting it.
 _Avoid_: run database, telemetry registry, analytics store
 
 **Control observer**:
-The optional external program the **Run registry** asks whether a run carries a finalization obligation, and notifies when one is discharged. It answers with two bounded tokens — an observer id and a control id — and owns all policy; the registry knows nothing about what any observer measures.
+The optional external program the **Run registry** asks whether a run carries a finalization obligation, and notifies when one is discharged. It answers with two bounded tokens — an observer id and a control id — and owns all policy; the registry knows nothing about what any observer measures. Discharge notifications carry one stable transition identity, delivered at least once, which the observer deduplicates into one logical transition.
 _Avoid_: experiment hook, control policy, publisher
 
 **Closability gate**:

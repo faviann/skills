@@ -5,14 +5,18 @@ set -euo pipefail
 # so an interrupted or forgotten run stays visible after its worktree, branch, or
 # clone is gone.
 #
+# The registry is an index over runs, never a second source of truth for what a
+# run did. The sink under the repository's Git common directory stays canonical:
+# every lifecycle fact here is projected from that sink's own deterministic
+# summary, and no registry command invents one.
+#
 # The registry is bounded metadata only. It holds enumerated lifecycle states,
 # an issue number, a normalized repository slug, resolved identifiers, two
-# filesystem locators, and a hash of the sink's own deterministic summary. It has
-# no field for a prompt, a diff, a command line, an output, a credential, or a
-# reviewer's prose, and every record is validated against that closed shape
-# before it is written, so such material cannot be stored even by mistake. Raw
-# events stay in the run's sink under the repository's Git common directory and
-# are never copied here.
+# filesystem locators, and hashes of the sink's summary and of the transition
+# being finalized. It has no field for a prompt, a diff, a command line, an
+# output, a credential, or a reviewer's prose, and every record is validated
+# against that closed shape before it is written, so such material cannot be
+# stored even by mistake.
 #
 # Whether a run carries a finalization obligation is decided by an optional
 # external observer program. This script knows only two bounded tokens from it —
@@ -20,16 +24,20 @@ set -euo pipefail
 # tokens belong to.
 
 readonly record_schema=1
-readonly lifecycle_states=(active resolved sealed unknown)
+readonly lifecycle_states=(active resolved sealed)
 readonly finalization_states=(pending finalizing finalized failed unreproducible)
 readonly run_outcomes=(Closes Progresses preflight-aborted abandoned failed)
 readonly failure_codes=(
   OUTCOME_UNRESOLVED OUTCOME_CONFLICT RESOLVE_FAILED SEAL_FAILED
-  INTEGRITY_INCOMPLETE INTEGRITY_INVALID SUMMARY_FAILED
+  INTEGRITY_INCOMPLETE INTEGRITY_INVALID SUMMARY_FAILED IDENTITY_MISMATCH
   OBSERVER_FAILED SINK_MISSING REPOSITORY_MISSING
 )
 readonly default_capacity=512
 readonly default_retention_days=30
+# The outcome the guard prescribes for a run that was interrupted before it
+# resolved one. Recovery never guesses an outcome on its own; this is the
+# explicit, documented one its printed command supplies.
+readonly interrupted_run_outcome=abandoned
 
 fail() {
   printf 'run registry: %s\n' "$1" >&2
@@ -41,10 +49,12 @@ usage() {
 usage: run-registry.sh <subcommand>
   register --run HANDLE                     record the run's lifecycle obligation
   finalize --run HANDLE [--outcome O]       seal and discharge the obligation
-  recover (--run HANDLE | --run-id ID | --all) [--outcome O]
+  recover (--run HANDLE | --all) [--outcome O]
                                             idempotently finish the same run
-  status [--run-id ID] [--repository R] [--issue N] [--pending]
+  status [--run HANDLE] [--repository R] [--issue N] [--pending]
   prune [--older-than-days N]               drop retained ungoverned records
+
+HANDLE is the repository-bound handle printed by run-telemetry.sh start.
 USAGE
   exit 1
 }
@@ -67,13 +77,40 @@ readonly telemetry_script="$script_root/run-telemetry.sh"
 readonly registry_script="$script_root/run-registry.sh"
 [[ -x "$telemetry_script" ]] || fail "run telemetry script is missing"
 
-registry_root="${XDG_STATE_HOME:-$HOME/.local/state}/work-on/registry"
+# User-level state and policy are user-level: a root is used only when it is
+# absolute. A relative override would otherwise be interpreted against the
+# working directory, which is the target repository — putting the registry
+# inside the clone it must outlive, or letting repository content become the
+# observer program. Such an override is refused rather than reinterpreted.
+require_absolute_root() {
+  local name="$1" value="$2"
+  [[ "$value" == /* ]] \
+    || fail "$name must be an absolute path when set; refusing to resolve it against the working directory"
+}
+
+resolve_user_root() {
+  local name="$1" fallback_suffix="$2" value="${3:-}"
+  if [[ -n "$value" ]]; then
+    require_absolute_root "$name" "$value"
+    printf '%s\n' "$value"
+    return 0
+  fi
+  require_absolute_root HOME "${HOME:-}"
+  printf '%s/%s\n' "$HOME" "$fallback_suffix"
+}
+
+state_home="$(resolve_user_root XDG_STATE_HOME .local/state "${XDG_STATE_HOME:-}")"
+config_home="$(resolve_user_root XDG_CONFIG_HOME .config "${XDG_CONFIG_HOME:-}")"
+registry_root="$state_home/work-on/registry"
 runs_root="$registry_root/runs"
 registry_lock="$registry_root/registry.lock"
 
 readonly run_id_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$'
 readonly run_handle_pattern='^([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})@([0-9a-f]{32})$'
-readonly token_pattern='^[a-z0-9][a-z0-9-]{0,63}$'
+# The documented observer token grammar: alphanumeric words joined by single
+# hyphens, so a leading, trailing, or doubled hyphen is not a token.
+readonly token_pattern='^[a-z0-9]+(-[a-z0-9]+)*$'
+readonly token_max_length=64
 
 capacity="${WORK_ON_REGISTRY_CAPACITY:-$default_capacity}"
 [[ "$capacity" =~ ^[1-9][0-9]*$ ]] \
@@ -116,6 +153,31 @@ sha256_of_stdin() {
   fi
 }
 
+# --- identity ---------------------------------------------------------------
+#
+# A run id is unique only within the repository that minted it: #70 keeps two
+# repositories able to hold the same textual id, and pairs it with an opaque
+# repository binding to tell them apart. The registry key is that whole bound
+# handle, so one repository's record can never be selected, mutated, locked,
+# evicted, or finalized through another repository's identically named run.
+
+record_key=""
+record_run_id=""
+record_binding=""
+parse_handle() {
+  local handle="$1"
+  [[ -n "$handle" ]] || fail "operation requires --run"
+  [[ "$handle" =~ $run_handle_pattern ]] || fail "run handle is malformed"
+  record_run_id="${BASH_REMATCH[1]}"
+  record_binding="${BASH_REMATCH[2]}"
+  record_key="$record_run_id@$record_binding"
+}
+
+handle_of_record() {
+  printf '%s@%s\n' "$(record_field "$1" run_id)" \
+    "$(record_field "$1" repository_binding)"
+}
+
 record_path() {
   printf '%s/%s.json\n' "$runs_root" "$1"
 }
@@ -125,19 +187,23 @@ record_lock_path() {
 }
 
 # One closed shape, checked on the way in. A record that does not match it is
-# never written, so a later reader can trust the field set as well as the values.
+# never written, so a later reader can trust the field set as well as the
+# values — including that a projected lifecycle and outcome cannot contradict
+# each other.
 readonly record_validator='
-  def token: type == "string" and test("^[a-z0-9][a-z0-9-]{0,63}$");
+  def token: type == "string" and (length <= 64)
+    and test("^[a-z0-9]+(-[a-z0-9]+)*$");
   def locator: type == "string" and (length > 0) and (length <= 4096)
     and startswith("/") and (test("[\\n\\r\\t]") | not);
   def stamp: type == "string"
     and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$");
+  def digest: type == "string" and test("^[0-9a-f]{64}$");
   type == "object"
   and (keys == [
-    "control_id","failure_code","finalization","issue","lifecycle","observer",
-    "outcome","registered_at","repository","repository_binding","run_id",
-    "schema","sink","summary_sha256","telemetry_schema","updated_at",
-    "updated_epoch","worktree"])
+    "control_id","failure_code","finalization","finalization_id","issue",
+    "lifecycle","observer","outcome","registered_at","repository",
+    "repository_binding","run_id","schema","sink","summary_sha256",
+    "telemetry_schema","updated_at","updated_epoch","worktree"])
   and .schema == 1
   and (.run_id | type == "string" and test("^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$"))
   and (.repository | type == "string" and test("^[a-z0-9_.-]+/[a-z0-9_.-]+$"))
@@ -147,14 +213,18 @@ readonly record_validator='
   and (.repository_binding | type == "string" and test("^[0-9a-f]{32}$"))
   and (.lifecycle | IN($lifecycles[]))
   and (.outcome == null or (.outcome | IN($outcomes[])))
-  and (.summary_sha256 == null
-    or (.summary_sha256 | type == "string" and test("^[0-9a-f]{64}$")))
+  and (.summary_sha256 == null or (.summary_sha256 | digest))
+  and (.finalization_id == null or (.finalization_id | digest))
   and (.finalization | IN($finalizations[]))
   and (.observer == null or (.observer | token))
   and (.control_id == null or (.control_id | token))
   and (.registered_at | stamp) and (.updated_at | stamp)
   and (.updated_epoch | type == "number" and floor == . and . >= 0)
   and (.failure_code == null or (.failure_code | IN($failure_codes[])))
+  and (if .lifecycle == "active" then .outcome == null else .outcome != null end)
+  and (.finalization != "finalized"
+    or (.lifecycle == "sealed" and .outcome != null
+      and .summary_sha256 != null))
 '
 
 jq_string_array() {
@@ -170,21 +240,31 @@ validate_record() {
     "$record_validator" >/dev/null
 }
 
-# Records are replaced whole, never appended to: a reader under no lock at all
-# sees either the previous record or the next one.
+# Records are replaced whole, never appended to: a reader sees either the
+# previous record or the next one. The staged file is tracked so an interrupted
+# writer cannot leave an artifact behind, and cleanup reaps any that a killed
+# writer still managed to strand.
+staged_record_file=""
+remove_staged_record_file() {
+  [[ -z "$staged_record_file" ]] || rm -f "$staged_record_file"
+  staged_record_file=""
+}
+trap remove_staged_record_file EXIT
+
 write_record() {
-  local run="$1" body="$2" staged
+  local key="$1" body="$2"
   printf '%s' "$body" | validate_record \
     || fail "refusing to write a registry record outside its bounded shape"
-  staged="$(record_path "$run").staged.$$"
-  create_private_file "$staged"
-  printf '%s\n' "$body" >"$staged"
-  mv -f "$staged" "$(record_path "$run")"
+  staged_record_file="$(record_path "$key").staged.$$"
+  create_private_file "$staged_record_file"
+  printf '%s\n' "$body" >"$staged_record_file"
+  mv -f "$staged_record_file" "$(record_path "$key")"
+  staged_record_file=""
 }
 
 read_record() {
-  local run="$1" file
-  file="$(record_path "$run")"
+  local file
+  file="$(record_path "$1")"
   [[ -f "$file" ]] || return 1
   cat "$file"
 }
@@ -193,30 +273,70 @@ record_field() {
   jq -r --arg field "$2" '.[$field] // "" | tostring' <<<"$1"
 }
 
-# Every mutation names its run, so two agents working on different runs never
-# contend and can never reach each other's record.
+# --- locking ----------------------------------------------------------------
+#
+# One order, everywhere: the registry lock is taken before a record lock, and
+# never the other way round, so no cycle exists.
+#
+#   * a record transition holds the registry lock SHARED for its whole command,
+#     then its own record lock exclusively;
+#   * admission, eviction, and retention hold the registry lock EXCLUSIVE.
+#
+# Cleanup therefore cannot run while any transition is in flight, a row can
+# never be unlinked underneath a live holder, and a lock pathname can never be
+# split into two independent lock domains.
+
+registry_lock_fd=""
+lock_registry() {
+  local mode="$1"
+  exec {registry_lock_fd}>>"$registry_lock"
+  flock "$mode" "$registry_lock_fd" || fail "could not lock the run registry"
+}
+
+unlock_registry() {
+  [[ -n "$registry_lock_fd" ]] || return 0
+  exec {registry_lock_fd}>&-
+  registry_lock_fd=""
+}
+
+record_lock_fd=""
 lock_record() {
-  local run="$1"
-  create_private_file "$(record_lock_path "$run")"
-  exec {record_lock_fd}>>"$(record_lock_path "$run")"
-  flock -x "$record_lock_fd" || fail "could not lock registry record $run"
+  local key="$1"
+  create_private_file "$(record_lock_path "$key")"
+  exec {record_lock_fd}>>"$(record_lock_path "$key")"
+  flock -x "$record_lock_fd" || fail "could not lock registry record $key"
 }
 
 unlock_record() {
-  [[ -n "${record_lock_fd:-}" ]] || return 0
+  [[ -n "$record_lock_fd" ]] || return 0
   exec {record_lock_fd}>&-
   record_lock_fd=""
 }
 
-lock_registry() {
-  exec {registry_lock_fd}>>"$registry_lock"
-  flock -x "$registry_lock_fd" || fail "could not lock the run registry"
+# Removal happens only under the exclusive registry lock, and still takes the
+# record's own lock first: a row is never unlinked while any holder of its
+# transition lock can exist.
+remove_record() {
+  local key="$1" victim_fd
+  create_private_file "$(record_lock_path "$key")"
+  exec {victim_fd}>>"$(record_lock_path "$key")"
+  if ! flock -x -n "$victim_fd"; then
+    exec {victim_fd}>&-
+    return 1
+  fi
+  rm -f "$(record_path "$key")"
+  exec {victim_fd}>&-
+  rm -f "$(record_lock_path "$key")"
+  return 0
 }
 
-unlock_registry() {
-  [[ -n "${registry_lock_fd:-}" ]] || return 0
-  exec {registry_lock_fd}>&-
-  registry_lock_fd=""
+reap_staged_records() {
+  local staged
+  shopt -s nullglob
+  for staged in "$runs_root"/*.staged.*; do
+    rm -f "$staged"
+  done
+  shopt -u nullglob
 }
 
 all_records() {
@@ -231,27 +351,60 @@ all_records() {
 # --- the observer seam ------------------------------------------------------
 #
 # Policy lives in an external program. It is asked one question — does this
-# repository/issue carry an obligation — and answers with two bounded tokens or
-# a refusal. Anything else is a policy error, and a run that might be governed
-# is never allowed to proceed on a guess.
+# repository/issue carry an obligation — and answers with exactly two bounded
+# lines or a refusal. Anything else is a policy error, and a run that might be
+# governed is never allowed to proceed on a guess.
 
 observer_program=""
 resolve_observer_program() {
   local candidate="${WORK_ON_OBSERVER:-}"
   if [[ -n "$candidate" ]]; then
+    require_absolute_root WORK_ON_OBSERVER "$candidate"
     [[ -x "$candidate" ]] || fail "observer program is not executable: $candidate"
     observer_program="$candidate"
     return 0
   fi
-  candidate="${XDG_CONFIG_HOME:-$HOME/.config}/work-on/observer"
+  candidate="$config_home/work-on/observer"
   [[ -x "$candidate" ]] && observer_program="$candidate"
+  return 0
+}
+
+# Exactly one observer= line and one control= line, each a token in the
+# documented grammar, and no other non-empty output. An extra line, a repeated
+# key, an unknown key, or an edge-form token is a policy error.
+parse_applicability_answer() {
+  local output="$1" line key value seen_observer=false seen_control=false
+  observer_id=""
+  control_id=""
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    [[ "$line" == *=* ]] || return 1
+    [[ "${#value}" -le "$token_max_length" ]] || return 1
+    [[ "$value" =~ $token_pattern ]] || return 1
+    case "$key" in
+      observer)
+        [[ "$seen_observer" == false ]] || return 1
+        seen_observer=true
+        observer_id="$value"
+        ;;
+      control)
+        [[ "$seen_control" == false ]] || return 1
+        seen_control=true
+        control_id="$value"
+        ;;
+      *) return 1 ;;
+    esac
+  done <<<"$output"
+  [[ "$seen_observer" == true && "$seen_control" == true ]] || return 1
   return 0
 }
 
 observer_id=""
 control_id=""
 resolve_observer_applicability() {
-  local repository="$1" issue="$2" output status line
+  local repository="$1" issue="$2" output status
   observer_id=""
   control_id=""
   resolve_observer_program
@@ -264,41 +417,61 @@ resolve_observer_applicability() {
     3) return 0 ;;
     *) fail "observer policy could not decide whether this run is governed" ;;
   esac
-  while IFS= read -r line; do
-    case "$line" in
-      observer=*) observer_id="${line#observer=}" ;;
-      control=*) control_id="${line#control=}" ;;
-    esac
-  done <<<"$output"
-  [[ "$observer_id" =~ $token_pattern && "$control_id" =~ $token_pattern ]] \
+  parse_applicability_answer "$output" \
     || fail "observer policy returned a malformed applicability answer"
 }
 
-# A record naming a control has an obligation to that observer. If the observer
-# is unreachable when the obligation comes due, the obligation stays outstanding
-# rather than being discharged against nothing.
-notify_observer_finalized() {
-  local run="$1"
-  [[ -n "$control_id" ]] || return 0
-  [[ -n "$observer_program" ]] || return 1
-  "$observer_program" finalize --record "$(record_path "$run")" >/dev/null 2>&1
+# The transition identity an observer deduplicates on. It is derived from the
+# run's immutable bound identity plus the transition being finalized, so every
+# retry of the same finalization presents the same value and a genuinely
+# different transition cannot reuse it.
+finalization_identity() {
+  local key="$1" repository="$2" issue="$3" outcome="$4" summary_sha256="$5"
+  printf 'work-on-finalize\0%s\0%s\0%s\0%s\0%s' \
+    "$key" "$repository" "$issue" "$outcome" "$summary_sha256" | sha256_of_stdin
 }
 
-# --- sink identity ----------------------------------------------------------
+# Delivery is at-least-once: the intended transition is recorded durably before
+# the observer is called, so a crash after acceptance replays the same identity
+# instead of inventing a second transition. A record naming a control owes that
+# observer something, so an unreachable observer leaves the obligation
+# outstanding rather than discharging it against nothing.
+notify_observer_finalized() {
+  local key="$1" transition="$2"
+  [[ -n "$control_id" ]] || return 0
+  [[ -n "$observer_program" ]] || return 1
+  "$observer_program" finalize --record "$(record_path "$key")" \
+    --transition "$transition" >/dev/null 2>&1
+}
+
+# --- canonical sink facts ---------------------------------------------------
+#
+# Everything the registry knows about a run's lifecycle comes from here. The
+# projection is refreshed after every successful sink transition, so a record
+# written on a failure path still carries what the sink had already established.
 
 summary_json=""
+sink_lifecycle=""
+sink_outcome=""
 read_summary() {
   local workdir="$1" handle="$2"
   summary_json=""
   summary_json="$( (cd "$workdir" && "$telemetry_script" summary --run "$handle") 2>/dev/null )" \
     || return 1
   [[ "$(jq -r '.schema' <<<"$summary_json")" == 2 ]] || return 1
+  sink_outcome="$(jq -r '.final_workflow_outcome // ""' <<<"$summary_json")"
+  if [[ "$(jq -r '.sealed_at // ""' <<<"$summary_json")" != "" ]]; then
+    sink_lifecycle=sealed
+  elif [[ -n "$sink_outcome" ]]; then
+    sink_lifecycle=resolved
+  else
+    sink_lifecycle=active
+  fi
   return 0
 }
 
 sink_path_for() {
-  local common_dir="$1" run="$2"
-  printf '%s/work-on-telemetry/runs/%s.jsonl\n' "$common_dir" "$run"
+  printf '%s/work-on-telemetry/runs/%s.jsonl\n' "$1" "$2"
 }
 
 # A recovery may run long after the worktree that started the run was removed.
@@ -328,77 +501,95 @@ resolve_workdir() {
 # never change again, plus the lifecycle the sink reports right now.
 initial_record() {
   local run="$1" repository="$2" issue="$3" sink="$4" worktree="$5"
-  local binding="$6" lifecycle="$7" outcome="$8" stamp
+  local binding="$6" stamp
   stamp="$(now_iso)"
   jq -cn \
     --argjson schema "$record_schema" \
     --arg run_id "$run" --arg repository "$repository" --argjson issue "$issue" \
     --arg sink "$sink" --arg worktree "$worktree" --arg binding "$binding" \
-    --arg lifecycle "$lifecycle" --arg outcome "$outcome" \
+    --arg lifecycle "$sink_lifecycle" --arg outcome "$sink_outcome" \
     --arg observer "$observer_id" --arg control "$control_id" \
     --arg stamp "$stamp" --argjson updated_epoch "$(now_epoch)" \
     'def maybe: if . == "" then null else . end;
      {schema: $schema, run_id: $run_id, repository: $repository, issue: $issue,
       telemetry_schema: 2, sink: $sink, worktree: $worktree,
       repository_binding: $binding, lifecycle: $lifecycle,
-      outcome: ($outcome | maybe), summary_sha256: null,
+      outcome: ($outcome | maybe), summary_sha256: null, finalization_id: null,
       finalization: "pending", observer: ($observer | maybe),
       control_id: ($control | maybe), registered_at: $stamp,
       updated_at: $stamp, updated_epoch: $updated_epoch, failure_code: null}'
 }
 
 # Transitions restate the whole record from the one it replaces, so a field this
-# transition does not name cannot be lost or silently changed.
+# transition does not name cannot be lost or silently changed. The lifecycle and
+# outcome always come from the sink projection when one is available: a registry
+# row may record that processing failed, never a lifecycle fact contradicting
+# the sink.
 transition_record() {
-  local current="$1" lifecycle="$2" outcome="$3" summary_sha256="$4"
-  local finalization="$5" failure_code="$6"
+  local current="$1" finalization="$2" failure_code="$3"
+  local summary_sha256="${4:-}" finalization_id="${5:-}"
+  local lifecycle="$sink_lifecycle" outcome="$sink_outcome"
+  if [[ -z "$lifecycle" ]]; then
+    lifecycle="$(record_field "$current" lifecycle)"
+    outcome="$(record_field "$current" outcome)"
+  fi
+  [[ -n "$summary_sha256" ]] \
+    || summary_sha256="$(record_field "$current" summary_sha256)"
+  [[ -n "$finalization_id" ]] \
+    || finalization_id="$(record_field "$current" finalization_id)"
   jq -c \
     --arg lifecycle "$lifecycle" --arg outcome "$outcome" \
     --arg summary_sha256 "$summary_sha256" --arg finalization "$finalization" \
+    --arg finalization_id "$finalization_id" \
     --arg failure_code "$failure_code" --arg updated_at "$(now_iso)" \
     --argjson updated_epoch "$(now_epoch)" \
     'def maybe: if . == "" then null else . end;
      .lifecycle = $lifecycle
      | .outcome = ($outcome | maybe)
      | .summary_sha256 = ($summary_sha256 | maybe)
+     | .finalization_id = ($finalization_id | maybe)
      | .finalization = $finalization
      | .failure_code = ($failure_code | maybe)
      | .updated_at = $updated_at
      | .updated_epoch = $updated_epoch' <<<"$current"
 }
 
-lifecycle_from_summary() {
-  local summary="$1"
-  if [[ "$(jq -r '.sealed_at // "null"' <<<"$summary")" != null ]]; then
-    printf 'sealed\n'
-  elif [[ "$(jq -r '.final_workflow_outcome // "null"' <<<"$summary")" != null ]]; then
-    printf 'resolved\n'
+# The one command a caller is told to run next. It carries the bound handle, so
+# it can never select another repository's identically named run, and it names
+# the outcome when the run was interrupted before resolving one — the state in
+# which a bare recovery would otherwise be a dead end.
+recovery_command_for() {
+  local current="$1" handle
+  handle="$(handle_of_record "$current")"
+  if [[ -z "$(record_field "$current" outcome)" ]]; then
+    printf '%s recover --run %s --outcome %s\n' "$registry_script" "$handle" \
+      "$interrupted_run_outcome"
   else
-    printf 'active\n'
+    printf '%s recover --run %s\n' "$registry_script" "$handle"
   fi
-}
-
-recovery_command() {
-  printf '%s recover --run-id %s\n' "$registry_script" "$1"
 }
 
 # --- capacity and retention -------------------------------------------------
 #
 # A record that nothing governs may always be dropped to make room. A governed
 # record may be dropped only once its obligation is discharged. When neither
-# frees a slot, registration refuses rather than quietly losing the evidence an
-# observer still needs.
+# frees a slot, admission of a governed run refuses rather than quietly losing
+# the evidence an observer still needs.
 readonly evictable_filter='.control_id == null or .finalization == "finalized"'
 
+# Eligibility is evaluated, and the victim removed, under the exclusive registry
+# lock this caller already holds.
 evict_for_capacity() {
   local occupied victim
   occupied="$(all_records | jq -s 'length')"
   while [[ "$occupied" -ge "$capacity" ]]; do
     victim="$(all_records | jq -rs "
       [.[] | select($evictable_filter)]
-      | sort_by(.updated_epoch, .run_id) | .[0].run_id // empty")"
+      | sort_by(.updated_epoch, .run_id)
+      | .[0] // empty
+      | \"\(.run_id)@\(.repository_binding)\"")"
     [[ -n "$victim" ]] || return 1
-    rm -f "$(record_path "$victim")" "$(record_lock_path "$victim")"
+    remove_record "$victim" || return 1
     occupied=$(( occupied - 1 ))
   done
   return 0
@@ -411,39 +602,84 @@ evict_for_capacity() {
 # outcome for a run that never got that far, seals only if the run is unsealed,
 # and claims success only after the sealed sink's own integrity is valid.
 
-# Every way finalization can stop short ends here, keeping whatever the run had
-# already established. An outstanding obligation exits nonzero with the one
-# command that retries it; a run nobody can reproduce has nothing left to retry,
-# so it is recorded as such and reported as final.
+# Every way finalization can stop short ends here, with the record reconciled
+# from whatever the sink last established. An outstanding obligation exits
+# nonzero with the one command that retries it; a run nobody can reproduce has
+# nothing left to retry, so it is recorded as such and reported as final.
 halt_finalization() {
-  local run="$1" current="$2" lifecycle="$3" finalization="$4" code="$5"
-  local message="$6"
-  write_record "$run" \
-    "$(transition_record "$current" "$lifecycle" \
-      "$(record_field "$current" outcome)" \
-      "$(record_field "$current" summary_sha256)" "$finalization" "$code")"
+  local key="$1" current="$2" finalization="$3" code="$4" message="$5" updated
+  updated="$(transition_record "$current" "$finalization" "$code")"
+  write_record "$key" "$updated"
   unlock_record
   printf 'run registry: %s\n' "$message" >&2
   if [[ "$finalization" == unreproducible ]]; then
-    printf 'run registry: run %s is recorded as unreproducible\n' "$run" >&2
+    printf 'run registry: run %s is recorded as unreproducible\n' "$key" >&2
     exit 0
   fi
-  printf 'run registry: recover with: %s\n' "$(recovery_command "$run")" >&2
+  printf 'run registry: recover with: %s\n' "$(recovery_command_for "$updated")" >&2
   exit 1
 }
 
-drive_finalization() {
-  local run="$1" requested_outcome="$2" current sink worktree binding handle
-  local resolved integrity outcome summary_sha256 lifecycle
+# An ordinary run that registry admission deliberately skipped still hands back
+# through #71's own resolve/seal path, so nothing about it depends on a row that
+# was never created.
+finalize_unregistered_run() {
+  local handle="$1" run_id="$2" requested_outcome="$3" workdir="$4"
+  if [[ -z "$sink_outcome" ]]; then
+    [[ -n "$requested_outcome" ]] \
+      || fail "run $run_id is not registered and has resolved no outcome; supply --outcome"
+    (cd "$workdir" && "$telemetry_script" resolve --run "$handle" \
+      --outcome "$requested_outcome") >/dev/null \
+      || fail "run $run_id could not resolve outcome $requested_outcome"
+  fi
+  read_summary "$workdir" "$handle" || fail "run $run_id has no readable summary"
+  if [[ "$sink_lifecycle" != sealed ]]; then
+    (cd "$workdir" && "$telemetry_script" seal --run "$handle") >/dev/null \
+      || fail "run $run_id could not be sealed"
+  fi
+  printf 'finalized %s unregistered\n' "$run_id"
+}
 
-  current="$(read_record "$run")" \
-    || fail "run $run is not registered; register it before finalizing"
-  lock_record "$run"
-  current="$(read_record "$run")"
+# A run that is not registered is only acceptable when nothing observes it: a
+# governed run reaching hand-back without a record is exactly the missing
+# obligation this mechanism exists to surface.
+finalize_without_record() {
+  local handle="$1" run_id="$2" requested_outcome="$3" workdir repository issue
+  workdir="$(git rev-parse --show-toplevel 2>/dev/null)" \
+    || fail "run $run_id is not registered and no repository is available here"
+  read_summary "$workdir" "$handle" \
+    || fail "run $run_id is not registered and has no readable schema-2 summary"
+  repository="$(jq -r '.repository // ""' <<<"$summary_json")"
+  issue="$(jq -r '.issue // ""' <<<"$summary_json")"
+  resolve_observer_applicability "$repository" "$issue"
+  [[ -z "$control_id" ]] \
+    || fail "governed run $run_id is not registered; its obligation was never recorded"
+  finalize_unregistered_run "$handle" "$run_id" "$requested_outcome" "$workdir"
+}
+
+# `--outcome` means different things to the two callers, and the difference is
+# what makes the guard's printed command work in every state it can report:
+# finalize asserts the outcome (a contradiction is an error), while recover
+# offers one only for a run that resolved none.
+drive_finalization() {
+  local key="$1" requested_outcome="$2" outcome_is_assertion="$3"
+  local current sink worktree binding run_id handle transition summary_sha256
+
+  run_id="${key%@*}"
+  binding="${key#*@}"
+  handle="$run_id@$binding"
+
+  current="$(read_record "$key")" || {
+    finalize_without_record "$handle" "$run_id" "$requested_outcome"
+    return 0
+  }
+  lock_record "$key"
+  current="$(read_record "$key")" \
+    || fail "registry record $key disappeared before it could be locked"
 
   if [[ "$(record_field "$current" finalization)" == finalized ]]; then
     unlock_record
-    printf 'finalized %s\n' "$run"
+    printf 'finalized %s\n' "$run_id"
     return 0
   fi
 
@@ -453,89 +689,101 @@ drive_finalization() {
 
   sink="$(record_field "$current" sink)"
   worktree="$(record_field "$current" worktree)"
-  binding="$(record_field "$current" repository_binding)"
-  handle="$run@$binding"
-
-  # An interrupted finalization is visible as such, so a recovery can tell a
-  # crash apart from an obligation nobody has started discharging.
-  write_record "$run" \
-    "$(transition_record "$current" \
-      "$(record_field "$current" lifecycle)" \
-      "$(record_field "$current" outcome)" \
-      "$(record_field "$current" summary_sha256)" finalizing \
-      "$(record_field "$current" failure_code)")"
-  current="$(read_record "$run")"
+  sink_lifecycle=""
+  sink_outcome=""
 
   # A vanished clone takes its sink with it, so the repository is asked about
   # first: the narrower code is reserved for a sink that went missing from a
   # repository that is still there.
   resolve_workdir "$sink" "$worktree" \
-    || halt_finalization "$run" "$current" unknown unreproducible \
-      REPOSITORY_MISSING \
-      "run $run has no reachable repository for its telemetry sink"
+    || halt_finalization "$key" "$current" unreproducible REPOSITORY_MISSING \
+      "run $run_id has no reachable repository for its telemetry sink"
   [[ -f "$sink" ]] \
-    || halt_finalization "$run" "$current" unknown unreproducible SINK_MISSING \
-      "run $run has no telemetry sink at its recorded location"
-
+    || halt_finalization "$key" "$current" unreproducible SINK_MISSING \
+      "run $run_id has no telemetry sink at its recorded location"
   read_summary "$resolved_workdir" "$handle" \
-    || halt_finalization "$run" "$current" unknown unreproducible \
-      SUMMARY_FAILED "run $run has no readable schema-2 summary"
+    || halt_finalization "$key" "$current" unreproducible SUMMARY_FAILED \
+      "run $run_id has no readable schema-2 summary"
 
-  resolved="$(jq -r '.final_workflow_outcome // ""' <<<"$summary_json")"
-  if [[ -z "$resolved" ]]; then
+  # The sink is canonical for identity too: a row whose repository, issue, or
+  # run no longer matches the sink it names is never acted on — and its
+  # lifecycle facts are not adopted from a sink that is not its own.
+  if [[ "$(jq -r '.run' <<<"$summary_json")" != "$run_id" \
+    || "$(jq -r '.repository // ""' <<<"$summary_json")" != \
+      "$(record_field "$current" repository)" \
+    || "$(jq -r '.issue // ""' <<<"$summary_json")" != \
+      "$(record_field "$current" issue)" ]]; then
+    sink_lifecycle=""
+    sink_outcome=""
+    halt_finalization "$key" "$current" failed IDENTITY_MISMATCH \
+      "run $run_id does not match the identity recorded for it"
+  fi
+
+  # An interrupted finalization is visible as such, so a recovery can tell a
+  # crash apart from an obligation nobody has started discharging.
+  write_record "$key" "$(transition_record "$current" finalizing \
+    "$(record_field "$current" failure_code)")"
+  current="$(read_record "$key")"
+
+  if [[ -z "$sink_outcome" ]]; then
     [[ -n "$requested_outcome" ]] \
-      || halt_finalization "$run" "$current" active failed OUTCOME_UNRESOLVED \
-        "run $run has resolved no outcome; supply --outcome to finalize it"
+      || halt_finalization "$key" "$current" failed OUTCOME_UNRESOLVED \
+        "run $run_id has resolved no outcome; supply --outcome to finalize it"
     (cd "$resolved_workdir" && "$telemetry_script" resolve --run "$handle" \
       --outcome "$requested_outcome") >/dev/null \
-      || halt_finalization "$run" "$current" active failed RESOLVE_FAILED \
-        "run $run could not resolve outcome $requested_outcome"
-    resolved="$requested_outcome"
-  elif [[ -n "$requested_outcome" && "$requested_outcome" != "$resolved" ]]; then
-    halt_finalization "$run" "$current" resolved failed OUTCOME_CONFLICT \
-      "run $run already resolved $resolved; refusing to finalize as $requested_outcome"
+      || halt_finalization "$key" "$current" failed RESOLVE_FAILED \
+        "run $run_id could not resolve outcome $requested_outcome"
+    read_summary "$resolved_workdir" "$handle" \
+      || halt_finalization "$key" "$current" failed SUMMARY_FAILED \
+        "run $run_id has no readable schema-2 summary after resolving"
+    write_record "$key" "$(transition_record "$current" finalizing "")"
+    current="$(read_record "$key")"
+  elif [[ "$outcome_is_assertion" == true && -n "$requested_outcome" \
+      && "$requested_outcome" != "$sink_outcome" ]]; then
+    halt_finalization "$key" "$current" failed OUTCOME_CONFLICT \
+      "run $run_id already resolved $sink_outcome; refusing to finalize as $requested_outcome"
   fi
 
-  if [[ "$(jq -r '.sealed_at // ""' <<<"$summary_json")" == "" ]]; then
+  if [[ "$sink_lifecycle" != sealed ]]; then
     (cd "$resolved_workdir" && "$telemetry_script" seal --run "$handle") \
       >/dev/null \
-      || halt_finalization "$run" "$current" resolved failed SEAL_FAILED \
-        "run $run could not be sealed"
+      || halt_finalization "$key" "$current" failed SEAL_FAILED \
+        "run $run_id could not be sealed"
+    read_summary "$resolved_workdir" "$handle" \
+      || halt_finalization "$key" "$current" failed SUMMARY_FAILED \
+        "run $run_id has no readable schema-2 summary after sealing"
+    write_record "$key" "$(transition_record "$current" finalizing "")"
+    current="$(read_record "$key")"
   fi
 
-  read_summary "$resolved_workdir" "$handle" \
-    || halt_finalization "$run" "$current" resolved failed SUMMARY_FAILED \
-      "run $run has no readable schema-2 summary after sealing"
-  lifecycle="$(lifecycle_from_summary "$summary_json")"
-  outcome="$(jq -r '.final_workflow_outcome // ""' <<<"$summary_json")"
-  integrity="$(jq -r '.integrity.state' <<<"$summary_json")"
-  if [[ "$integrity" != valid ]]; then
-    case "$integrity" in
-      incomplete) halt_finalization "$run" "$current" "$lifecycle" failed \
-        INTEGRITY_INCOMPLETE "run $run is sealed but its telemetry is incomplete" ;;
-      *) halt_finalization "$run" "$current" "$lifecycle" failed \
-        INTEGRITY_INVALID \
-        "run $run is sealed but its telemetry integrity is $integrity" ;;
-    esac
-  fi
+  case "$(jq -r '.integrity.state' <<<"$summary_json")" in
+    valid) ;;
+    incomplete) halt_finalization "$key" "$current" failed INTEGRITY_INCOMPLETE \
+      "run $run_id is sealed but its telemetry is incomplete" ;;
+    *) halt_finalization "$key" "$current" failed INTEGRITY_INVALID \
+      "run $run_id is sealed but its telemetry integrity is not valid" ;;
+  esac
 
   # The canonical summary is the sink's own deterministic aggregate; the record
-  # keeps its hash, never a reconstruction of it.
+  # keeps its hash, never a reconstruction of it. The transition identity is
+  # written durably before the observer is called, so a crash after acceptance
+  # replays the same transition instead of starting a second one.
   summary_sha256="$(printf '%s' "$summary_json" | sha256_of_stdin)"
-  write_record "$run" \
-    "$(transition_record "$current" "$lifecycle" "$outcome" "$summary_sha256" \
-      finalizing "")"
-  current="$(read_record "$run")"
+  transition="$(record_field "$current" finalization_id)"
+  [[ -n "$transition" ]] || transition="$(finalization_identity "$key" \
+    "$(record_field "$current" repository)" "$(record_field "$current" issue)" \
+    "$sink_outcome" "$summary_sha256")"
+  write_record "$key" "$(transition_record "$current" finalizing "" \
+    "$summary_sha256" "$transition")"
+  current="$(read_record "$key")"
 
-  notify_observer_finalized "$run" \
-    || halt_finalization "$run" "$current" "$lifecycle" failed OBSERVER_FAILED \
-      "run $run was sealed but its observer did not accept the finalization"
+  notify_observer_finalized "$key" "$transition" \
+    || halt_finalization "$key" "$current" failed OBSERVER_FAILED \
+      "run $run_id was sealed but its observer did not accept the finalization"
 
-  write_record "$run" \
-    "$(transition_record "$current" "$lifecycle" "$outcome" "$summary_sha256" \
-      finalized "")"
+  write_record "$key" "$(transition_record "$current" finalized "")"
   unlock_record
-  printf 'finalized %s\n' "$run"
+  printf 'finalized %s\n' "$run_id"
 }
 
 subcommand="${1:-}"
@@ -551,17 +799,22 @@ case "$subcommand" in
         *) usage ;;
       esac
     done
-    [[ "$handle" =~ $run_handle_pattern ]] || fail "run handle is malformed"
-    run_id="${BASH_REMATCH[1]}"
-    binding="${BASH_REMATCH[2]}"
+    parse_handle "$handle"
+    run_id="$record_run_id"
+    key="$record_key"
 
     worktree="$(git rev-parse --show-toplevel 2>/dev/null)" \
       || fail "register requires a Git-backed target repository"
     common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
       || fail "could not resolve the repository's Git common directory"
     sink="$(sink_path_for "$common_dir" "$run_id")"
+    # The bound handle is resolved by the telemetry sink itself, so a handle
+    # belonging to another repository is refused here even when this repository
+    # holds a sink with the same textual run id.
     read_summary "$worktree" "$handle" \
       || fail "register requires a schema-2 run in this repository"
+    [[ "$(jq -r '.run' <<<"$summary_json")" == "$run_id" ]] \
+      || fail "the run handle does not match the sink it selects"
     repository="$(jq -r '.repository // ""' <<<"$summary_json")"
     issue="$(jq -r '.issue // ""' <<<"$summary_json")"
     [[ -n "$repository" && "$issue" =~ ^[1-9][0-9]*$ ]] \
@@ -571,50 +824,86 @@ case "$subcommand" in
 
     # A governed run may not proceed on an unrecorded obligation. A run nothing
     # observes owes nobody anything, so a registry problem is reported and the
-    # run continues exactly as it would have before the registry existed.
+    # run continues exactly as it would have before the registry existed; its
+    # hand-back still completes through the unregistered path above.
     registration_problem() {
       [[ -z "$control_id" ]] || fail "$1"
       printf 'run registry: %s\n' "$1" >&2
+      printf 'run registry: run %s continues unregistered\n' "$run_id" >&2
       exit 0
     }
 
     ensure_registry_root
-    lock_registry
-    existing="$(read_record "$run_id")" || existing=""
+    lock_registry -x
+    reap_staged_records
+    existing="$(read_record "$key")" || existing=""
 
-    if [[ -n "$control_id" && -z "$existing" ]]; then
-      blocking="$(all_records | jq -rs --arg control "$control_id" '
-        [.[] | select(.control_id == $control
-          and (.finalization | IN("pending","finalizing","failed")))]
-        | sort_by(.updated_epoch, .run_id) | .[0] // empty
-        | "\(.run_id) \(.repository) \(.issue) \(.lifecycle) \(.finalization) \(.failure_code // "none")"')"
-      if [[ -n "$blocking" ]]; then
-        read -r blocked_run blocked_repository blocked_issue blocked_lifecycle \
-          blocked_finalization blocked_code <<<"$blocking"
-        unlock_registry
-        {
-          printf 'run registry: a prior observed run has an unfinished obligation\n'
-          printf '  run: %s (%s#%s)\n' "$blocked_run" "$blocked_repository" \
-            "$blocked_issue"
-          printf '  lifecycle: %s, finalization: %s, failure: %s\n' \
-            "$blocked_lifecycle" "$blocked_finalization" "$blocked_code"
-          printf '  recover with: %s\n' "$(recovery_command "$blocked_run")"
-        } >&2
-        exit 1
+    if [[ -n "$existing" ]]; then
+      # A retry is the same run or nothing: every immutable field must agree
+      # with the sink this handle selects.
+      [[ "$(record_field "$existing" repository)" == "$repository" \
+        && "$(record_field "$existing" issue)" == "$issue" \
+        && "$(record_field "$existing" sink)" == "$sink" \
+        && "$(record_field "$existing" repository_binding)" == "$record_binding" ]] \
+        || fail "run $run_id is already registered with a different identity"
+    else
+      if [[ -n "$control_id" ]]; then
+        # A governed run may not begin while a prior run under the same control
+        # still owes its observer a finalization. The scan and this run's
+        # admission happen under one exclusive lock, so two competing starts
+        # cannot both find no obligation and both be admitted.
+        blocking="$(all_records | jq -rs --arg control "$control_id" \
+          --arg key "$key" '
+          [.[] | select(.control_id == $control
+            and ("\(.run_id)@\(.repository_binding)") != $key
+            and (.finalization | IN("pending","finalizing","failed")))]
+          | sort_by(.updated_epoch, .run_id) | .[0] // empty | tojson')"
+        if [[ -n "$blocking" ]]; then
+          unlock_registry
+          {
+            printf 'run registry: a prior observed run has an unfinished obligation\n'
+            printf '  run: %s (%s#%s)\n' \
+              "$(handle_of_record "$blocking")" \
+              "$(record_field "$blocking" repository)" \
+              "$(record_field "$blocking" issue)"
+            printf '  lifecycle: %s, finalization: %s, failure: %s\n' \
+              "$(record_field "$blocking" lifecycle)" \
+              "$(record_field "$blocking" finalization)" \
+              "$(jq -r '.failure_code // "none"' <<<"$blocking")"
+            printf '  recover with: %s\n' "$(recovery_command_for "$blocking")"
+          } >&2
+          exit 1
+        fi
+
+        # Registration must be provably before implementation, and the sink is
+        # the only evidence of that. Registry timestamps prove nothing about
+        # what the run had already done.
+        pristine="$(jq -r '
+          if (.subagent_launches.total == 0 and .review_delegations.total == 0
+            and .validations.total == 0 and .outcome_resolution_events == 0
+            and .seal_events == 0 and .events == 1)
+          then "pristine"
+          elif .subagent_launches.total > 0 then "subagent launches"
+          elif .review_delegations.total > 0 then "reviewer delegations"
+          elif .validations.total > 0 then "validation executions"
+          elif .outcome_resolution_events > 0 then "a resolved outcome"
+          elif .seal_events > 0 then "a seal"
+          else "recorded work" end' <<<"$summary_json")"
+        [[ "$pristine" == pristine ]] || {
+          unlock_registry
+          fail "run $run_id already recorded $pristine; a governed run must be registered before implementation"
+        }
       fi
-    fi
 
-    if [[ -z "$existing" ]]; then
       evict_for_capacity || {
         unlock_registry
         registration_problem \
-          "the run registry is full of unfinished obligations; discharge them with $registry_script recover --all"
+          "registry capacity $capacity is exhausted by unfinished obligations; discharge them with $registry_script recover --all"
       }
-      write_record "$run_id" "$(initial_record "$run_id" "$repository" "$issue" \
-        "$sink" "$worktree" "$binding" \
-        "$(lifecycle_from_summary "$summary_json")" \
-        "$(jq -r '.final_workflow_outcome // ""' <<<"$summary_json")")"
+      write_record "$key" "$(initial_record "$run_id" "$repository" "$issue" \
+        "$sink" "$worktree" "$record_binding")"
     fi
+
     unlock_registry
     printf 'registered %s observer=%s control=%s\n' "$run_id" \
       "${observer_id:-none}" "${control_id:-none}"
@@ -630,24 +919,22 @@ case "$subcommand" in
         *) usage ;;
       esac
     done
-    [[ "$handle" =~ $run_handle_pattern ]] || fail "run handle is malformed"
-    run_id="${BASH_REMATCH[1]}"
+    parse_handle "$handle"
     [[ -z "$outcome" ]] \
       || contains "$outcome" "${run_outcomes[@]}" \
       || fail "outcome must be one of: ${run_outcomes[*]}"
     ensure_registry_root
-    drive_finalization "$run_id" "$outcome"
+    lock_registry -s
+    drive_finalization "$record_key" "$outcome" true
     ;;
 
   recover)
     handle=""
-    run_id=""
     outcome=""
     recover_all=false
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
         --run) handle="${2:?--run requires a value}"; shift 2 ;;
-        --run-id) run_id="${2:?--run-id requires a value}"; shift 2 ;;
         --outcome) outcome="${2:?--outcome requires a value}"; shift 2 ;;
         --all) recover_all=true; shift ;;
         *) usage ;;
@@ -656,54 +943,58 @@ case "$subcommand" in
     [[ -z "$outcome" ]] \
       || contains "$outcome" "${run_outcomes[@]}" \
       || fail "outcome must be one of: ${run_outcomes[*]}"
-    if [[ -n "$handle" ]]; then
-      [[ "$handle" =~ $run_handle_pattern ]] || fail "run handle is malformed"
-      run_id="${BASH_REMATCH[1]}"
-    fi
     ensure_registry_root
+    lock_registry -s
     if [[ "$recover_all" == true ]]; then
-      [[ -z "$run_id" ]] || fail "recover takes --all or one run, not both"
+      [[ -z "$handle" ]] || fail "recover takes --all or one run, not both"
       status=0
       # Each run is driven in a subshell, so one run that stops short reports
       # itself and the sweep still reaches the rest.
-      while IFS= read -r pending_run; do
-        [[ -n "$pending_run" ]] || continue
-        ( drive_finalization "$pending_run" "$outcome" ) || status=1
+      while IFS= read -r pending_key; do
+        [[ -n "$pending_key" ]] || continue
+        ( drive_finalization "$pending_key" "$outcome" false ) || status=1
       done < <(all_records | jq -rs '
         [.[] | select(.finalization | IN("pending","finalizing","failed"))]
-        | sort_by(.updated_epoch, .run_id) | .[].run_id')
+        | sort_by(.updated_epoch, .run_id)
+        | .[] | "\(.run_id)@\(.repository_binding)"')
       exit "$status"
     fi
-    [[ "$run_id" =~ $run_id_pattern ]] \
-      || fail "recover requires --run, --run-id, or --all"
-    drive_finalization "$run_id" "$outcome"
+    parse_handle "$handle"
+    drive_finalization "$record_key" "$outcome" false
     ;;
 
   status)
-    run_id=""
+    handle=""
     repository=""
     issue=""
     pending_only=false
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
-        --run-id) run_id="${2:?--run-id requires a value}"; shift 2 ;;
+        --run) handle="${2:?--run requires a value}"; shift 2 ;;
         --repository) repository="${2:?--repository requires a value}"; shift 2 ;;
         --issue) issue="${2:?--issue requires a value}"; shift 2 ;;
         --pending) pending_only=true; shift ;;
         *) usage ;;
       esac
     done
+    key=""
+    if [[ -n "$handle" ]]; then
+      parse_handle "$handle"
+      key="$record_key"
+    fi
     ensure_registry_root
+    lock_registry -s
     all_records | jq -sc \
-      --arg run_id "$run_id" --arg repository "$repository" --arg issue "$issue" \
+      --arg key "$key" --arg repository "$repository" --arg issue "$issue" \
       --argjson pending_only "$pending_only" '
       [.[]
-        | select($run_id == "" or .run_id == $run_id)
+        | select($key == "" or ("\(.run_id)@\(.repository_binding)") == $key)
         | select($repository == "" or .repository == $repository)
         | select($issue == "" or (.issue | tostring) == $issue)
         | select(($pending_only | not)
           or (.finalization | IN("pending","finalizing","failed")))]
       | sort_by(.updated_epoch, .run_id) | .[]'
+    unlock_registry
     ;;
 
   prune)
@@ -717,16 +1008,17 @@ case "$subcommand" in
     [[ "$older_than_days" =~ ^(0|[1-9][0-9]*)$ ]] \
       || fail "--older-than-days must be a nonnegative integer"
     ensure_registry_root
-    lock_registry
+    lock_registry -x
+    reap_staged_records
     pruned=0
-    while IFS= read -r stale_run; do
-      [[ -n "$stale_run" ]] || continue
-      rm -f "$(record_path "$stale_run")" "$(record_lock_path "$stale_run")"
+    while IFS= read -r stale_key; do
+      [[ -n "$stale_key" ]] || continue
+      remove_record "$stale_key" || continue
       pruned=$(( pruned + 1 ))
     done < <(all_records | jq -rs \
       --argjson cutoff "$(( $(now_epoch) - older_than_days * 86400 ))" "
       [.[] | select(($evictable_filter) and .updated_epoch <= \$cutoff)]
-      | .[].run_id")
+      | .[] | \"\(.run_id)@\(.repository_binding)\"")
     unlock_registry
     printf 'pruned %s\n' "$pruned"
     ;;

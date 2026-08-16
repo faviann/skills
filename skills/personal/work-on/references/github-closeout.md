@@ -229,7 +229,9 @@ and validation executions stay in the sink. Record the run's outcome with
 soon as the gate resolves it. Record legitimate closeout evidence, then run
 `scripts/run-registry.sh finalize --run "$RUN_HANDLE"` before rendering: it
 seals the run and discharges its registered lifecycle from the sink's own
-sealed summary, and refuses to report success unless that summary is valid.
+sealed summary, and refuses to report success unless that summary is valid. A
+run the registry deliberately left unregistered is sealed the same way and
+reported as `unregistered`.
 Schema-2
 rendering fails unless integrity is `valid`, repository/issue/outcome identity
 matches the facts, and the run has exactly one compatible resolution and seal.
