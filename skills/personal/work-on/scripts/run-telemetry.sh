@@ -190,9 +190,11 @@ require_run_handle() {
 }
 
 # Aggregation alone can read a schema-1 sink from the location used before
-# linked worktrees adopted common-directory storage. The lookup is deliberately
-# limited to this worktree's own Git directory: it is not discovery, and every
-# writer still passes require_run_handle above and therefore targets only runs_root.
+# linked worktrees adopted common-directory storage. For a plain ID, that local
+# legacy sink takes precedence over a same-named canonical sink; a bound handle
+# still selects canonical storage. The legacy lookup is deliberately limited to
+# this worktree's own Git directory: it is not discovery, and every writer still
+# passes require_run_handle above and therefore targets only runs_root.
 summary_run_file=""
 resolve_summary_run() {
   local handle="$1" legacy_run_file
@@ -208,13 +210,13 @@ resolve_summary_run() {
   [[ "$handle" =~ $run_id_pattern ]] \
     || fail "run handle is malformed"
   run_id="$handle"
-  if [[ -f "$runs_root/$run_id.jsonl" ]]; then
-    summary_run_file="$runs_root/$run_id.jsonl"
-    return 0
-  fi
   legacy_run_file="$git_dir/work-on-telemetry/runs/$run_id.jsonl"
   if [[ "$git_dir" != "$git_common_dir" && -f "$legacy_run_file" ]]; then
     summary_run_file="$legacy_run_file"
+    return 0
+  fi
+  if [[ -f "$runs_root/$run_id.jsonl" ]]; then
+    summary_run_file="$runs_root/$run_id.jsonl"
     return 0
   fi
   fail "telemetry sink is missing for run $run_id"

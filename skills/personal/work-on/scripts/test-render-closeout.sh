@@ -200,9 +200,10 @@ fi
 grep -Fq 'run handle belongs to another repository' \
   "$fixture/foreign-binding.err"
 
-# A closeout rendered inside a still-existing linked worktree can summarize a
-# schema-1 sink left in that worktree's pre-common-directory location. Reading
-# it through the renderer must leave the forensic source byte-for-byte intact.
+# A closeout rendered inside a still-existing linked worktree can independently
+# select two schema-1 sinks with the same textual run ID. The plain ID selects
+# that worktree's legacy source; the repository-bound handle selects the common-
+# directory canonical source. Neither forensic read may change either file.
 legacy_render_worktree="$fixture/legacy-render-worktree"
 git -C "$target_checkout" worktree add -q -b legacy-render \
   "$legacy_render_worktree"
@@ -214,14 +215,25 @@ legacy_render_run=20000101T000000Z-00000003
 legacy_render_git_dir="$(git -C "$legacy_render_worktree" \
   rev-parse --absolute-git-dir)"
 legacy_render_sink="$legacy_render_git_dir/work-on-telemetry/runs/$legacy_render_run.jsonl"
+canonical_render_sink="$telemetry_dir/runs/$legacy_render_run.jsonl"
+canonical_render_handle="$legacy_render_run@${render_run#*@}"
 mkdir -p "$(dirname "$legacy_render_sink")"
 printf '%s\n' \
   '{"schema":1,"run":"20000101T000000Z-00000003","seq":1,"at":"2000-01-01T00:00:00Z","epoch_ms":946684800000,"type":"run_start","workflow":"work-on"}' \
   '{"schema":1,"run":"20000101T000000Z-00000003","seq":2,"at":"2000-01-01T00:00:01Z","epoch_ms":946684801000,"type":"subagent_launch","role":"implementation","phase":"implementation","round":1}' \
   '{"schema":1,"run":"20000101T000000Z-00000003","seq":3,"at":"2000-01-01T00:00:02Z","epoch_ms":946684802000,"type":"run_finish","outcome":"Closes"}' \
   >"$legacy_render_sink"
+printf '%s\n' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":1,"at":"2000-01-01T00:00:00Z","epoch_ms":946684800000,"type":"run_start","workflow":"work-on"}' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":2,"at":"2000-01-01T00:00:01Z","epoch_ms":946684801000,"type":"subagent_launch","role":"review-spec","phase":"gate","round":1}' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":3,"at":"2000-01-01T00:00:02Z","epoch_ms":946684802000,"type":"subagent_launch","role":"review-spec","phase":"gate","round":2}' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":4,"at":"2000-01-01T00:00:03Z","epoch_ms":946684803000,"type":"run_finish","outcome":"Closes"}' \
+  >"$canonical_render_sink"
+chmod 600 "$legacy_render_sink" "$canonical_render_sink"
 cp "$legacy_render_sink" "$fixture/legacy-render-before.jsonl"
+cp "$canonical_render_sink" "$fixture/canonical-render-before.jsonl"
 legacy_render_checksum="$(sha256sum "$legacy_render_sink")"
+canonical_render_checksum="$(sha256sum "$canonical_render_sink")"
 (
   cd "$legacy_render_worktree"
   "$command_under_test" --run "$legacy_render_run" \
@@ -231,8 +243,19 @@ grep -Fqx "| Telemetry run | $legacy_render_run (schema 1) |" \
   "$fixture/legacy-render.md"
 grep -Fqx '| Subagent launches | 1 (implementation=1) |' \
   "$fixture/legacy-render.md"
+(
+  cd "$legacy_render_worktree"
+  "$command_under_test" --run "$canonical_render_handle" \
+    "$fixture/facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/canonical-render.md"
+grep -Fqx "| Telemetry run | $legacy_render_run (schema 1) |" \
+  "$fixture/canonical-render.md"
+grep -Fqx '| Subagent launches | 2 (review-spec=2) |' \
+  "$fixture/canonical-render.md"
 [[ "$(sha256sum "$legacy_render_sink")" == "$legacy_render_checksum" ]]
+[[ "$(sha256sum "$canonical_render_sink")" == "$canonical_render_checksum" ]]
 cmp "$fixture/legacy-render-before.jsonl" "$legacy_render_sink"
+cmp "$fixture/canonical-render-before.jsonl" "$canonical_render_sink"
 git -C "$target_checkout" worktree remove "$legacy_render_worktree"
 
 # stdin is the other documented input mode.

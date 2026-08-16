@@ -199,36 +199,90 @@ for linked_sink_and_id in \
 done
 
 # Before durable common-directory storage, a linked worktree's recorder put its
-# schema-1 sink under that worktree's own absolute Git directory. While that
-# worktree still exists, its explicit run handle remains available for forensic
-# reads only: aggregation must not move, rewrite, or make the old sink writable.
+# schema-1 sink under that worktree's own absolute Git directory. A canonical
+# common-directory sink can have the same textual run ID. The plain ID must keep
+# the current worktree's legacy sink individually readable, while the bound
+# handle selects the canonical sink; neither read may rewrite either source.
 legacy_linked_run=20000101T000000Z-00000002
 legacy_linked_git_dir="$(git -C "$linked_one" rev-parse --absolute-git-dir)"
 legacy_linked_sink="$legacy_linked_git_dir/work-on-telemetry/runs/$legacy_linked_run.jsonl"
+canonical_colliding_sink="$sink_root/runs/$legacy_linked_run.jsonl"
+canonical_colliding_handle="$legacy_linked_run@${linked_one_run#*@}"
 mkdir -p "$(dirname "$legacy_linked_sink")"
 printf '%s\n' \
   '{"schema":1,"run":"20000101T000000Z-00000002","seq":1,"at":"2000-01-01T00:00:00Z","epoch_ms":946684800000,"type":"run_start","workflow":"work-on"}' \
   '{"schema":1,"run":"20000101T000000Z-00000002","seq":2,"at":"2000-01-01T00:00:01Z","epoch_ms":946684801000,"type":"subagent_launch","role":"implementation","phase":"implementation","round":1}' \
   >"$legacy_linked_sink"
+printf '%s\n' \
+  '{"schema":1,"run":"20000101T000000Z-00000002","seq":1,"at":"2000-01-01T00:00:00Z","epoch_ms":946684800000,"type":"run_start","workflow":"work-on"}' \
+  '{"schema":1,"run":"20000101T000000Z-00000002","seq":2,"at":"2000-01-01T00:00:01Z","epoch_ms":946684801000,"type":"subagent_launch","role":"review-spec","phase":"gate","round":1}' \
+  '{"schema":1,"run":"20000101T000000Z-00000002","seq":3,"at":"2000-01-01T00:00:02Z","epoch_ms":946684802000,"type":"subagent_launch","role":"review-spec","phase":"gate","round":2}' \
+  >"$canonical_colliding_sink"
+chmod 600 "$legacy_linked_sink" "$canonical_colliding_sink"
 cp "$legacy_linked_sink" "$fixture/legacy-linked-before.jsonl"
+cp "$canonical_colliding_sink" "$fixture/canonical-colliding-before.jsonl"
 legacy_linked_checksum="$(sha256sum "$legacy_linked_sink")"
+canonical_colliding_checksum="$(sha256sum "$canonical_colliding_sink")"
 legacy_linked_summary="$(cd "$linked_one" && "$command_under_test" summary \
   --run "$legacy_linked_run")"
 [[ "$(jq -r '.subagent_launches.total' <<<"$legacy_linked_summary")" -eq 1 ]]
+[[ "$(jq -r '.subagent_launches.by_role.implementation' \
+  <<<"$legacy_linked_summary")" -eq 1 ]]
+[[ "$(jq -r '.subagent_launches.by_role."review-spec"' \
+  <<<"$legacy_linked_summary")" -eq 0 ]]
+canonical_colliding_summary="$(cd "$linked_one" && "$command_under_test" summary \
+  --run "$canonical_colliding_handle")"
+[[ "$(jq -r '.subagent_launches.total' \
+  <<<"$canonical_colliding_summary")" -eq 2 ]]
+[[ "$(jq -r '.subagent_launches.by_role."review-spec"' \
+  <<<"$canonical_colliding_summary")" -eq 2 ]]
+[[ "$(jq -r '.subagent_launches.by_role.implementation' \
+  <<<"$canonical_colliding_summary")" -eq 0 ]]
 [[ "$(sha256sum "$legacy_linked_sink")" == "$legacy_linked_checksum" ]]
+[[ "$(sha256sum "$canonical_colliding_sink")" == \
+  "$canonical_colliding_checksum" ]]
 cmp "$fixture/legacy-linked-before.jsonl" "$legacy_linked_sink"
-if (cd "$linked_one" && "$command_under_test" launch \
-    --run "$legacy_linked_run" \
-    --role implementation --phase implementation --round 2) \
-    >"$fixture/legacy-linked-write.out" 2>"$fixture/legacy-linked-write.err"; then
-  printf 'FAIL[legacy-linked-write]: recorder wrote to a legacy sink\n' >&2
-  exit 1
-fi
-[[ ! -s "$fixture/legacy-linked-write.out" ]]
-grep -Fq 'run handle is malformed' \
-  "$fixture/legacy-linked-write.err"
+cmp "$fixture/canonical-colliding-before.jsonl" "$canonical_colliding_sink"
+refuse_legacy_write() {
+  local label="$1"
+  shift
+  if (cd "$linked_one" && "$command_under_test" "$@") \
+      >"$fixture/legacy-linked-$label.out" \
+      2>"$fixture/legacy-linked-$label.err"; then
+    printf 'FAIL[legacy-linked-%s]: recorder wrote through a plain ID\n' \
+      "$label" >&2
+    exit 1
+  fi
+  [[ ! -s "$fixture/legacy-linked-$label.out" ]]
+  grep -Fq 'run handle is malformed' "$fixture/legacy-linked-$label.err"
+}
+refuse_legacy_write launch launch --run "$legacy_linked_run" \
+  --role implementation --phase implementation --round 2
+refuse_legacy_write finish finish --run "$legacy_linked_run" --outcome Closes
 [[ "$(sha256sum "$legacy_linked_sink")" == "$legacy_linked_checksum" ]]
+[[ "$(sha256sum "$canonical_colliding_sink")" == \
+  "$canonical_colliding_checksum" ]]
 cmp "$fixture/legacy-linked-before.jsonl" "$legacy_linked_sink"
+cmp "$fixture/canonical-colliding-before.jsonl" "$canonical_colliding_sink"
+
+# Without a canonical collision, a plain ID still selects the current linked
+# worktree's legacy forensic sink.
+legacy_only_run=20000101T000000Z-00000004
+legacy_only_git_dir="$(git -C "$linked_two" rev-parse --absolute-git-dir)"
+legacy_only_sink="$legacy_only_git_dir/work-on-telemetry/runs/$legacy_only_run.jsonl"
+mkdir -p "$(dirname "$legacy_only_sink")"
+printf '%s\n' \
+  '{"schema":1,"run":"20000101T000000Z-00000004","seq":1,"at":"2000-01-01T00:00:00Z","epoch_ms":946684800000,"type":"run_start","workflow":"work-on"}' \
+  '{"schema":1,"run":"20000101T000000Z-00000004","seq":2,"at":"2000-01-01T00:00:01Z","epoch_ms":946684801000,"type":"subagent_launch","role":"other","phase":"closeout","round":1}' \
+  >"$legacy_only_sink"
+[[ ! -e "$sink_root/runs/$legacy_only_run.jsonl" ]]
+legacy_only_checksum="$(sha256sum "$legacy_only_sink")"
+legacy_only_summary="$(cd "$linked_two" && "$command_under_test" summary \
+  --run "$legacy_only_run")"
+[[ "$(jq -r '.subagent_launches.total' <<<"$legacy_only_summary")" -eq 1 ]]
+[[ "$(jq -r '.subagent_launches.by_role.other' \
+  <<<"$legacy_only_summary")" -eq 1 ]]
+[[ "$(sha256sum "$legacy_only_sink")" == "$legacy_only_checksum" ]]
 git -C "$target" worktree remove "$linked_one"
 git -C "$target" worktree remove "$linked_two"
 
