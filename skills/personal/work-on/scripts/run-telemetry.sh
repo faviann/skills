@@ -696,6 +696,17 @@ case "$subcommand" in
       esac
     done
     resolve_summary_run "$run_id"
+    # Integrity is evaluated from one stable physical artifact. Writers take an
+    # exclusive lock on this same file, so the shared lock prevents a summary
+    # from observing an append between its framing check and JSON evaluation.
+    exec {summary_lock_fd}<"$summary_run_file"
+    flock -s "$summary_lock_fd" \
+      || fail "could not lock the telemetry sink: $summary_run_file"
+    terminal_newline_missing=false
+    if [[ -s "$summary_run_file" ]] \
+        && [[ "$(tail -c 1 "$summary_run_file" | od -An -tx1 | tr -d ' \n')" != 0a ]]; then
+      terminal_newline_missing=true
+    fi
     observed_schemas="$(jq -n -R -c \
       '[inputs | fromjson? // empty | select(type == "object") | .schema]
       | unique' <"$summary_run_file")"
@@ -761,6 +772,7 @@ case "$subcommand" in
     resolve_repository_identity
     jq -n -R -c \
       --arg run "$run_id" --arg repository "$normalized_repository" \
+      --argjson terminal_newline_missing "$terminal_newline_missing" \
       --argjson launch_roles "$(printf '%s\n' "${launch_roles[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
       --argjson review_roles "$(printf '%s\n' "${review_roles[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
       --argjson kinds "$(printf '%s\n' "${review_kinds[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
@@ -836,7 +848,7 @@ case "$subcommand" in
           and .kind == "full" and (.phase == "gate" or (.role == "closure-sweep" and .phase == "closeout")))
         or ((.role == "review-standards" or .role == "review-spec" or .role == "closure-sweep")
           and .kind == "delta" and .phase == "remediation");
-      [inputs | select(length > 0)] as $lines
+      [inputs] as $lines
       | [$lines[] | fromjson? // empty] as $parsed
       | [$parsed[] | select(type == "object" and .schema == 2)] as $events
       | [$events[] | select(.type == "run_start")] as $starts_run
@@ -888,6 +900,7 @@ case "$subcommand" in
               or (.type == "subagent_launch" and .role == "other" and .phase == "closeout")
               | not))] end | length) as $bad_post_resolution
       | ((if (($lines | length) - ($parsed | length)) > 0 then ["MALFORMED_LINE"] else [] end)
+        + (if $terminal_newline_missing then ["TERMINAL_NEWLINE_MISSING"] else [] end)
         + (if ([$parsed[] | select(type != "object" or .schema != 2)] | length) > 0 then ["MIXED_SCHEMA"] else [] end)
         + (if ($starts_run | length) != 1 then ["RUN_START_COUNT_INVALID"] else [] end)
         + (if ($starts_run | length) == 1 and
@@ -949,7 +962,8 @@ case "$subcommand" in
               .[$role] = ([$reviews[] | select(.role == $role)] | length))),
             by_kind: (reduce $kinds[] as $kind ({};
               .[$kind] = ([$reviews[] | select(.kind == $kind)] | length))),
-            input_bytes: ([$reviews[] | .input_bytes] | add // 0)},
+            input_bytes: ([$reviews[] | .input_bytes | select(nonnegative)]
+              | add // 0)},
           validations: {total: ($starts | length),
             passed: ([$ends[] | select(.outcome == "passed")] | length),
             failed: ([$ends[] | select(.outcome == "failed")] | length),

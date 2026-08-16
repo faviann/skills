@@ -6,6 +6,7 @@ set -euo pipefail
 
 readonly script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly telemetry_script="$script_root/run-telemetry.sh"
+readonly renderer_script="$script_root/render-closeout.sh"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 
@@ -22,6 +23,74 @@ telemetry() {
   (cd "$repo" && "$telemetry_script" "$@")
 }
 
+(cd "$repo" && "$script_root/workflow-provenance.sh" capture)
+cat >"$fixture/facts.json" <<'EOF'
+{
+  "repository": "example/telemetry",
+  "issue_number": 71,
+  "outcome": "Closes",
+  "acceptance_criteria": ["Telemetry is integrity-gated"],
+  "acceptance": [{
+    "criterion": "Telemetry is integrity-gated",
+    "production_path": "`run-telemetry.sh`",
+    "seam": "Public telemetry and renderer commands",
+    "evidence": "Schema-2 black-box scenarios",
+    "status": "tested"
+  }],
+  "telemetry": {
+    "model_configuration": "test",
+    "wall_clock_elapsed": "1 second",
+    "implementation_rounds": 1,
+    "independent_review_rounds": 1,
+    "remediation_rounds": 0,
+    "validation_executions": 1,
+    "blocking_findings_resolved": 0,
+    "findings_rejected_at_adjudication": 0,
+    "final_workflow_outcome": "Closes"
+  }
+}
+EOF
+cat >"$fixture/narrative.md" <<'EOF'
+## Summary
+
+Exercised schema-2 integrity.
+EOF
+
+declare -A renderer_reasons_covered=()
+assert_renderer_refusal() {
+  local handle="$1" reason="$2"
+  if (
+    cd "$repo"
+    "$renderer_script" --run "$handle" "$fixture/facts.json" \
+      "$fixture/narrative.md" --new-pr
+  ) >"$fixture/render-$reason.out" 2>"$fixture/render-$reason.err"; then
+    printf 'FAIL[render-%s]: renderer accepted non-valid telemetry\n' \
+      "$reason" >&2
+    exit 1
+  fi
+  [[ ! -s "$fixture/render-$reason.out" ]]
+  grep -Fq 'run telemetry integrity is ' "$fixture/render-$reason.err"
+  renderer_reasons_covered["$reason"]=1
+}
+
+assert_reason() {
+  local handle="$1" reason="$2" summary
+  summary="$(telemetry summary --run "$handle")"
+  [[ "$(jq -r '.integrity.state' <<<"$summary")" == invalid ]]
+  jq -e --arg reason "$reason" \
+    '.integrity.reasons | index($reason) != null' <<<"$summary" >/dev/null
+  assert_renderer_refusal "$handle" "$reason"
+}
+
+assert_incomplete_reason() {
+  local handle="$1" reason="$2" summary
+  summary="$(telemetry summary --run "$handle")"
+  [[ "$(jq -r '.integrity.state' <<<"$summary")" == incomplete ]]
+  jq -e --arg reason "$reason" \
+    '.integrity.reasons | index($reason) != null' <<<"$summary" >/dev/null
+  assert_renderer_refusal "$handle" "$reason"
+}
+
 run="$(telemetry start --issue 71)"
 summary="$(telemetry summary --run "$run")"
 [[ "$(jq -r '.schema' <<<"$summary")" -eq 2 ]]
@@ -31,6 +100,7 @@ summary="$(telemetry summary --run "$run")"
   "$(git -C "$repo" rev-parse HEAD)" ]]
 [[ "$(jq -r '.run' <<<"$summary")" == "${run%%@*}" ]]
 [[ "$(jq -r '.integrity.state' <<<"$summary")" == incomplete ]]
+assert_incomplete_reason "$run" OUTCOME_UNRESOLVED
 
 continued="$(telemetry start --issue 71 --continues-run "$run")"
 continued_summary="$(telemetry summary --run "$continued")"
@@ -112,13 +182,50 @@ expect_refusal readiness-gate review-delegation --run "$review_run" \
   --base HEAD --worktree
 
 parallel_run="$(telemetry start --issue 71)"
+parallel_sync="$fixture/parallel-review-sync"
+parallel_git_bin="$parallel_sync/bin"
+parallel_release="$parallel_sync/release"
+mkdir -p "$parallel_git_bin"
+real_git="$(command -v git)"
+cat >"$parallel_git_bin/git" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+for argument in "$@"; do
+  if [[ "$argument" == diff ]]; then
+    : "${REVIEW_SYNC_ENTERED:?}"
+    : "${REVIEW_SYNC_RELEASE:?}"
+    touch "$REVIEW_SYNC_ENTERED"
+    while [[ ! -e "$REVIEW_SYNC_RELEASE" ]]; do sleep 0.01; done
+    break
+  fi
+done
+exec "${REVIEW_REAL_GIT:?}" "$@"
+EOF
+chmod +x "$parallel_git_bin/git"
 parallel_pids=()
 for role in review-standards review-spec closure-sweep; do
-  telemetry review-delegation --run "$parallel_run" \
-    --role "$role" --kind full --phase gate --round 1 \
-    --base HEAD --head HEAD &
+  (
+    export PATH="$parallel_git_bin:$PATH"
+    export REVIEW_REAL_GIT="$real_git"
+    export REVIEW_SYNC_ENTERED="$parallel_sync/$role.entered"
+    export REVIEW_SYNC_RELEASE="$parallel_release"
+    telemetry review-delegation --run "$parallel_run" \
+      --role "$role" --kind full --phase gate --round 1 \
+      --base HEAD --head HEAD
+  ) &
   parallel_pids+=("$!")
 done
+for ((attempt = 0; attempt < 500; attempt++)); do
+  entered_count="$(find "$parallel_sync" -name '*.entered' -type f | wc -l)"
+  [[ "$entered_count" -eq 3 ]] && break
+  sleep 0.01
+done
+[[ "$entered_count" -eq 3 ]]
+for pid in "${parallel_pids[@]}"; do
+  kill -0 "$pid"
+done
+touch "$parallel_release"
 for pid in "${parallel_pids[@]}"; do
   wait "$pid"
 done
@@ -132,6 +239,18 @@ for role in readiness review-standards review-spec closure-sweep; do
     '.review_delegations.by_role[$role]' <<<"$parallel_summary")" \
     -eq "$expected" ]]
 done
+parallel_head="$(git -C "$repo" rev-parse HEAD)"
+jq -s -e --arg head "$parallel_head" '
+  [.[] | select(.type == "review_delegation")] as $reviews
+  | ($reviews | length) == 3
+    and ([$reviews[].role] | sort
+      == ["closure-sweep", "review-spec", "review-standards"])
+    and ([$reviews[].seq] | unique | length) == 3
+    and all($reviews[];
+      .kind == "full" and .phase == "gate" and .round == 1
+      and .base == $head and .head == $head
+      and .head_is_worktree == false and .input_bytes == 0)
+' "$repo/.git/work-on-telemetry/runs/${parallel_run%%@*}.jsonl" >/dev/null
 
 resolve_and_seal() {
   local handle="$1" outcome="$2"
@@ -178,6 +297,7 @@ telemetry exec --run "$closeout_run" \
   --command-id final-check --phase closeout --round 1 -- true
 [[ "$(jq -r '.integrity.state' \
   <<<"$(telemetry summary --run "$closeout_run")")" == incomplete ]]
+assert_incomplete_reason "$closeout_run" RUN_UNSEALED
 telemetry seal --run "$closeout_run"
 [[ "$(jq -r '.integrity.state' \
   <<<"$(telemetry summary --run "$closeout_run")")" == valid ]]
@@ -202,13 +322,30 @@ append_raw_event() {
       epoch_ms: 1786838400000, type: $type} + $extra' >>"$sink"
 }
 
-assert_reason() {
-  local handle="$1" reason="$2" summary
-  summary="$(telemetry summary --run "$handle")"
-  [[ "$(jq -r '.integrity.state' <<<"$summary")" == invalid ]]
-  jq -e --arg reason "$reason" '.integrity.reasons | index($reason) != null' \
-    <<<"$summary" >/dev/null
-}
+well_framed_run="$(telemetry start --issue 71)"
+resolve_and_seal "$well_framed_run" Closes
+well_framed_summary="$(telemetry summary --run "$well_framed_run")"
+[[ "$(jq -r '.integrity.state' <<<"$well_framed_summary")" == valid ]]
+(
+  cd "$repo"
+  "$renderer_script" --run "$well_framed_run" "$fixture/facts.json" \
+    "$fixture/narrative.md" --new-pr
+) >"$fixture/well-framed-render.md"
+[[ -s "$fixture/well-framed-render.md" ]]
+
+blank_line_run="$(telemetry start --issue 71)"
+resolve_and_seal "$blank_line_run" Closes
+printf '\n' >>"$(sink_for "$blank_line_run")"
+blank_line_summary="$(telemetry summary --run "$blank_line_run")"
+[[ "$(jq -r '.malformed_lines' <<<"$blank_line_summary")" -eq 1 ]]
+assert_reason "$blank_line_run" MALFORMED_LINE
+
+missing_newline_run="$(telemetry start --issue 71)"
+resolve_and_seal "$missing_newline_run" Closes
+truncate -s -1 "$(sink_for "$missing_newline_run")"
+missing_newline_summary="$(telemetry summary --run "$missing_newline_run")"
+[[ "$(jq -r '.events' <<<"$missing_newline_summary")" -eq 3 ]]
+assert_reason "$missing_newline_run" TERMINAL_NEWLINE_MISSING
 
 malformed_run="$(telemetry start --issue 71)"
 resolve_and_seal "$malformed_run" failed
@@ -233,6 +370,26 @@ head_sha="$(git -C "$repo" rev-parse HEAD)"
 append_raw_event "$bad_review_run" review_delegation \
   "{\"role\":\"readiness\",\"kind\":\"full\",\"phase\":\"checkpoint\",\"round\":1,\"base\":\"$head_sha\",\"head\":\"$head_sha\",\"head_is_worktree\":true,\"input_bytes\":0}"
 assert_reason "$bad_review_run" REVIEW_DELEGATION_INVALID
+
+malformed_review_run="$(telemetry start --issue 71)"
+append_raw_event "$malformed_review_run" review_delegation \
+  "{\"role\":\"review-spec\",\"kind\":\"full\",\"phase\":\"gate\",\"round\":1,\"base\":\"$head_sha\",\"head\":\"$head_sha\",\"head_is_worktree\":false,\"input_bytes\":\"attacker-controlled-text\"}"
+malformed_review_summary="$(telemetry summary --run "$malformed_review_run")"
+[[ "$(jq -r '.review_delegations.input_bytes' \
+  <<<"$malformed_review_summary")" -eq 0 ]]
+[[ "$malformed_review_summary" != *attacker-controlled-text* ]]
+assert_reason "$malformed_review_run" EVENT_SHAPE_INVALID
+
+mixed_review_run="$(telemetry start --issue 71)"
+append_raw_event "$mixed_review_run" review_delegation \
+  "{\"role\":\"review-standards\",\"kind\":\"full\",\"phase\":\"gate\",\"round\":1,\"base\":\"$head_sha\",\"head\":\"$head_sha\",\"head_is_worktree\":false,\"input_bytes\":37}"
+append_raw_event "$mixed_review_run" review_delegation \
+  "{\"role\":\"review-spec\",\"kind\":\"full\",\"phase\":\"gate\",\"round\":1,\"base\":\"$head_sha\",\"head\":\"$head_sha\",\"head_is_worktree\":false,\"input_bytes\":\"attacker-controlled-text\"}"
+mixed_review_summary="$(telemetry summary --run "$mixed_review_run")"
+[[ "$(jq -r '.review_delegations.input_bytes' \
+  <<<"$mixed_review_summary")" -eq 37 ]]
+[[ "$mixed_review_summary" != *attacker-controlled-text* ]]
+assert_reason "$mixed_review_run" EVENT_SHAPE_INVALID
 
 late_abort_sink_run="$(telemetry start --issue 71)"
 telemetry launch --run "$late_abort_sink_run" \
@@ -273,6 +430,7 @@ incomplete_summary="$(telemetry summary --run "$validation_incomplete_run")"
 [[ "$(jq -r '.integrity.state' <<<"$incomplete_summary")" == incomplete ]]
 jq -e '.integrity.reasons | index("VALIDATION_INCOMPLETE") != null' \
   <<<"$incomplete_summary" >/dev/null
+assert_incomplete_reason "$validation_incomplete_run" VALIDATION_INCOMPLETE
 
 bad_shape_run="$(telemetry start --issue 71)"
 append_raw_event "$bad_shape_run" subagent_launch \
@@ -336,6 +494,24 @@ seal_first_run="$(telemetry start --issue 71)"
 append_raw_event "$seal_first_run" run_sealed
 append_raw_event "$seal_first_run" outcome_resolved '{"outcome":"failed"}'
 assert_reason "$seal_first_run" LIFECYCLE_TRANSITION_INVALID
+
+# Every bounded reason declared by the evaluator must have reached the public
+# renderer through one of the fixtures above. Extracting the closed vocabulary
+# makes a new reason fail this matrix until its refusal case is added.
+mapfile -t declared_integrity_reasons < <(
+  grep -oE '"[A-Z][A-Z_]+"' "$telemetry_script" \
+    | tr -d '"' | sort -u
+)
+mapfile -t covered_renderer_reasons < <(
+  printf '%s\n' "${!renderer_reasons_covered[@]}" | sort
+)
+[[ "${#declared_integrity_reasons[@]}" -eq 21 ]]
+if ! diff -u \
+    <(printf '%s\n' "${declared_integrity_reasons[@]}") \
+    <(printf '%s\n' "${covered_renderer_reasons[@]}"); then
+  printf 'FAIL[renderer-reason-matrix]: renderer coverage drifted\n' >&2
+  exit 1
+fi
 
 if telemetry start --issue 0 >"$fixture/zero.out" 2>"$fixture/zero.err"; then
   printf 'FAIL[zero-issue]: start accepted a non-positive issue\n' >&2
