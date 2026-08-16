@@ -166,7 +166,7 @@ telemetry_fields=(
 )
 # The sink-derived rows follow the facts-supplied counts, so the count-field
 # offset into telemetry_fields is unchanged.
-readonly telemetry_run_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8} \(schema [1-9][0-9]*\)$'
+readonly telemetry_run_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8} \(schema (1, integrity legacy-unverifiable|2, integrity valid)\)$'
 readonly subagent_launches_pattern='^(0|[1-9][0-9]* \([a-z-]+=[1-9][0-9]*(, [a-z-]+=[1-9][0-9]*)*\))$'
 readonly reviews_pattern='^[0-9]+ \(readiness=[0-9]+, full=[0-9]+, delta=[0-9]+\)$'
 readonly validations_pattern='^[0-9]+ \(passed=[0-9]+, failed=[0-9]+(, interrupted=[1-9][0-9]*)?(, incomplete=[1-9][0-9]*)?\)$'

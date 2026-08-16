@@ -22,11 +22,13 @@ durable_worktree="$fixture/durable-worktree"
 git init -q -b main "$durable_repo"
 git -C "$durable_repo" config user.name 'Telemetry Test'
 git -C "$durable_repo" config user.email telemetry@example.invalid
+git -C "$durable_repo" remote add origin \
+  'https://github.com/example/durable.git'
 printf 'durable\n' >"$durable_repo/file.txt"
 git -C "$durable_repo" add .
 git -C "$durable_repo" commit -qm 'first'
 git -C "$durable_repo" worktree add -q -b telemetry-test "$durable_worktree"
-durable_run="$(cd "$durable_worktree" && "$command_under_test" start)"
+durable_run="$(cd "$durable_worktree" && "$command_under_test" start --issue 71)"
 (cd "$durable_worktree" && "$command_under_test" launch --run "$durable_run" \
   --role implementation --phase implementation --round 1)
 git -C "$durable_repo" worktree remove "$durable_worktree"
@@ -38,6 +40,7 @@ target="$fixture/target"
 git init -q -b main "$target"
 git -C "$target" config user.name 'Telemetry Test'
 git -C "$target" config user.email telemetry@example.invalid
+git -C "$target" remote add origin 'https://github.com/example/target.git'
 printf 'SYNTHETIC-FILE-CONTENT-MARKER\n' >"$target/first.txt"
 git -C "$target" add .
 git -C "$target" commit -qm 'first'
@@ -59,30 +62,30 @@ readonly emit_stdout_marker='printf "SYNTHETIC-%s-MARKER\n" OUTPUT'
 readonly emit_stderr_marker='printf "SYNTHETIC-%s-MARKER\n" DIAGNOSTIC >&2'
 
 # 1. A run is created, identified, and kept separate from any other run.
-first_run="$(telemetry start)"
+first_run="$(telemetry start --issue 71)"
 [[ "$first_run" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}@[0-9a-f]{32}$ ]]
 telemetry launch --run "$first_run" \
   --role implementation --phase implementation --round 1
 telemetry launch --run "$first_run" \
-  --role readiness --phase checkpoint --round 1
+  --role other --phase checkpoint --round 1
 
-second_run="$(telemetry start)"
+second_run="$(telemetry start --issue 71)"
 [[ "$second_run" != "$first_run" ]]
-telemetry launch --run "$second_run" --role review-spec --phase gate --round 2
+telemetry launch --run "$second_run" --role other --phase gate --round 2
 # Explicit handles, rather than the most recently started run, route interleaved
 # events back to their own sinks.
 telemetry launch --run "$first_run" --role other --phase closeout --round 3
 
 # A stale or corrupt convenience pointer is outside routing correctness.
 printf 'not-a-run\n' >"$sink_root/current-run"
-telemetry launch --run "$first_run" --role readiness --phase checkpoint --round 4
+telemetry launch --run "$first_run" --role other --phase checkpoint --round 4
 rm "$sink_root/current-run"
 
 first_summary="$(telemetry summary --run "$first_run")"
 second_summary="$(telemetry summary --run "$second_run")"
 [[ "$(jq -r '.subagent_launches.total' <<<"$first_summary")" -eq 4 ]]
 [[ "$(jq -r '.subagent_launches.total' <<<"$second_summary")" -eq 1 ]]
-[[ "$(jq -r '.subagent_launches.by_role."review-spec"' <<<"$first_summary")" -eq 0 ]]
+[[ "$(jq -r '.subagent_launches.by_role.other' <<<"$second_summary")" -eq 1 ]]
 [[ "$(jq -r '.subagent_launches.by_role.implementation' <<<"$second_summary")" -eq 0 ]]
 [[ "$(jq -r '.run' <<<"$first_summary")" == \
   "$(run_id_from_handle "$first_run")" ]]
@@ -95,8 +98,8 @@ linked_one="$fixture/linked-one"
 linked_two="$fixture/linked-two"
 git -C "$target" worktree add -q -b linked-one "$linked_one"
 git -C "$target" worktree add -q -b linked-two "$linked_two"
-linked_one_run="$(cd "$linked_one" && "$command_under_test" start)"
-linked_two_run="$(cd "$linked_two" && "$command_under_test" start)"
+linked_one_run="$(cd "$linked_one" && "$command_under_test" start --issue 71)"
+linked_two_run="$(cd "$linked_two" && "$command_under_test" start --issue 71)"
 [[ "${linked_one_run#*@}" == "${linked_two_run#*@}" ]]
 linked_sync="$fixture/linked-sync"
 mkdir "$linked_sync"
@@ -116,7 +119,7 @@ for ((writer = 1; writer <= linked_writers_per_run; writer++)); do
     while [[ ! -e "$linked_sync/release" ]]; do sleep 0.01; done
     cd "$linked_two"
     "$command_under_test" launch --run "$linked_two_run" \
-      --role review-spec --phase gate --round "$writer"
+      --role other --phase gate --round "$writer"
   ) &
   linked_writer_pids+=("$!")
 done
@@ -176,9 +179,9 @@ linked_two_summary="$(cd "$linked_one" && "$command_under_test" summary \
   -eq "$linked_writers_per_run" ]]
 [[ "$(jq -r '.subagent_launches.by_role.implementation' \
   <<<"$linked_one_summary")" -eq "$linked_writers_per_run" ]]
-[[ "$(jq -r '.subagent_launches.by_role."review-spec"' \
+[[ "$(jq -r '.subagent_launches.by_role.other' \
   <<<"$linked_one_summary")" -eq 0 ]]
-[[ "$(jq -r '.subagent_launches.by_role."review-spec"' \
+[[ "$(jq -r '.subagent_launches.by_role.other' \
   <<<"$linked_two_summary")" -eq "$linked_writers_per_run" ]]
 [[ "$(jq -r '.subagent_launches.by_role.implementation' \
   <<<"$linked_two_summary")" -eq 0 ]]
@@ -243,6 +246,38 @@ canonical_colliding_summary="$(cd "$linked_one" && "$command_under_test" summary
   "$canonical_colliding_checksum" ]]
 cmp "$fixture/legacy-linked-before.jsonl" "$legacy_linked_sink"
 cmp "$fixture/canonical-colliding-before.jsonl" "$canonical_colliding_sink"
+refuse_bound_legacy_write() {
+  local label="$1"
+  shift
+  if (cd "$linked_one" && "$command_under_test" "$@") \
+      >"$fixture/canonical-schema1-$label.out" \
+      2>"$fixture/canonical-schema1-$label.err"; then
+    printf 'FAIL[canonical-schema1-%s]: schema-2 writer accepted schema 1\n' \
+      "$label" >&2
+    exit 1
+  fi
+  [[ ! -s "$fixture/canonical-schema1-$label.out" ]]
+  grep -Fq 'schema-2 writer requires a schema-2 run' \
+    "$fixture/canonical-schema1-$label.err"
+  [[ "$(sha256sum "$legacy_linked_sink")" == "$legacy_linked_checksum" ]]
+  [[ "$(sha256sum "$canonical_colliding_sink")" == \
+    "$canonical_colliding_checksum" ]]
+  cmp "$fixture/legacy-linked-before.jsonl" "$legacy_linked_sink"
+  cmp "$fixture/canonical-colliding-before.jsonl" "$canonical_colliding_sink"
+}
+refuse_bound_legacy_write launch launch --run "$canonical_colliding_handle" \
+  --role implementation --phase implementation --round 2
+refuse_bound_legacy_write review review-delegation \
+  --run "$canonical_colliding_handle" --role review-spec --kind full \
+  --phase gate --round 2 --base HEAD --head HEAD
+legacy_exec_marker="$fixture/schema1-exec-ran"
+refuse_bound_legacy_write exec exec --run "$canonical_colliding_handle" \
+  --command-id schema-one-check --phase gate --round 2 -- \
+  bash -c 'touch "$1"' _ "$legacy_exec_marker"
+[[ ! -e "$legacy_exec_marker" ]]
+refuse_bound_legacy_write resolve resolve --run "$canonical_colliding_handle" \
+  --outcome Closes
+refuse_bound_legacy_write seal seal --run "$canonical_colliding_handle"
 refuse_legacy_write() {
   local label="$1"
   shift
@@ -258,7 +293,7 @@ refuse_legacy_write() {
 }
 refuse_legacy_write launch launch --run "$legacy_linked_run" \
   --role implementation --phase implementation --round 2
-refuse_legacy_write finish finish --run "$legacy_linked_run" --outcome Closes
+refuse_legacy_write resolve resolve --run "$legacy_linked_run" --outcome Closes
 [[ "$(sha256sum "$legacy_linked_sink")" == "$legacy_linked_checksum" ]]
 [[ "$(sha256sum "$canonical_colliding_sink")" == \
   "$canonical_colliding_checksum" ]]
@@ -311,20 +346,20 @@ assert_private "$sink_root" "$sink_root/runs" \
 # A directory an earlier version left readable is tightened rather than reused
 # as it is.
 chmod 755 "$sink_root" "$sink_root/runs"
-loose_run="$(telemetry start)"
+loose_run="$(telemetry start --issue 71)"
 assert_private "$sink_root" "$sink_root/runs" \
   "$sink_root/repository-binding" "$sink_root/repository-binding.lock" \
   "$sink_root/runs/$(run_id_from_handle "$loose_run").jsonl"
 
 # 2. A launch retains its role, phase, and round.
-work_run="$(telemetry start)"
+work_run="$(telemetry start --issue 71)"
 telemetry launch --run "$work_run" \
   --role implementation --phase implementation --round 1
 telemetry launch --run "$work_run" \
-  --role review-standards --phase gate --round 2
-telemetry launch --run "$work_run" --role review-spec --phase gate --round 2
+  --role other --phase gate --round 2
+telemetry launch --run "$work_run" --role other --phase gate --round 2
 telemetry launch --run "$work_run" \
-  --role closure-sweep --phase closeout --round 2
+  --role other --phase closeout --round 2
 sink="$sink_root/runs/$(run_id_from_handle "$work_run").jsonl"
 grep -Fqx "${work_run#*@}" "$sink_root/repository-binding"
 if grep -Fq "${work_run#*@}" "$sink"; then
@@ -334,8 +369,8 @@ fi
 launch_rows="$(jq -c 'select(.type == "subagent_launch")
   | [.role, .phase, .round]' "$sink")"
 grep -Fqx '["implementation","implementation",1]' <<<"$launch_rows"
-grep -Fqx '["review-standards","gate",2]' <<<"$launch_rows"
-grep -Fqx '["closure-sweep","closeout",2]' <<<"$launch_rows"
+grep -Fqx '["other","gate",2]' <<<"$launch_rows"
+grep -Fqx '["other","closeout",2]' <<<"$launch_rows"
 
 # An unknown role, phase, kind, or round is refused rather than recorded.
 refuse() {
@@ -352,9 +387,9 @@ refuse bad-phase launch --run "$work_run" \
   --role implementation --phase deploy --round 1
 refuse bad-round launch --run "$work_run" \
   --role implementation --phase gate --round -1
-refuse bad-kind review --run "$work_run" \
+refuse bad-kind review-delegation --run "$work_run" --role review-spec \
   --kind smoke --phase gate --round 1 --base HEAD --worktree
-refuse bad-outcome finish --run "$work_run" --outcome merged
+refuse bad-outcome resolve --run "$work_run" --outcome merged
 refuse missing-run launch --role implementation --phase gate --round 1
 refuse malformed-run launch --run ../current-run \
   --role implementation --phase gate --round 1
@@ -366,10 +401,11 @@ foreign_repo="$fixture/foreign"
 git init -q -b main "$foreign_repo"
 git -C "$foreign_repo" config user.name 'Telemetry Test'
 git -C "$foreign_repo" config user.email telemetry@example.invalid
+git -C "$foreign_repo" remote add origin 'https://github.com/example/foreign.git'
 printf 'foreign\n' >"$foreign_repo/file.txt"
 git -C "$foreign_repo" add .
 git -C "$foreign_repo" commit -qm 'first'
-foreign_run="$(cd "$foreign_repo" && "$command_under_test" start)"
+foreign_run="$(cd "$foreign_repo" && "$command_under_test" start --issue 71)"
 refuse foreign-run launch --run "$foreign_run" \
   --role implementation --phase gate --round 1
 
@@ -404,14 +440,16 @@ for collision_repo in "$collision_a" "$collision_b"; do
   git init -q -b main "$collision_repo"
   git -C "$collision_repo" config user.name 'Telemetry Test'
   git -C "$collision_repo" config user.email telemetry@example.invalid
+  git -C "$collision_repo" remote add origin \
+    "https://github.com/example/$(basename "$collision_repo").git"
   printf 'collision\n' >"$collision_repo/file.txt"
   git -C "$collision_repo" add .
   git -C "$collision_repo" commit -qm 'first'
 done
 collision_a_run="$(cd "$collision_a" && \
-  PATH="$collision_bin:$PATH" "$command_under_test" start)"
+  PATH="$collision_bin:$PATH" "$command_under_test" start --issue 71)"
 collision_b_run="$(cd "$collision_b" && \
-  PATH="$collision_bin:$PATH" "$command_under_test" start)"
+  PATH="$collision_bin:$PATH" "$command_under_test" start --issue 71)"
 [[ "$(run_id_from_handle "$collision_a_run")" == \
   20260816T180000Z-aabbccdd ]]
 [[ "$(run_id_from_handle "$collision_b_run")" == \
@@ -422,7 +460,7 @@ collision_b_run="$(cd "$collision_b" && \
   --role implementation --phase implementation --round 1)
 (cd "$collision_b" && "$command_under_test" launch \
   --run "$collision_b_run" \
-  --role review-spec --phase gate --round 1)
+  --role other --phase gate --round 1)
 
 refuse_collision() {
   local label="$1"
@@ -440,11 +478,11 @@ refuse_collision() {
 }
 refuse_collision launch launch --run "$collision_a_run" \
   --role implementation --phase implementation --round 2
-refuse_collision review review --run "$collision_a_run" \
-  --kind full --phase gate --round 2 --base HEAD --head HEAD
+refuse_collision review review-delegation --run "$collision_a_run" \
+  --role review-spec --kind full --phase gate --round 2 --base HEAD --head HEAD
 refuse_collision exec exec --run "$collision_a_run" \
   --command-id foreign-check --phase gate --round 2 -- true
-refuse_collision finish finish --run "$collision_a_run" --outcome Closes
+refuse_collision resolve resolve --run "$collision_a_run" --outcome Closes
 refuse_collision summary summary --run "$collision_a_run"
 
 [[ "$(cd "$collision_a" && "$command_under_test" summary \
@@ -452,7 +490,8 @@ refuse_collision summary summary --run "$collision_a_run"
 [[ "$(cd "$collision_b" && "$command_under_test" summary \
   --run "$collision_b_run" | jq -r '.subagent_launches.total')" -eq 1 ]]
 
-# 3. A review retains kind, compared SHAs, and input byte count.
+# 3. A reviewer delegation retains its role, kind, compared SHAs, and input
+# byte count in one event.
 base_sha="$(git -C "$target" rev-parse HEAD)"
 printf 'SYNTHETIC-DIFF-CONTENT-MARKER\n' >"$target/second.txt"
 git -C "$target" add .
@@ -461,9 +500,11 @@ head_sha="$(git -C "$target" rev-parse HEAD)"
 expected_bytes="$(git -C "$target" diff "$base_sha...$head_sha" | wc -c | tr -d ' ')"
 [[ "$expected_bytes" -gt 0 ]]
 
-telemetry review --run "$work_run" --kind full --phase gate --round 1 \
+telemetry review-delegation --run "$work_run" --role review-standards \
+  --kind full --phase gate --round 1 \
   --base "$base_sha" --head "$head_sha"
-full_review="$(jq -c 'select(.type == "review" and .kind == "full")' "$sink")"
+full_review="$(jq -c 'select(.type == "review_delegation" and .kind == "full")' "$sink")"
+[[ "$(jq -r '.role' <<<"$full_review")" == review-standards ]]
 [[ "$(jq -r '.base' <<<"$full_review")" == "$base_sha" ]]
 [[ "$(jq -r '.head' <<<"$full_review")" == "$head_sha" ]]
 [[ "$(jq -r '.input_bytes' <<<"$full_review")" -eq "$expected_bytes" ]]
@@ -477,19 +518,20 @@ printf 'SYNTHETIC-WORKTREE-CONTENT-MARKER\n' >"$target/third.txt"
 git -C "$target" add third.txt
 worktree_bytes="$(git -C "$target" diff "$head_sha" | wc -c | tr -d ' ')"
 [[ "$worktree_bytes" -gt 0 ]]
-telemetry review --run "$work_run" --kind readiness --phase checkpoint --round 1 \
+telemetry review-delegation --run "$work_run" --role readiness \
+  --kind readiness --phase checkpoint --round 1 \
   --base "$head_sha" --worktree
-readiness_review="$(jq -c 'select(.type == "review" and .kind == "readiness")' "$sink")"
+readiness_review="$(jq -c 'select(.type == "review_delegation" and .kind == "readiness")' "$sink")"
 [[ "$(jq -r '.head_is_worktree' <<<"$readiness_review")" == true ]]
 [[ "$(jq -r '.input_bytes' <<<"$readiness_review")" -eq "$worktree_bytes" ]]
 
 # A file git does not track yet is still material the sweep reads, so it counts
 # toward the measured bundle; a file the repository ignores does not.
 review_bytes() {
-  telemetry review --run "$work_run" \
+  telemetry review-delegation --run "$work_run" --role readiness \
     --kind readiness --phase checkpoint --round 1 \
     --base "$head_sha" --worktree
-  jq -r '[.[] | select(.type == "review" and .kind == "readiness")][-1]
+  jq -r '[.[] | select(.type == "review_delegation" and .kind == "readiness")][-1]
     | .input_bytes' -s "$sink"
 }
 # What one untracked file contributes to the bundle, computed independently of
@@ -551,16 +593,18 @@ done < <(git -C "$target" ls-files --others --exclude-standard -z)
 mkdir -p "$target/nested"
 printf 'SYNTHETIC-NESTED-CONTENT-MARKER\n' >"$target/nested/nested.txt"
 nested_bytes="$(review_bytes)"
-(cd "$target/nested" && "$command_under_test" review \
-  --run "$work_run" --kind readiness --phase checkpoint --round 1 \
+(cd "$target/nested" && "$command_under_test" review-delegation \
+  --run "$work_run" --role readiness \
+  --kind readiness --phase checkpoint --round 1 \
   --base "$head_sha" --worktree)
-[[ "$(jq -r '[.[] | select(.type == "review" and .kind == "readiness")][-1]
+[[ "$(jq -r '[.[] | select(.type == "review_delegation" and .kind == "readiness")][-1]
   | .input_bytes' -s "$sink")" -eq "$nested_bytes" ]]
 
 # `delta` is recordable even though the workflow does not yet run delta review.
-telemetry review --run "$work_run" --kind delta --phase remediation --round 2 \
+telemetry review-delegation --run "$work_run" --role review-spec \
+  --kind delta --phase remediation --round 2 \
   --base "$base_sha" --head "$head_sha"
-[[ "$(jq -r '.reviews.by_kind.delta' \
+[[ "$(jq -r '.review_delegations.by_kind.delta' \
   <<<"$(telemetry summary --run "$work_run")")" -eq 1 ]]
 
 # 4. A validation execution gets a stable execution id, a duration, and an
@@ -644,26 +688,26 @@ jq -e . "$sink" >/dev/null
 telemetry launch --run "$work_run" \
   --role implementation --phase remediation --round 3
 [[ "$(jq -r '.subagent_launches.total' \
-  <<<"$(telemetry summary --run "$work_run")")" -eq 5 ]]
+  <<<"$(telemetry summary --run "$work_run")")" -eq 18 ]]
 
 # A line the recorder did not write is ignored rather than corrupting the run.
 printf 'not json\n' >>"$sink"
 truncated_summary="$(telemetry summary --run "$work_run")"
 [[ "$(jq -r '.malformed_lines' <<<"$truncated_summary")" -eq 1 ]]
-[[ "$(jq -r '.subagent_launches.total' <<<"$truncated_summary")" -eq 5 ]]
+[[ "$(jq -r '.subagent_launches.total' <<<"$truncated_summary")" -eq 18 ]]
 
 # 6. Token counts are optional at every stage.
 [[ "$(jq -r '.tokens.coverage' <<<"$truncated_summary")" == none ]]
 [[ "$(jq -r '.tokens.input' <<<"$truncated_summary")" -eq 0 ]]
 telemetry launch --run "$work_run" \
-  --role review-standards --phase gate --round 3 \
+  --role other --phase gate --round 3 \
   --tokens-in 1200 --tokens-out 340
 partial_summary="$(telemetry summary --run "$work_run")"
 [[ "$(jq -r '.tokens.coverage' <<<"$partial_summary")" == partial ]]
 [[ "$(jq -r '.tokens.input' <<<"$partial_summary")" -eq 1200 ]]
 [[ "$(jq -r '.tokens.output' <<<"$partial_summary")" -eq 340 ]]
 
-token_free_run="$(telemetry start)"
+token_free_run="$(telemetry start --issue 71)"
 telemetry launch --run "$token_free_run" \
   --role implementation --phase implementation --round 1
 token_free_summary="$(telemetry summary --run "$token_free_run")"
@@ -752,7 +796,7 @@ done
 
 # The recorder has no field for a prompt, a diff, a file body, a command line,
 # or output: every recorded key comes from this closed set.
-readonly allowed_keys='["at","base","command_id","duration_ms","epoch_ms","exec_id","exit_status","head","head_is_worktree","input_bytes","kind","outcome","phase","role","round","run","schema","seq","tokens_in","tokens_out","type","workflow"]'
+readonly allowed_keys='["at","base","command_id","continues_run","duration_ms","epoch_ms","exec_id","exit_status","head","head_is_worktree","input_bytes","issue","kind","outcome","phase","repository","role","round","run","run_identity","schema","seq","tokens_in","tokens_out","type","workflow"]'
 for run_sink in "$sink_root"/runs/*.jsonl; do
   unexpected="$(jq -r -R --argjson allowed "$allowed_keys" '
     fromjson? // empty | keys[]
@@ -777,6 +821,10 @@ chmod 600 "$legacy_sink"
 legacy_before="$(sha256sum "$legacy_sink")"
 legacy_summary="$(telemetry summary --run "$legacy_run")"
 [[ "$(jq -r '.schema' <<<"$legacy_summary")" -eq 1 ]]
+[[ "$(jq -r '.integrity.state' <<<"$legacy_summary")" == \
+  legacy-unverifiable ]]
+[[ "$(jq -r '.reviewer_accounting' <<<"$legacy_summary")" == \
+  legacy-unverifiable ]]
 [[ "$(jq -r '.subagent_launches.total' <<<"$legacy_summary")" -eq 1 ]]
 [[ "$(sha256sum "$legacy_sink")" == "$legacy_before" ]]
 
@@ -789,7 +837,7 @@ repeat_three="$(telemetry summary --run "$token_free_run")"
 
 # The final workflow outcome is recorded and aggregated.
 [[ "$(jq -r '.final_workflow_outcome' <<<"$repeat_one")" == null ]]
-telemetry finish --run "$token_free_run" --outcome Progresses
+telemetry resolve --run "$token_free_run" --outcome Progresses
 [[ "$(jq -r '.final_workflow_outcome' \
   <<<"$(telemetry summary --run "$token_free_run")")" == Progresses ]]
 
@@ -799,32 +847,21 @@ phase_keys="$(jq -r '.phase_elapsed_ms | keys_unsorted | join(",")' \
   <<<"$(telemetry summary --run "$token_free_run")")"
 [[ "$phase_keys" == implementation,gate ]]
 
-# A run resolves its outcome exactly once. A second `finish` is refused rather
-# than leaving the run holding two answers.
-finished_summary="$(telemetry summary --run "$token_free_run")"
-[[ "$(jq -r '.finish_events' <<<"$finished_summary")" -eq 1 ]]
-[[ "$(jq -r '.events_after_finish' <<<"$finished_summary")" -eq 0 ]]
-refuse second-finish finish --run "$token_free_run" --outcome Closes
-grep -Fq 'already recorded its final outcome' "$fixture/second-finish.err"
-[[ "$(telemetry summary --run "$token_free_run")" == "$finished_summary" ]]
-
-# A finished run's summary is final, not a snapshot: work recorded afterwards is
-# reported separately instead of changing counts a published body already
-# carried.
+# Closeout evidence may follow outcome resolution until explicit sealing.
 telemetry launch --run "$token_free_run" --role other --phase closeout --round 9
 telemetry exec --run "$token_free_run" \
   --command-id after-finish --phase closeout --round 9 -- true
-after_finish_summary="$(telemetry summary --run "$token_free_run")"
-[[ "$(jq -r '.events_after_finish' <<<"$after_finish_summary")" -eq 3 ]]
-for unchanged in .subagent_launches.total .validations.total .events \
-    .final_workflow_outcome .finished_at .phase_elapsed_ms; do
-  [[ "$(jq -c "$unchanged" <<<"$after_finish_summary")" \
-    == "$(jq -c "$unchanged" <<<"$finished_summary")" ]]
-done
+telemetry seal --run "$token_free_run"
+sealed_summary="$(telemetry summary --run "$token_free_run")"
+[[ "$(jq -r '.integrity.state' <<<"$sealed_summary")" == valid ]]
+refuse second-resolution resolve --run "$token_free_run" --outcome Closes
+grep -Fq 'is sealed' "$fixture/second-resolution.err"
+refuse after-seal launch --run "$token_free_run" \
+  --role other --phase closeout --round 10
 
 # 10. Concurrent writers do not lose, fuse, or duplicate events. Several
 # subagents and validation wrappers recording at once is the ordinary case.
-concurrent_run="$(telemetry start)"
+concurrent_run="$(telemetry start --issue 71)"
 concurrent_sink="$sink_root/runs/$(run_id_from_handle "$concurrent_run").jsonl"
 readonly writers=12
 for ((writer = 0; writer < writers; writer++)); do
@@ -867,7 +904,7 @@ assert_private "$concurrent_sink"
 # 11. A writer killed mid-append leaves a line with no terminator. The next
 # append closes it off rather than fusing with it, so one torn line costs one
 # malformed line and nothing else.
-torn_run="$(telemetry start)"
+torn_run="$(telemetry start --issue 71)"
 torn_run_id="$(run_id_from_handle "$torn_run")"
 torn_sink="$sink_root/runs/$torn_run_id.jsonl"
 printf '{"schema":1,"run":"%s","seq":2,"type":"subagent_lau' "$torn_run_id" \
@@ -899,7 +936,7 @@ fi
 grep -Fq 'repository binding is missing' "$fixture/bare.err"
 
 # Telemetry requires a Git-backed target repository.
-if (cd "$fixture" && "$command_under_test" start) \
+if (cd "$fixture" && "$command_under_test" start --issue 71) \
     >"$fixture/non-git.out" 2>"$fixture/non-git.err"; then
   printf 'FAIL[non-git]: telemetry started outside a repository\n' >&2
   exit 1

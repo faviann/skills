@@ -11,8 +11,8 @@ production or test edits, implementation commits, and any pull request.
 The gate decides only whether the issue is closable in this run. It changes no
 readiness, Standards, Spec, closure, remediation, validation, or closeout
 semantics, and adds no artifact, ledger, or telemetry field of its own. A pass
-records nothing. An abort resolves the run's existing outcome as `aborted`, as
-the abort steps below require.
+records nothing. An abort resolves the run's existing outcome as
+`preflight-aborted`, as the abort steps below require.
 
 ## The reasoning the primary produces
 
@@ -105,15 +105,16 @@ Launch no implementation delegate, make no implementation edit, and create no
 implementation commit or pull request. Then:
 
 1. resolve the run's outcome in the sink this run already opened, with
-   `scripts/run-telemetry.sh finish --run "$RUN_HANDLE" --outcome aborted`;
-2. name the exact criterion, prerequisite, command, or contract conflict that
+   `scripts/run-telemetry.sh resolve --run "$RUN_HANDLE" --outcome preflight-aborted`;
+2. seal the sink with `scripts/run-telemetry.sh seal --run "$RUN_HANDLE"`;
+3. name the exact criterion, prerequisite, command, or contract conflict that
    failed;
-3. explain why direct `tested` evidence is unavailable;
-4. name the one narrow route out — return to triage; split or amend the issue;
+4. explain why direct `tested` evidence is unavailable;
+5. name the one narrow route out — return to triage; split or amend the issue;
    complete a blocking prerequisite; obtain the explicitly required
    human/manual environment; create or identify a blocking tracker issue; or
    request a trusted-maintainer contract correction; and
-5. stop.
+6. stop.
 
 Do not convert the failure into a speculative implementation plan, weaken the
 criterion to continue, or manufacture a seam.

@@ -21,10 +21,15 @@ git -C "$skills_checkout" remote add origin \
   'https://github.com/example/skills.git'
 
 readonly command_under_test="$skills_checkout/skills/personal/work-on/scripts/render-closeout.sh"
+readonly closeout_reference="$skills_checkout/skills/personal/work-on/references/github-closeout.md"
+grep -Fq 'resolve --run "$RUN_HANDLE" --outcome "$OUTCOME"' \
+  "$closeout_reference"
 target_checkout="$fixture/target-checkout"
 git init -q -b main "$target_checkout"
 git -C "$target_checkout" config user.name 'Closeout Test'
 git -C "$target_checkout" config user.email closeout@example.invalid
+git -C "$target_checkout" remote add origin \
+  'https://github.com/example/target.git'
 touch "$target_checkout/.keep"
 git -C "$target_checkout" add .
 git -C "$target_checkout" commit -qm fixture
@@ -53,15 +58,15 @@ telemetry_sink() {
   printf '%s/runs/%s.jsonl\n' "$telemetry_dir" \
     "$(run_id_from_handle "$1")"
 }
-telemetry_run="$(telemetry start)"
+telemetry_run="$(telemetry start --issue 164)"
 render_run="$telemetry_run"
 telemetry launch --run "$render_run" \
   --role implementation --phase implementation --round 1
-telemetry launch --run "$render_run" \
-  --role review-standards --phase gate --round 1
-telemetry review --run "$render_run" --kind full --phase gate --round 1 \
+telemetry review-delegation --run "$render_run" --role review-standards \
+  --kind full --phase gate --round 1 \
   --base HEAD --head HEAD
-telemetry finish --run "$render_run" --outcome Closes
+telemetry resolve --run "$render_run" --outcome Closes
+telemetry seal --run "$render_run"
 
 run_new() {
   (
@@ -72,6 +77,7 @@ run_new() {
 
 cat >"$fixture/facts.json" <<'EOF'
 {
+  "repository": "example/target",
   "issue_number": 164,
   "outcome": "Closes",
   "acceptance_criteria": [
@@ -160,7 +166,7 @@ No findings required adjudication.
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
-| Telemetry run | TELEMETRY_RUN (schema 1) |
+| Telemetry run | TELEMETRY_RUN (schema 2, integrity valid) |
 | Subagent launches | 2 (implementation=1, review-standards=1) |
 | Reviews recorded | 1 (readiness=0, full=1, delta=0) |
 | Validation executions recorded | 0 (passed=0, failed=0) |
@@ -239,7 +245,7 @@ canonical_render_checksum="$(sha256sum "$canonical_render_sink")"
   "$command_under_test" --run "$legacy_render_run" \
     "$fixture/facts.json" "$fixture/narrative.md" --new-pr
 ) >"$fixture/legacy-render.md"
-grep -Fqx "| Telemetry run | $legacy_render_run (schema 1) |" \
+grep -Fqx "| Telemetry run | $legacy_render_run (schema 1, integrity legacy-unverifiable) |" \
   "$fixture/legacy-render.md"
 grep -Fqx '| Subagent launches | 1 (implementation=1) |' \
   "$fixture/legacy-render.md"
@@ -248,7 +254,7 @@ grep -Fqx '| Subagent launches | 1 (implementation=1) |' \
   "$command_under_test" --run "$canonical_render_handle" \
     "$fixture/facts.json" "$fixture/narrative.md" --new-pr
 ) >"$fixture/canonical-render.md"
-grep -Fqx "| Telemetry run | $legacy_render_run (schema 1) |" \
+grep -Fqx "| Telemetry run | $legacy_render_run (schema 1, integrity legacy-unverifiable) |" \
   "$fixture/canonical-render.md"
 grep -Fqx '| Subagent launches | 2 (review-spec=2) |' \
   "$fixture/canonical-render.md"
@@ -274,18 +280,17 @@ telemetry_section() {
 }
 [[ "$(telemetry_section "$fixture/actual.md" | wc -l)" -eq 18 ]]
 
-grown_run="$(telemetry start)"
+grown_run="$(telemetry start --issue 164)"
 render_run="$grown_run"
 telemetry launch --run "$render_run" \
   --role implementation --phase implementation --round 1
-telemetry launch --run "$render_run" \
-  --role review-standards --phase gate --round 1
-telemetry launch --run "$render_run" --role review-spec --phase gate --round 1
-telemetry launch --run "$render_run" \
-  --role closure-sweep --phase closeout --round 1
-telemetry review --run "$render_run" \
+telemetry review-delegation --run "$render_run" --role review-standards \
   --kind full --phase gate --round 1 --base HEAD --head HEAD
-telemetry review --run "$render_run" \
+telemetry review-delegation --run "$render_run" --role review-spec \
+  --kind full --phase gate --round 1 --base HEAD --head HEAD
+telemetry review-delegation --run "$render_run" --role closure-sweep \
+  --kind full --phase gate --round 1 --base HEAD --head HEAD
+telemetry review-delegation --run "$render_run" --role readiness \
   --kind readiness --phase checkpoint --round 1 \
   --base HEAD --worktree
 telemetry exec --run "$render_run" \
@@ -293,16 +298,17 @@ telemetry exec --run "$render_run" \
 telemetry exec --run "$render_run" \
   --command-id failing-check --phase closeout --round 1 -- false \
   || true
-telemetry finish --run "$render_run" --outcome Closes
+telemetry resolve --run "$render_run" --outcome Closes
+telemetry seal --run "$render_run"
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/grown.md"
 [[ "$(telemetry_section "$fixture/grown.md" | wc -l)" -eq 18 ]]
-grep -Fqx '| Subagent launches | 4 (implementation=1, review-standards=1, review-spec=1, closure-sweep=1) |' \
+grep -Fqx '| Subagent launches | 5 (implementation=1, readiness=1, review-standards=1, review-spec=1, closure-sweep=1) |' \
   "$fixture/grown.md"
-grep -Fqx '| Reviews recorded | 2 (readiness=1, full=1, delta=0) |' \
+grep -Fqx '| Reviews recorded | 4 (readiness=1, full=3, delta=0) |' \
   "$fixture/grown.md"
 grep -Fqx '| Validation executions recorded | 2 (passed=1, failed=1) |' \
   "$fixture/grown.md"
-grep -Fqx "| Telemetry run | $(run_id_from_handle "$grown_run") (schema 1) |" \
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$grown_run") (schema 2, integrity valid) |" \
   "$fixture/grown.md"
 
 # No per-launch or per-command event material reaches the body.
@@ -371,72 +377,101 @@ expect_run_failure() {
   fi
 }
 
-seed_finish() {
-  jq -cn --arg run "$(run_id_from_handle "$1")" --argjson extra "$2" \
-    '{schema: 1, run: $run, seq: 99, at: "2026-08-14T00:00:00Z",
-      epoch_ms: 1755000000000, type: "run_finish"} + $extra' \
-    >>"$(telemetry_sink "$1")"
+seed_event() {
+  local handle="$1" type="$2" extra="${3:-}" sink seq
+  [[ -n "$extra" ]] || extra='{}'
+  sink="$(telemetry_sink "$handle")"
+  seq=$(( $(wc -l <"$sink") + 1 ))
+  jq -cn --arg run "$(run_id_from_handle "$handle")" --arg type "$type" \
+    --argjson seq "$seq" --argjson extra "$extra" \
+    '{schema: 2, run: $run, seq: $seq, at: "2026-08-14T00:00:00Z",
+      epoch_ms: 1755000000000, type: $type} + $extra' >>"$sink"
 }
 
 jq '.outcome = "Progresses" | .telemetry.final_workflow_outcome = "Progresses"' \
   "$fixture/facts.json" >"$fixture/progresses-facts.json"
 
 # A run that never finished has nothing to report.
-unfinished_run="$(telemetry start)"
+unfinished_run="$(telemetry start --issue 164)"
 render_run="$unfinished_run"
 expect_run_failure unfinished \
-  'closeout invalid: the run has not finished; record run-telemetry.sh finish --run HANDLE at the closure gate'
+  'closeout invalid: run telemetry integrity is incomplete; schema-2 closeout requires valid'
 
 # The sink says Progresses while the facts say Closes.
-telemetry finish --run "$render_run" --outcome Progresses
+telemetry resolve --run "$render_run" --outcome Progresses
+telemetry seal --run "$render_run"
 expect_run_failure sink-progresses \
   'closeout invalid: outcome Closes contradicts recorded run outcome Progresses'
 
 # The sink says Closes while the facts say Progresses.
-render_run="$(telemetry start)"
-telemetry finish --run "$render_run" --outcome Closes
+render_run="$(telemetry start --issue 164)"
+telemetry resolve --run "$render_run" --outcome Closes
+telemetry seal --run "$render_run"
 expect_run_failure sink-closes \
   'closeout invalid: outcome Progresses contradicts recorded run outcome Closes' \
   "$fixture/progresses-facts.json"
 
 # Two recorded outcomes are not an outcome.
 duplicate_run="$render_run"
-seed_finish "$duplicate_run" '{"outcome": "Closes"}'
+seed_event "$duplicate_run" outcome_resolved '{"outcome": "Closes"}'
 expect_run_failure duplicate-finish \
-  'closeout invalid: the run recorded 2 final outcomes; exactly one is allowed'
+  'closeout invalid: run telemetry integrity is invalid; schema-2 closeout requires valid'
 
-# A finish record with no outcome in it leaves the run without one.
-render_run="$(telemetry start)"
-seed_finish "$render_run" '{}'
+# A resolution record with no outcome is invalid telemetry.
+render_run="$(telemetry start --issue 164)"
+seed_event "$render_run" outcome_resolved '{}'
+seed_event "$render_run" run_sealed
 expect_run_failure outcomeless-finish \
-  'closeout invalid: the run recorded no final outcome'
+  'closeout invalid: run telemetry integrity is invalid; schema-2 closeout requires valid'
 
 # A finish record carrying something outside the outcome enum contradicts the
 # body rather than being read as agreement.
-render_run="$(telemetry start)"
-seed_finish "$render_run" '{"outcome": "merged"}'
+render_run="$(telemetry start --issue 164)"
+seed_event "$render_run" outcome_resolved '{"outcome": "merged"}'
+seed_event "$render_run" run_sealed
 expect_run_failure unrecognized-finish \
-  'closeout invalid: outcome Closes contradicts recorded run outcome merged'
+  'closeout invalid: run telemetry integrity is invalid; schema-2 closeout requires valid'
 
 # A finished run whose recorded outcome matches renders.
-matching_run="$(telemetry start)"
+matching_run="$(telemetry start --issue 164)"
 render_run="$matching_run"
 telemetry launch --run "$render_run" \
   --role implementation --phase implementation --round 1
-telemetry finish --run "$render_run" --outcome Closes
+OUTCOME=Closes
+telemetry resolve --run "$render_run" --outcome "$OUTCOME"
+telemetry seal --run "$render_run"
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/matching.md"
-grep -Fqx "| Telemetry run | $(run_id_from_handle "$matching_run") (schema 1) |" \
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$matching_run") (schema 2, integrity valid) |" \
   "$fixture/matching.md"
 grep -Fqx '| Final workflow outcome | Closes |' "$fixture/matching.md"
 
-# The rendered rows are the run's final summary, not a snapshot of the moment
-# the body was rendered: work recorded after the gate cannot change a body the
-# run already published.
-telemetry launch --run "$render_run" --role other --phase closeout --round 2
-telemetry exec --run "$render_run" \
-  --command-id after-the-gate --phase closeout --round 2 -- true
-run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/re-rendered.md"
-diff -u "$fixture/matching.md" "$fixture/re-rendered.md"
+progresses_run="$(telemetry start --issue 164)"
+render_run="$progresses_run"
+telemetry launch --run "$render_run" \
+  --role implementation --phase implementation --round 1
+OUTCOME=Progresses
+telemetry resolve --run "$render_run" --outcome "$OUTCOME"
+telemetry seal --run "$render_run"
+run_new "$fixture/progresses-facts.json" "$fixture/narrative.md" \
+  >"$fixture/matching-progresses.md"
+grep -Fqx '| Final workflow outcome | Progresses |' \
+  "$fixture/matching-progresses.md"
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$progresses_run") (schema 2, integrity valid) |" \
+  "$fixture/matching-progresses.md"
+
+render_run="$matching_run"
+
+jq '.repository = "example/another"' "$fixture/facts.json" \
+  >"$fixture/wrong-repository-facts.json"
+expect_run_failure wrong-repository \
+  'closeout invalid: repository example/another contradicts recorded run repository example/target' \
+  "$fixture/wrong-repository-facts.json"
+jq '.issue_number = 165' "$fixture/facts.json" \
+  >"$fixture/wrong-issue-facts.json"
+expect_run_failure wrong-issue \
+  'closeout invalid: issue 165 contradicts recorded run issue 164' \
+  "$fixture/wrong-issue-facts.json"
+
 [[ "$unfinished_run" != "$matching_run" ]]
 
 rm -rf "$telemetry_dir"

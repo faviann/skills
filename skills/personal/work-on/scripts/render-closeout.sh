@@ -205,20 +205,39 @@ run_value="$("$script_root/workflow-provenance.sh" verify)" \
 telemetry_summary="$("$script_root/run-telemetry.sh" summary --run "$run_id")" \
   || fail "run telemetry summary failed"
 
-# A closeout body reports a finished run. The run resolves its own outcome at
-# the closure gate, before any body is rendered, so the three statements of that
-# outcome — the issue mapping, the observed telemetry field, and the run's own
-# record — must be one statement. A run that never finished has nothing to
-# report; a run that finished twice does not have an outcome at all; and a run
-# that recorded a different outcome contradicts the body rather than supporting
-# it. Each is refused before anything is published.
-recorded_finishes="$(jq -r '.finish_events // 0' <<<"$telemetry_summary")"
-[[ "$recorded_finishes" =~ ^[0-9]+$ ]] \
-  || fail "run telemetry did not report how the run finished"
-[[ "$recorded_finishes" -ne 0 ]] \
-  || fail "the run has not finished; record run-telemetry.sh finish --run HANDLE at the closure gate"
-[[ "$recorded_finishes" -eq 1 ]] \
-  || fail "the run recorded $recorded_finishes final outcomes; exactly one is allowed"
+# Schema-2 successful closeout fails closed on the sink evaluator. Facts name
+# the same repository and issue so a valid run cannot be rendered for another
+# closeout. Schema-1 forensic rendering retains its historical outcome checks.
+recorded_schema="$(jq -r '.schema // empty' <<<"$telemetry_summary")"
+integrity_state="$(jq -r '.integrity.state // empty' <<<"$telemetry_summary")"
+if [[ "$recorded_schema" == 2 ]]; then
+  [[ "$integrity_state" == valid ]] \
+    || fail "run telemetry integrity is ${integrity_state:-invalid}; schema-2 closeout requires valid"
+  recorded_resolutions="$(jq -r '.outcome_resolution_events // 0' \
+    <<<"$telemetry_summary")"
+  recorded_seals="$(jq -r '.seal_events // 0' <<<"$telemetry_summary")"
+  [[ "$recorded_resolutions" -eq 1 && "$recorded_seals" -eq 1 ]] \
+    || fail "schema-2 closeout requires one outcome resolution and one seal"
+  facts_repository="$(jq -r '.repository // empty' "$facts")"
+  [[ "$facts_repository" =~ ^[a-z0-9_.-]+/[a-z0-9_.-]+$ ]] \
+    || fail "repository must be a normalized GitHub owner/repository"
+  recorded_repository="$(jq -r '.repository // empty' <<<"$telemetry_summary")"
+  recorded_issue="$(jq -r '.issue // empty' <<<"$telemetry_summary")"
+  [[ "$facts_repository" == "$recorded_repository" ]] \
+    || fail "repository $facts_repository contradicts recorded run repository $recorded_repository"
+  [[ "$issue_number" == "$recorded_issue" ]] \
+    || fail "issue $issue_number contradicts recorded run issue $recorded_issue"
+elif [[ "$recorded_schema" == 1 ]]; then
+  recorded_finishes="$(jq -r '.finish_events // 0' <<<"$telemetry_summary")"
+  [[ "$recorded_finishes" =~ ^[0-9]+$ ]] \
+    || fail "run telemetry did not report how the run finished"
+  [[ "$recorded_finishes" -ne 0 ]] \
+    || fail "the legacy run has not finished"
+  [[ "$recorded_finishes" -eq 1 ]] \
+    || fail "the legacy run recorded $recorded_finishes final outcomes; exactly one is allowed"
+else
+  fail "run telemetry schema is unsupported"
+fi
 recorded_outcome="$(jq -r '.final_workflow_outcome // empty' \
   <<<"$telemetry_summary")"
 [[ -n "$recorded_outcome" ]] \
@@ -233,7 +252,8 @@ summary_value() {
     <<<"$telemetry_summary"
 }
 
-telemetry_run_value="$(summary_value '"\(.run) (schema \(.schema))"')"
+telemetry_run_value="$(summary_value '
+  "\(.run) (schema \(.schema), integrity \(.integrity.state))"')"
 subagent_launches_value="$(summary_value '
   if .subagent_launches.total == 0 then "0"
   else "\(.subagent_launches.total) ("
@@ -242,8 +262,9 @@ subagent_launches_value="$(summary_value '
     + ")"
   end')"
 reviews_value="$(summary_value '
-  "\(.reviews.total) (readiness=\(.reviews.by_kind.readiness), "
-  + "full=\(.reviews.by_kind.full), delta=\(.reviews.by_kind.delta))"')"
+  (.review_delegations // .reviews) as $reviews
+  | "\($reviews.total) (readiness=\($reviews.by_kind.readiness), "
+  + "full=\($reviews.by_kind.full), delta=\($reviews.by_kind.delta))"')"
 validations_value="$(summary_value '
   "\(.validations.total) (passed=\(.validations.passed), "
   + "failed=\(.validations.failed)"

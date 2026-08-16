@@ -12,18 +12,15 @@ set -euo pipefail
 # arguments, or a command's output, so that material cannot be recorded even by
 # mistake.
 
-readonly schema_version=1
-readonly roles=(
+readonly schema_version=2
+readonly launch_roles=(
   implementation
-  readiness
-  review-standards
-  review-spec
-  closure-sweep
   other
 )
+readonly review_roles=(readiness review-standards review-spec closure-sweep)
 readonly review_kinds=(readiness full delta)
 readonly phases=(orient implementation checkpoint gate remediation closeout)
-readonly run_outcomes=(Closes Progresses aborted)
+readonly run_outcomes=(Closes Progresses preflight-aborted abandoned failed)
 
 fail() {
   printf 'run telemetry: %s\n' "$1" >&2
@@ -33,12 +30,13 @@ fail() {
 usage() {
   cat >&2 <<'USAGE'
 usage: run-telemetry.sh <subcommand>
-  start                                     begin a run; prints its bound handle
+  start --issue N [--continues-run HANDLE]  begin a schema-2 run; prints its bound handle
   launch --run HANDLE --role R --phase P --round N [--tokens-in N] [--tokens-out N]
-  review --run HANDLE --kind K --phase P --round N --base REF (--head REF | --worktree)
+  review-delegation --run HANDLE --role R --kind K --phase P --round N --base REF (--head REF | --worktree)
   exec --run HANDLE --command-id ID --phase P --round N -- <command...>
                                             run and time a validation command
-  finish --run HANDLE --outcome (Closes|Progresses|aborted)
+  resolve --run HANDLE --outcome (Closes|Progresses|preflight-aborted|abandoned|failed)
+  seal --run HANDLE                          explicitly end recording
   summary --run HANDLE                      deterministic aggregate as JSON
 USAGE
   exit 1
@@ -83,6 +81,17 @@ require_command_id() {
     || fail "command-id must be lowercase alphanumeric words joined by single hyphens"
 }
 
+require_review_combination() {
+  local role="$1" kind="$2" phase="$3"
+  case "$role:$kind:$phase" in
+    readiness:readiness:checkpoint) ;;
+    review-standards:full:gate|review-spec:full:gate|closure-sweep:full:gate) ;;
+    review-standards:delta:remediation|review-spec:delta:remediation|closure-sweep:delta:remediation) ;;
+    closure-sweep:full:closeout) ;;
+    *) fail "review role/kind/phase combination is invalid" ;;
+  esac
+}
+
 # Milliseconds since the epoch. EPOCHREALTIME avoids a subprocess per event;
 # a shell without it degrades to whole seconds rather than failing.
 now_ms() {
@@ -116,6 +125,27 @@ repository_binding_lock="$telemetry_root/repository-binding.lock"
 readonly run_id_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$'
 readonly run_handle_pattern='^([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})@([0-9a-f]{32})$'
 readonly repository_binding_pattern='^[0-9a-f]{32}$'
+
+normalized_repository=""
+resolve_repository_identity() {
+  local origin slug
+  origin="$(git remote get-url origin 2>/dev/null)" \
+    || fail "origin must identify a GitHub owner/repository"
+  case "$origin" in
+    git@github.com:*) slug="${origin#git@github.com:}" ;;
+    https://github.com/*) slug="${origin#https://github.com/}" ;;
+    ssh://git@github.com/*) slug="${origin#ssh://git@github.com/}" ;;
+    *) fail "origin must identify a GitHub owner/repository" ;;
+  esac
+  slug="${slug%.git}"
+  [[ "$slug" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] \
+    || fail "origin must identify a GitHub owner/repository"
+  normalized_repository="${slug,,}"
+}
+
+require_issue() {
+  [[ "$1" =~ ^[1-9][0-9]*$ ]] || fail "issue must be a positive integer"
+}
 
 # The sink records what a workstation's runs did, so it is created for its owner
 # only. The umask closes the window between creation and the chmod; the chmod
@@ -196,10 +226,12 @@ require_run_handle() {
 # this worktree's own Git directory: it is not discovery, and every writer still
 # passes require_run_handle above and therefore targets only runs_root.
 summary_run_file=""
+summary_handle_is_bound=false
 resolve_summary_run() {
   local handle="$1" legacy_run_file
   [[ -n "$handle" ]] || fail "operation requires --run"
   if [[ "$handle" =~ $run_handle_pattern ]]; then
+    summary_handle_is_bound=true
     resolve_bound_handle "$handle"
     run_id="$resolved_run_id"
     [[ -f "$runs_root/$run_id.jsonl" ]] \
@@ -239,11 +271,23 @@ repair_partial_line() {
     || printf '\n' >&"$sink_lock_fd"
 }
 
-open_sink() {
+lock_sink() {
   sink_run_file="$runs_root/$1.jsonl"
   exec {sink_lock_fd}>>"$sink_run_file"
   flock -x "$sink_lock_fd" \
     || fail "could not lock the telemetry sink: $sink_run_file"
+}
+
+open_schema2_sink() {
+  local observed_schemas
+  lock_sink "$1"
+  observed_schemas="$(jq -n -R -c \
+    '[inputs | fromjson? // empty | select(type == "object") | .schema]
+    | unique' <"$sink_run_file")"
+  if [[ "$observed_schemas" != '[2]' ]]; then
+    close_sink
+    fail "schema-2 writer requires a schema-2 run"
+  fi
   repair_partial_line
 }
 
@@ -272,8 +316,42 @@ write_event() {
 }
 
 append_event() {
-  open_sink "$1"
+  # start owns the only empty sink initialization path. Existing-run writers
+  # must use open_schema2_sink so they cannot modify historical schema 1.
+  lock_sink "$1"
   write_event "$@"
+  close_sink
+}
+
+event_count_locked() {
+  jq -n -R --arg type "$1" \
+    '[inputs | fromjson? // empty
+      | select(type == "object" and .type == $type)] | length' \
+    <"$sink_run_file"
+}
+
+require_recording_open_locked() {
+  [[ "$(event_count_locked run_sealed)" -eq 0 ]] \
+    || fail "run $run_id is sealed"
+}
+
+require_event_lifecycle_locked() {
+  local type="$1" phase="${2:-}" role="${3:-}" resolutions
+  require_recording_open_locked
+  resolutions="$(event_count_locked outcome_resolved)"
+  [[ "$resolutions" -le 1 ]] || fail "run $run_id has invalid lifecycle state"
+  [[ "$resolutions" -eq 0 ]] && return 0
+  case "$type:$phase:$role" in
+    validation_start:closeout:|validation_end:closeout:|subagent_launch:closeout:other) ;;
+    *) fail "run $run_id has already resolved its outcome" ;;
+  esac
+}
+
+append_recording_event() {
+  local target_run="$1" type="$2" extra="$3" phase="${4:-}" role="${5:-}"
+  open_schema2_sink "$target_run"
+  require_event_lifecycle_locked "$type" "$phase" "$role"
+  write_event "$target_run" "$type" "$extra"
   close_sink
 }
 
@@ -317,7 +395,38 @@ shift || true
 
 case "$subcommand" in
   start)
-    [[ "$#" -eq 0 ]] || usage
+    issue=""
+    continues_run=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --issue) issue="${2:?--issue requires a value}"; shift 2 ;;
+        --continues-run) continues_run="${2:?--continues-run requires a value}"; shift 2 ;;
+        *) usage ;;
+      esac
+    done
+    require_issue "$issue"
+    resolve_repository_identity
+    continues_run_id=""
+    if [[ -n "$continues_run" ]]; then
+      resolve_bound_handle "$continues_run"
+      continues_run_id="$resolved_run_id"
+      continued_sink="$runs_root/$continues_run_id.jsonl"
+      [[ -f "$continued_sink" ]] \
+        || fail "continued run telemetry sink is missing"
+      continued_identity="$(jq -n -R -c --arg run "$continues_run_id" '
+        [inputs | fromjson? // empty
+          | select(type == "object" and .schema == 2 and .type == "run_start")]
+        | if length == 1 and .[0].seq == 1 and .[0].run == $run
+            and .[0].run_identity == $run
+            and (.[0].head | type == "string" and test("^[0-9a-f]{40}$"))
+          then {repository: .[0].repository, issue: .[0].issue}
+          else null end
+      ' <"$continued_sink")"
+      [[ "$(jq -r '.repository // empty' <<<"$continued_identity")" == \
+          "$normalized_repository" \
+        && "$(jq -r '.issue // empty' <<<"$continued_identity")" == "$issue" ]] \
+        || fail "continued run belongs to another repository or issue"
+    fi
     create_private_dir "$telemetry_root"
     create_private_dir "$runs_root"
     ensure_repository_binding
@@ -328,10 +437,16 @@ case "$subcommand" in
     [[ "$run_id" =~ $run_id_pattern ]] || fail "could not mint a run id"
     [[ ! -e "$runs_root/$run_id.jsonl" ]] || fail "run id collision: $run_id"
     create_private_file "$runs_root/$run_id.jsonl"
-    head_sha="$(git rev-parse --verify HEAD 2>/dev/null || printf '')"
+    head_sha="$(git rev-parse --verify HEAD^{commit} 2>/dev/null)" \
+      || fail "start requires a committed HEAD"
     append_event "$run_id" run_start "$(
-      jq -cn --arg head "$head_sha" \
-        '{workflow: "work-on"} + (if $head == "" then {} else {head: $head} end)'
+      jq -cn --arg repository "$normalized_repository" \
+        --argjson issue "$issue" --arg head "$head_sha" --arg run "$run_id" \
+        --arg continues_run "$continues_run_id" \
+        '{workflow: "work-on", repository: $repository, issue: $issue,
+          head: $head, run_identity: $run}
+          + (if $continues_run == "" then {}
+             else {continues_run: $continues_run} end)'
     )"
     printf '%s@%s\n' "$run_id" "$repository_binding"
     ;;
@@ -355,25 +470,26 @@ case "$subcommand" in
       esac
     done
     require_run_handle "$run_id"
-    require_enum role "$role" "${roles[@]}"
+    require_enum role "$role" "${launch_roles[@]}"
     require_enum phase "$phase" "${phases[@]}"
     require_round "$round"
     # Token counts are optional: a runtime that does not expose them records a
     # launch without them rather than failing or inventing a number.
     [[ -z "$tokens_in" ]] || require_count tokens-in "$tokens_in"
     [[ -z "$tokens_out" ]] || require_count tokens-out "$tokens_out"
-    append_event "$run_id" subagent_launch "$(
+    append_recording_event "$run_id" subagent_launch "$(
       jq -cn \
         --arg role "$role" --arg phase "$phase" --argjson round "$round" \
         --arg tokens_in "$tokens_in" --arg tokens_out "$tokens_out" \
         '{role: $role, phase: $phase, round: $round}
           + (if $tokens_in == "" then {} else {tokens_in: ($tokens_in | tonumber)} end)
           + (if $tokens_out == "" then {} else {tokens_out: ($tokens_out | tonumber)} end)'
-    )"
+    )" "$phase" "$role"
     ;;
 
-  review)
+  review-delegation)
     run_id=""
+    role=""
     kind=""
     phase=""
     round=""
@@ -383,6 +499,7 @@ case "$subcommand" in
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
         --run) run_id="${2:?--run requires a value}"; shift 2 ;;
+        --role) role="${2:?--role requires a value}"; shift 2 ;;
         --kind) kind="${2:?--kind requires a value}"; shift 2 ;;
         --phase) phase="${2:?--phase requires a value}"; shift 2 ;;
         --round) round="${2:?--round requires a value}"; shift 2 ;;
@@ -393,15 +510,17 @@ case "$subcommand" in
       esac
     done
     require_run_handle "$run_id"
+    require_enum role "$role" "${review_roles[@]}"
     require_enum kind "$kind" "${review_kinds[@]}"
     require_enum phase "$phase" "${phases[@]}"
     require_round "$round"
-    [[ -n "$base" ]] || fail "review requires --base"
+    require_review_combination "$role" "$kind" "$phase"
+    [[ -n "$base" ]] || fail "review-delegation requires --base"
     if [[ "$worktree" == true ]]; then
-      [[ -z "$head_ref" ]] || fail "review takes --head or --worktree, not both"
+      [[ -z "$head_ref" ]] || fail "review-delegation takes --head or --worktree, not both"
       head_ref=HEAD
     else
-      [[ -n "$head_ref" ]] || fail "review requires --head or --worktree"
+      [[ -n "$head_ref" ]] || fail "review-delegation requires --head or --worktree"
     fi
     base_sha="$(git rev-parse --verify "$base^{commit}" 2>/dev/null)" \
       || fail "review --base does not resolve to a commit: $base"
@@ -418,14 +537,16 @@ case "$subcommand" in
     else
       input_bytes="$(diff_git "$base_sha...$head_sha" | wc -c | tr -d ' ')"
     fi
-    append_event "$run_id" review "$(
+    append_recording_event "$run_id" review_delegation "$(
       jq -cn \
-        --arg kind "$kind" --arg phase "$phase" --argjson round "$round" \
+        --arg role "$role" --arg kind "$kind" --arg phase "$phase" \
+        --argjson round "$round" \
         --arg base "$base_sha" --arg head "$head_sha" \
         --argjson worktree "$worktree" --argjson input_bytes "$input_bytes" \
-        '{kind: $kind, phase: $phase, round: $round, base: $base, head: $head,
+        '{role: $role, kind: $kind, phase: $phase, round: $round,
+          base: $base, head: $head,
           head_is_worktree: $worktree, input_bytes: $input_bytes}'
-    )"
+    )" "$phase" "$role"
     ;;
 
   exec)
@@ -458,7 +579,8 @@ case "$subcommand" in
     # Counting prior executions and writing this one's start happen under a
     # single lock, so two wrappers starting at once cannot be handed the same
     # execution id.
-    open_sink "$run_id"
+    open_schema2_sink "$run_id"
+    require_event_lifecycle_locked validation_start "$phase"
     execution_index="$(
       jq -n -R '[inputs | fromjson? // empty
         | select(type == "object" and .type == "validation_start")] | length' \
@@ -478,7 +600,7 @@ case "$subcommand" in
     record_end() {
       local outcome="$1" status="$2"
       validation_ended=true
-      append_event "$run_id" validation_end "$(
+      append_recording_event "$run_id" validation_end "$(
         jq -cn \
           --arg exec_id "$exec_id" --arg command_id "$command_id" \
           --arg phase "$phase" --argjson round "$round" \
@@ -487,7 +609,7 @@ case "$subcommand" in
           '{exec_id: $exec_id, command_id: $command_id,
             phase: $phase, round: $round, outcome: $outcome,
             exit_status: $exit_status, duration_ms: $duration_ms}'
-      )"
+      )" "$phase"
     }
     # An interrupted wrapper still closes its own execution, so the sink holds
     # a controlled `interrupted` record instead of a dangling start.
@@ -510,7 +632,7 @@ case "$subcommand" in
     exit "$exit_status"
     ;;
 
-  finish)
+  resolve)
     run_id=""
     outcome=""
     while [[ "$#" -gt 0 ]]; do
@@ -523,21 +645,61 @@ case "$subcommand" in
     require_run_handle "$run_id"
     require_enum outcome "$outcome" "${run_outcomes[@]}"
     # A run resolves its outcome exactly once. Checking for an existing
-    # `run_finish` and writing this one happen under a single lock, so two
+    # resolution and writing this one happen under a single lock, so two
     # closers cannot both find none and both write.
-    open_sink "$run_id"
-    finish_count="$(
-      jq -n -R '[inputs | fromjson? // empty
-        | select(type == "object" and .type == "run_finish")] | length' \
-        <"$sink_run_file"
-    )"
-    if [[ "$finish_count" -ne 0 ]]; then
+    open_schema2_sink "$run_id"
+    require_recording_open_locked
+    resolution_count="$(event_count_locked outcome_resolved)"
+    if [[ "$resolution_count" -ne 0 ]]; then
       close_sink
-      fail "run $run_id already recorded its final outcome"
+      fail "run $run_id already resolved its outcome"
     fi
-    write_event "$run_id" run_finish "$(
+    if [[ "$outcome" == preflight-aborted ]]; then
+      work_count="$(jq -n -R '[inputs | fromjson? // empty
+        | select(type == "object"
+          and ((.type == "subagent_launch" and .role == "implementation")
+            or .type == "review_delegation"))] | length' <"$sink_run_file")"
+      if [[ "$work_count" -ne 0 ]]; then
+        close_sink
+        fail "preflight-aborted is invalid after implementation or review delegation"
+      fi
+    fi
+    write_event "$run_id" outcome_resolved "$(
       jq -cn --arg outcome "$outcome" '{outcome: $outcome}'
     )"
+    close_sink
+    ;;
+
+  seal)
+    run_id=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --run) run_id="${2:?--run requires a value}"; shift 2 ;;
+        *) usage ;;
+      esac
+    done
+    require_run_handle "$run_id"
+    open_schema2_sink "$run_id"
+    seal_count="$(event_count_locked run_sealed)"
+    [[ "$seal_count" -eq 0 ]] || {
+      close_sink
+      fail "run $run_id is already sealed"
+    }
+    resolution_count="$(event_count_locked outcome_resolved)"
+    [[ "$resolution_count" -eq 1 ]] || {
+      close_sink
+      fail "run $run_id must resolve exactly one outcome before sealing"
+    }
+    validation_balance="$(jq -n -R '[inputs | fromjson? // empty
+      | select(type == "object")]
+      | ([.[] | select(.type == "validation_start")] | length)
+        - ([.[] | select(.type == "validation_end")] | length)' \
+      <"$sink_run_file")"
+    [[ "$validation_balance" -eq 0 ]] || {
+      close_sink
+      fail "run $run_id has incomplete validation executions"
+    }
+    write_event "$run_id" run_sealed
     close_sink
     ;;
 
@@ -550,79 +712,293 @@ case "$subcommand" in
       esac
     done
     resolve_summary_run "$run_id"
-    # Aggregation is a pure function of one run's sink: enumerated keys in a
-    # fixed order, and lines that are not this run's schema-1 JSON ignored.
-    #
-    # A finished run's summary is final, not a snapshot of the moment it was
-    # asked for. The window closes at `run_finish`, so the same finished run
-    # always summarizes to the same document however often it is rendered, and
-    # anything recorded afterwards is reported as `events_after_finish` rather
-    # than folded into counts the closeout body already published.
+    # Integrity is evaluated from one stable physical artifact. Writers take an
+    # exclusive lock on this same file, so the shared lock prevents a summary
+    # from observing an append between its framing check and JSON evaluation.
+    exec {summary_lock_fd}<"$summary_run_file"
+    flock -s "$summary_lock_fd" \
+      || fail "could not lock the telemetry sink: $summary_run_file"
+    terminal_newline_missing=false
+    if [[ -s "$summary_run_file" ]] \
+        && [[ "$(tail -c 1 "$summary_run_file" | od -An -tx1 | tr -d ' \n')" != 0a ]]; then
+      terminal_newline_missing=true
+    fi
+    observed_schemas="$(jq -n -R -c \
+      '[inputs | fromjson? // empty | select(type == "object") | .schema]
+      | unique' <"$summary_run_file")"
+    if [[ "$summary_handle_is_bound" == false \
+        && "$observed_schemas" != '[1]' ]]; then
+      fail "schema-2 summary requires a repository-bound handle"
+    fi
+    if [[ "$observed_schemas" == '[1]' ]]; then
+      # Schema 1 is historical evidence. Preserve its aggregation window and
+      # recorded-event counts, but never promote those observations into exact
+      # reviewer accounting or retrospectively claim integrity.
+      jq -n -R -c --arg run "$run_id" \
+        --argjson roles '["implementation","readiness","review-standards","review-spec","closure-sweep","other"]' \
+        --argjson kinds '["readiness","full","delta"]' \
+        --argjson phases '["orient","implementation","checkpoint","gate","remediation","closeout"]' '
+        [inputs | select(length > 0)] as $lines
+        | [$lines[] | fromjson? // empty] as $parsed
+        | [$parsed[] | select(type == "object" and .run == $run and .schema == 1)] as $recorded
+        | [$recorded[] | select(.type == "run_finish")] as $finishes
+        | ($finishes | first) as $finish
+        | (if $finish == null then null else ($finish.seq // 0) end) as $final_seq
+        | [$recorded[] | select($final_seq == null or (.seq // 0) <= $final_seq)] as $events
+        | [$events[] | select(.type == "subagent_launch")] as $launches
+        | [$events[] | select(.type == "review")] as $reviews
+        | [$events[] | select(.type == "validation_start")] as $starts
+        | [$events[] | select(.type == "validation_end")] as $ends
+        | ([$ends[] | .exec_id] | unique) as $ended_ids
+        | [$launches[] | select(has("tokens_in") or has("tokens_out"))] as $token_launches
+        | {
+            schema: 1, run: $run,
+            integrity: {state: "legacy-unverifiable", reasons: []},
+            reviewer_accounting: "legacy-unverifiable",
+            started_at: ([$events[] | select(.type == "run_start") | .at] | first),
+            finished_at: (if $finish == null then null else $finish.at end),
+            final_workflow_outcome: (if $finish == null then null else $finish.outcome end),
+            finish_events: ($finishes | length), events: ($events | length),
+            events_after_finish: (($recorded | length) - ($events | length)),
+            malformed_lines: (($lines | length) - ($parsed | length)),
+            subagent_launches: {total: ($launches | length),
+              by_role: (reduce $roles[] as $role ({};
+                .[$role] = ([$launches[] | select(.role == $role)] | length)))},
+            reviews: {total: ($reviews | length),
+              by_kind: (reduce $kinds[] as $kind ({};
+                .[$kind] = ([$reviews[] | select(.kind == $kind)] | length))),
+              input_bytes: ([$reviews[] | .input_bytes] | add // 0)},
+            validations: {total: ($starts | length),
+              passed: ([$ends[] | select(.outcome == "passed")] | length),
+              failed: ([$ends[] | select(.outcome == "failed")] | length),
+              interrupted: ([$ends[] | select(.outcome == "interrupted")] | length),
+              incomplete: ([$starts[]
+                | select(.exec_id as $id | ($ended_ids | index($id)) == null)] | length),
+              duration_ms: ([$ends[] | .duration_ms] | add // 0)},
+            phase_elapsed_ms: (reduce $phases[] as $phase ({};
+              ([$events[] | select(.phase == $phase) | .epoch_ms]) as $stamps
+              | if ($stamps | length) > 0
+                then .[$phase] = (($stamps | max) - ($stamps | min)) else . end)),
+            tokens: {input: ([$token_launches[] | .tokens_in // 0] | add // 0),
+              output: ([$token_launches[] | .tokens_out // 0] | add // 0),
+              coverage: (if ($token_launches | length) == 0 then "none"
+                elif ($token_launches | length) == ($launches | length)
+                then "complete" else "partial" end)}
+          }
+      ' <"$summary_run_file"
+      exit 0
+    fi
+
+    resolve_repository_identity
     jq -n -R -c \
-      --argjson schema "$schema_version" \
-      --arg run "$run_id" \
-      --argjson roles "$(printf '%s\n' "${roles[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
+      --arg run "$run_id" --arg repository "$normalized_repository" \
+      --argjson terminal_newline_missing "$terminal_newline_missing" \
+      --argjson launch_roles "$(printf '%s\n' "${launch_roles[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
+      --argjson review_roles "$(printf '%s\n' "${review_roles[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
       --argjson kinds "$(printf '%s\n' "${review_kinds[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
       --argjson phases "$(printf '%s\n' "${phases[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" '
-      [inputs | select(length > 0)] as $lines
+      def integer: type == "number" and floor == .;
+      def nonnegative: integer and . >= 0;
+      def only_keys($allowed): ((keys - $allowed) | length) == 0;
+      def envelope:
+        type == "object" and .schema == 2
+        and (.run | type == "string"
+          and test("^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$"))
+        and (.seq | integer and . > 0)
+        and (.at | type == "string"
+          and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+        and (.epoch_ms | nonnegative)
+        and (.type | type == "string");
+      def event_shape:
+        envelope and
+        if .type == "run_start" then
+          only_keys(["schema","run","seq","at","epoch_ms","type","workflow","repository","issue","head","run_identity","continues_run"])
+          and .workflow == "work-on"
+          and (.repository | type == "string" and test("^[a-z0-9_.-]+/[a-z0-9_.-]+$"))
+          and (.issue | integer and . > 0)
+          and (.head | type == "string" and test("^[0-9a-f]{40}$"))
+          and (.run_identity | type == "string")
+          and ((has("continues_run") | not)
+            or (.continues_run | type == "string"
+              and test("^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$")))
+        elif .type == "subagent_launch" then
+          only_keys(["schema","run","seq","at","epoch_ms","type","role","phase","round","tokens_in","tokens_out"])
+          and (.role == "implementation" or .role == "other")
+          and (.phase | type == "string" and IN($phases[]))
+          and (.round | nonnegative)
+          and ((has("tokens_in") | not) or (.tokens_in | nonnegative))
+          and ((has("tokens_out") | not) or (.tokens_out | nonnegative))
+        elif .type == "review_delegation" then
+          only_keys(["schema","run","seq","at","epoch_ms","type","role","kind","phase","round","base","head","head_is_worktree","input_bytes"])
+          and (.role | type == "string" and IN($review_roles[]))
+          and (.kind | type == "string" and IN($kinds[]))
+          and (.phase | type == "string" and IN($phases[]))
+          and (.round | nonnegative)
+          and (.base | type == "string" and test("^[0-9a-f]{40}$"))
+          and (.head | type == "string" and test("^[0-9a-f]{40}$"))
+          and (.head_is_worktree | type == "boolean")
+          and (.input_bytes | nonnegative)
+        elif .type == "validation_start" then
+          only_keys(["schema","run","seq","at","epoch_ms","type","exec_id","command_id","phase","round"])
+          and (.exec_id | type == "string"
+            and test("^" + $run + "-e[0-9]{3,}$"))
+          and (.command_id | type == "string" and length <= 48
+            and test("^[a-z][a-z0-9]*(-[a-z0-9]+)*$"))
+          and (.phase | type == "string" and IN($phases[]))
+          and (.round | nonnegative)
+        elif .type == "validation_end" then
+          only_keys(["schema","run","seq","at","epoch_ms","type","exec_id","command_id","phase","round","outcome","exit_status","duration_ms"])
+          and (.exec_id | type == "string"
+            and test("^" + $run + "-e[0-9]{3,}$"))
+          and (.command_id | type == "string" and length <= 48
+            and test("^[a-z][a-z0-9]*(-[a-z0-9]+)*$"))
+          and (.phase | type == "string" and IN($phases[]))
+          and (.round | nonnegative) and (.outcome | type == "string")
+          and ((.exit_status == null) or (.exit_status | nonnegative))
+          and (.duration_ms | nonnegative)
+        elif .type == "outcome_resolved" then
+          only_keys(["schema","run","seq","at","epoch_ms","type","outcome"])
+          and (.outcome | type == "string")
+        elif .type == "run_sealed" then
+          only_keys(["schema","run","seq","at","epoch_ms","type"])
+        else false end;
+      def valid_review:
+        (.role == "readiness" and .kind == "readiness" and .phase == "checkpoint")
+        or ((.role == "review-standards" or .role == "review-spec" or .role == "closure-sweep")
+          and .kind == "full" and (.phase == "gate" or (.role == "closure-sweep" and .phase == "closeout")))
+        or ((.role == "review-standards" or .role == "review-spec" or .role == "closure-sweep")
+          and .kind == "delta" and .phase == "remediation");
+      [inputs] as $lines
       | [$lines[] | fromjson? // empty] as $parsed
-      | [$parsed[] | select(type == "object" and .run == $run and .schema == $schema)] as $recorded
-      | [$recorded[] | select(.type == "run_finish")] as $finishes
-      | ($finishes | first) as $finish
-      | (if $finish == null then null else ($finish.seq // 0) end) as $final_seq
-      | [$recorded[]
-        | select($final_seq == null or (.seq // 0) <= $final_seq)] as $events
+      | [$parsed[] | select(type == "object" and .schema == 2)] as $events
+      | [$events[] | select(.type == "run_start")] as $starts_run
+      | [$events[] | select(.type == "outcome_resolved")] as $resolutions
+      | [$events[] | select(.type == "run_sealed")] as $seals
       | [$events[] | select(.type == "subagent_launch")] as $launches
-      | [$events[] | select(.type == "review")] as $reviews
+      | [$events[] | select(.type == "review_delegation")] as $reviews
+      | ($launches + $reviews) as $agent_events
+      | ($launch_roles + $review_roles) as $agent_roles
       | [$events[] | select(.type == "validation_start")] as $starts
       | [$events[] | select(.type == "validation_end")] as $ends
-      | ([$ends[] | .exec_id] | unique) as $ended_ids
+      | ([($starts[].exec_id), ($ends[].exec_id)] | unique) as $exec_ids
+      | ($resolutions | first) as $resolution
+      | ($seals | first) as $seal
+      | ([$events[] | select(event_shape | not)] | length) as $bad_shapes
+      | ([$reviews[] | select(valid_review | not)] | length) as $bad_reviews
+      | ([$exec_ids[] as $id
+          | [$starts[] | select(.exec_id == $id)] as $matching_starts
+          | [$ends[] | select(.exec_id == $id)] as $matching_ends
+          | select(($matching_starts | length) > 1
+            or ($matching_ends | length) > 1
+            or (($matching_starts | length) == 0
+              and ($matching_ends | length) > 0)
+            or (($matching_starts | length) == 1
+              and ($matching_ends | length) == 1
+              and $matching_ends[0].seq <= $matching_starts[0].seq))]
+          | length) as $bad_pairs
+      | ([$exec_ids[] as $id
+          | ([$starts[] | select(.exec_id == $id)] | first) as $start
+          | ([$ends[] | select(.exec_id == $id)] | first) as $end
+          | select($start != null and $end != null
+            and ($start.command_id != $end.command_id
+              or $start.phase != $end.phase or $start.round != $end.round))]
+          | length) as $bad_validation_identity
+      | ([$ends[] | select(
+          ((.outcome == "passed" and .exit_status == 0)
+            or (.outcome == "failed" and (.exit_status | integer and . > 0))
+            or (.outcome == "interrupted" and .exit_status == null)) | not)]
+          | length) as $bad_completions
+      | ([$starts[] | select(.exec_id as $id
+          | ([$ends[] | select(.exec_id == $id)] | length) == 0)] | length)
+          as $incomplete_validations
+      | (if $seal == null then 0
+         else ([$events[] | select(.seq > $seal.seq)] | length) end) as $after_seal
+      | (if $resolution == null then [] else
+          [$events[] | select(.seq > $resolution.seq
+            and ($seal == null or .seq < $seal.seq)
+            and (((.type == "validation_start" or .type == "validation_end") and .phase == "closeout")
+              or (.type == "subagent_launch" and .role == "other" and .phase == "closeout")
+              | not))] end | length) as $bad_post_resolution
+      | ((if (($lines | length) - ($parsed | length)) > 0 then ["MALFORMED_LINE"] else [] end)
+        + (if $terminal_newline_missing then ["TERMINAL_NEWLINE_MISSING"] else [] end)
+        + (if ([$parsed[] | select(type != "object" or .schema != 2)] | length) > 0 then ["MIXED_SCHEMA"] else [] end)
+        + (if ($starts_run | length) != 1 then ["RUN_START_COUNT_INVALID"] else [] end)
+        + (if ($starts_run | length) == 1 and
+            ($starts_run[0].seq != 1 or $starts_run[0].run != $run
+              or $starts_run[0].run_identity != $run
+              or $starts_run[0].repository != $repository)
+          then ["RUN_START_IDENTITY_INVALID"] else [] end)
+        + (if ([$events[] | select(.run != $run)] | length) > 0 then ["RUN_IDENTITY_MISMATCH"] else [] end)
+        + (if [$events[].seq] != [range(1; ($events | length) + 1)] then ["SEQUENCE_INVALID"] else [] end)
+        + (if $bad_shapes > 0 then ["EVENT_SHAPE_INVALID"] else [] end)
+        + (if $bad_reviews > 0 then ["REVIEW_DELEGATION_INVALID"] else [] end)
+        + (if $bad_pairs > 0 then ["VALIDATION_PAIR_INVALID"] else [] end)
+        + (if $bad_validation_identity > 0 then ["VALIDATION_IDENTITY_MISMATCH"] else [] end)
+        + (if $bad_completions > 0 then ["VALIDATION_COMPLETION_INVALID"] else [] end)
+        + (if ($resolutions | length) > 1 then ["OUTCOME_RESOLUTION_COUNT_INVALID"] else [] end)
+        + (if ($resolutions | length) == 1
+            and ($resolutions[0].outcome | IN("Closes","Progresses","preflight-aborted","abandoned","failed") | not)
+          then ["OUTCOME_RESOLUTION_INVALID"] else [] end)
+        + (if ($seals | length) > 1 then ["SEAL_COUNT_INVALID"] else [] end)
+        + (if ($seals | length) > 0
+            and (($resolutions | length) != 1 or $seals[0].seq < $resolutions[0].seq)
+          then ["LIFECYCLE_TRANSITION_INVALID"] else [] end)
+        + (if $bad_post_resolution > 0 then ["LIFECYCLE_TRANSITION_INVALID"] else [] end)
+        + (if $after_seal > 0 then ["EVENT_AFTER_SEAL"] else [] end)
+        + (if ($resolutions | length) == 1 and $resolutions[0].outcome == "preflight-aborted"
+            and ([$events[] | select(.seq < $resolutions[0].seq
+              and ((.type == "subagent_launch" and .role == "implementation")
+                or .type == "review_delegation"))] | length) > 0
+          then ["PREFLIGHT_ABORT_AFTER_WORK"] else [] end)
+        | unique | sort) as $invalid_reasons
+      | ((if ($resolutions | length) == 0 then ["OUTCOME_UNRESOLVED"] else [] end)
+        + (if ($resolutions | length) == 1 and ($seals | length) == 0 then ["RUN_UNSEALED"] else [] end)
+        + (if $incomplete_validations > 0 then ["VALIDATION_INCOMPLETE"] else [] end)
+        | unique | sort) as $incomplete_reasons
       | [$launches[] | select(has("tokens_in") or has("tokens_out"))] as $token_launches
       | {
-          schema: $schema,
-          run: $run,
-          started_at: ([$events[] | select(.type == "run_start") | .at] | first),
-          finished_at: (if $finish == null then null else $finish.at end),
-          final_workflow_outcome:
-            (if $finish == null then null else $finish.outcome end),
-          finish_events: ($finishes | length),
-          events: ($events | length),
-          events_after_finish: (($recorded | length) - ($events | length)),
+          schema: 2, run: $run,
+          repository: ($starts_run[0].repository // null),
+          issue: ($starts_run[0].issue // null),
+          started_head: ($starts_run[0].head // null),
+          continues_run: ($starts_run[0].continues_run // null),
+          integrity: (if ($invalid_reasons | length) > 0
+            then {state: "invalid", reasons: $invalid_reasons}
+            elif ($incomplete_reasons | length) > 0
+            then {state: "incomplete", reasons: $incomplete_reasons}
+            else {state: "valid", reasons: []} end),
+          started_at: ($starts_run[0].at // null),
+          outcome_resolved_at: ($resolution.at // null), sealed_at: ($seal.at // null),
+          final_workflow_outcome: ($resolution.outcome // null),
+          outcome_resolution_events: ($resolutions | length),
+          seal_events: ($seals | length), events: ($events | length),
+          events_after_seal: $after_seal,
           malformed_lines: (($lines | length) - ($parsed | length)),
-          subagent_launches: {
-            total: ($launches | length),
-            by_role: (reduce $roles[] as $role ({};
-              .[$role] = ([$launches[] | select(.role == $role)] | length)))
-          },
-          reviews: {
-            total: ($reviews | length),
+          subagent_launches: {total: ($agent_events | length),
+            by_role: (reduce $agent_roles[] as $role ({};
+              .[$role] = ([$agent_events[] | select(.role == $role)] | length)))},
+          review_delegations: {total: ($reviews | length),
+            by_role: (reduce $review_roles[] as $role ({};
+              .[$role] = ([$reviews[] | select(.role == $role)] | length))),
             by_kind: (reduce $kinds[] as $kind ({};
               .[$kind] = ([$reviews[] | select(.kind == $kind)] | length))),
-            input_bytes: ([$reviews[] | .input_bytes] | add // 0)
-          },
-          validations: {
-            total: ($starts | length),
+            input_bytes: ([$reviews[] | .input_bytes | select(nonnegative)]
+              | add // 0)},
+          validations: {total: ($starts | length),
             passed: ([$ends[] | select(.outcome == "passed")] | length),
             failed: ([$ends[] | select(.outcome == "failed")] | length),
             interrupted: ([$ends[] | select(.outcome == "interrupted")] | length),
-            incomplete: ([$starts[]
-              | select(.exec_id as $id | ($ended_ids | index($id)) == null)]
-              | length),
-            duration_ms: ([$ends[] | .duration_ms] | add // 0)
-          },
+            incomplete: $incomplete_validations,
+            duration_ms: ([$ends[] | .duration_ms | numbers] | add // 0)},
           phase_elapsed_ms: (reduce $phases[] as $phase ({};
-            ([$events[] | select(.phase == $phase) | .epoch_ms]) as $stamps
+            ([$events[] | select(.phase == $phase) | .epoch_ms | numbers]) as $stamps
             | if ($stamps | length) > 0
-              then .[$phase] = (($stamps | max) - ($stamps | min))
-              else . end)),
-          tokens: {
-            input: ([$token_launches[] | .tokens_in // 0] | add // 0),
-            output: ([$token_launches[] | .tokens_out // 0] | add // 0),
-            coverage:
-              (if ($token_launches | length) == 0 then "none"
-               elif ($token_launches | length) == ($launches | length) then "complete"
-               else "partial" end)
-          }
+              then .[$phase] = (($stamps | max) - ($stamps | min)) else . end)),
+          tokens: {input: ([$token_launches[] | .tokens_in // 0 | numbers] | add // 0),
+            output: ([$token_launches[] | .tokens_out // 0 | numbers] | add // 0),
+            coverage: (if ($token_launches | length) == 0 then "none"
+              elif ($token_launches | length) == ($launches | length)
+              then "complete" else "partial" end)}
         }
     ' <"$summary_run_file"
     ;;
