@@ -34,13 +34,12 @@ usage() {
   cat >&2 <<'USAGE'
 usage: run-telemetry.sh <subcommand>
   start                                     begin a run; prints the run id
-  run-id                                    print the active run id
-  launch --role R --phase P --round N [--tokens-in N] [--tokens-out N]
-  review --kind K --phase P --round N --base REF (--head REF | --worktree)
-  exec --command-id ID --phase P --round N -- <command...>
+  launch --run ID --role R --phase P --round N [--tokens-in N] [--tokens-out N]
+  review --run ID --kind K --phase P --round N --base REF (--head REF | --worktree)
+  exec --run ID --command-id ID --phase P --round N -- <command...>
                                             run and time a validation command
-  finish --outcome (Closes|Progresses|aborted)
-  summary [--run ID]                        deterministic aggregate as JSON
+  finish --run ID --outcome (Closes|Progresses|aborted)
+  summary --run ID                          deterministic aggregate as JSON
 USAGE
   exit 1
 }
@@ -105,8 +104,11 @@ command -v flock >/dev/null 2>&1 || fail "run telemetry requires flock"
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" \
   || fail "run telemetry requires a Git-backed target repository"
-telemetry_root="$(git rev-parse --absolute-git-dir)/work-on-telemetry"
-pointer="$telemetry_root/current-run"
+git_dir="$(git rev-parse --absolute-git-dir 2>/dev/null)" \
+  || fail "could not resolve the repository's Git directory"
+git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+  || fail "could not resolve the repository's Git common directory"
+telemetry_root="$git_common_dir/work-on-telemetry"
 runs_root="$telemetry_root/runs"
 
 readonly run_id_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$'
@@ -125,13 +127,33 @@ create_private_file() {
   chmod 600 "$1"
 }
 
-active_run() {
-  local id
-  [[ -f "$pointer" ]] || fail "no active telemetry run; run start first"
-  id="$(head -n 1 "$pointer" | tr -d '\r\n')"
-  [[ "$id" =~ $run_id_pattern ]] || fail "active telemetry run id is malformed"
-  [[ -f "$runs_root/$id.jsonl" ]] || fail "telemetry sink is missing for run $id"
-  printf '%s\n' "$id"
+require_run_id() {
+  local id="$1"
+  [[ -n "$id" ]] || fail "operation requires --run"
+  [[ "$id" =~ $run_id_pattern ]] || fail "run id is malformed: $id"
+  [[ -f "$runs_root/$id.jsonl" ]] \
+    || fail "telemetry sink is missing for run $id"
+}
+
+# Aggregation alone can read a schema-1 sink from the location used before
+# linked worktrees adopted common-directory storage. The lookup is deliberately
+# limited to this worktree's own Git directory: it is not discovery, and every
+# writer still passes require_run_id above and therefore targets only runs_root.
+summary_run_file=""
+resolve_summary_run() {
+  local id="$1" legacy_run_file
+  [[ -n "$id" ]] || fail "operation requires --run"
+  [[ "$id" =~ $run_id_pattern ]] || fail "run id is malformed: $id"
+  if [[ -f "$runs_root/$id.jsonl" ]]; then
+    summary_run_file="$runs_root/$id.jsonl"
+    return 0
+  fi
+  legacy_run_file="$git_dir/work-on-telemetry/runs/$id.jsonl"
+  if [[ "$git_dir" != "$git_common_dir" && -f "$legacy_run_file" ]]; then
+    summary_run_file="$legacy_run_file"
+    return 0
+  fi
+  fail "telemetry sink is missing for run $id"
 }
 
 # Recording is concurrent: several subagents and validation wrappers may append
@@ -244,19 +266,11 @@ case "$subcommand" in
       jq -cn --arg head "$head_sha" \
         '{workflow: "work-on"} + (if $head == "" then {} else {head: $head} end)'
     )"
-    staged="$pointer.$$"
-    create_private_file "$staged"
-    printf '%s\n' "$run_id" >"$staged"
-    mv -f "$staged" "$pointer"
     printf '%s\n' "$run_id"
     ;;
 
-  run-id)
-    [[ "$#" -eq 0 ]] || usage
-    active_run
-    ;;
-
   launch)
+    run_id=""
     role=""
     phase=""
     round=""
@@ -264,6 +278,7 @@ case "$subcommand" in
     tokens_out=""
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
+        --run) run_id="${2:?--run requires a value}"; shift 2 ;;
         --role) role="${2:?--role requires a value}"; shift 2 ;;
         --phase) phase="${2:?--phase requires a value}"; shift 2 ;;
         --round) round="${2:?--round requires a value}"; shift 2 ;;
@@ -272,6 +287,7 @@ case "$subcommand" in
         *) usage ;;
       esac
     done
+    require_run_id "$run_id"
     require_enum role "$role" "${roles[@]}"
     require_enum phase "$phase" "${phases[@]}"
     require_round "$round"
@@ -279,7 +295,6 @@ case "$subcommand" in
     # launch without them rather than failing or inventing a number.
     [[ -z "$tokens_in" ]] || require_count tokens-in "$tokens_in"
     [[ -z "$tokens_out" ]] || require_count tokens-out "$tokens_out"
-    run_id="$(active_run)"
     append_event "$run_id" subagent_launch "$(
       jq -cn \
         --arg role "$role" --arg phase "$phase" --argjson round "$round" \
@@ -291,6 +306,7 @@ case "$subcommand" in
     ;;
 
   review)
+    run_id=""
     kind=""
     phase=""
     round=""
@@ -299,6 +315,7 @@ case "$subcommand" in
     worktree=false
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
+        --run) run_id="${2:?--run requires a value}"; shift 2 ;;
         --kind) kind="${2:?--kind requires a value}"; shift 2 ;;
         --phase) phase="${2:?--phase requires a value}"; shift 2 ;;
         --round) round="${2:?--round requires a value}"; shift 2 ;;
@@ -308,6 +325,7 @@ case "$subcommand" in
         *) usage ;;
       esac
     done
+    require_run_id "$run_id"
     require_enum kind "$kind" "${review_kinds[@]}"
     require_enum phase "$phase" "${phases[@]}"
     require_round "$round"
@@ -333,7 +351,6 @@ case "$subcommand" in
     else
       input_bytes="$(diff_git "$base_sha...$head_sha" | wc -c | tr -d ' ')"
     fi
-    run_id="$(active_run)"
     append_event "$run_id" review "$(
       jq -cn \
         --arg kind "$kind" --arg phase "$phase" --argjson round "$round" \
@@ -345,11 +362,13 @@ case "$subcommand" in
     ;;
 
   exec)
+    run_id=""
     command_id=""
     phase=""
     round=""
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
+        --run) run_id="${2:?--run requires a value}"; shift 2 ;;
         --command-id) command_id="${2:?--command-id requires a value}"; shift 2 ;;
         --phase) phase="${2:?--phase requires a value}"; shift 2 ;;
         --round) round="${2:?--round requires a value}"; shift 2 ;;
@@ -357,14 +376,13 @@ case "$subcommand" in
         *) usage ;;
       esac
     done
+    require_run_id "$run_id"
     # The identifier is validated before the command runs, so a run cannot
     # record executions the next run has no name for.
     require_command_id "$command_id"
     require_enum phase "$phase" "${phases[@]}"
     require_round "$round"
     [[ "$#" -gt 0 ]] || fail "exec requires a command after --"
-    run_id="$(active_run)"
-
     # Nothing about the command itself is examined, hashed, or stored — not its
     # arguments, not its program, not its path. A validation is whatever the
     # caller deliberately named it, and that name is all the sink learns.
@@ -426,15 +444,17 @@ case "$subcommand" in
     ;;
 
   finish)
+    run_id=""
     outcome=""
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
+        --run) run_id="${2:?--run requires a value}"; shift 2 ;;
         --outcome) outcome="${2:?--outcome requires a value}"; shift 2 ;;
         *) usage ;;
       esac
     done
+    require_run_id "$run_id"
     require_enum outcome "$outcome" "${run_outcomes[@]}"
-    run_id="$(active_run)"
     # A run resolves its outcome exactly once. Checking for an existing
     # `run_finish` and writing this one happen under a single lock, so two
     # closers cannot both find none and both write.
@@ -462,13 +482,7 @@ case "$subcommand" in
         *) usage ;;
       esac
     done
-    if [[ -n "$run_id" ]]; then
-      [[ "$run_id" =~ $run_id_pattern ]] || fail "run id is malformed: $run_id"
-      [[ -f "$runs_root/$run_id.jsonl" ]] \
-        || fail "telemetry sink is missing for run $run_id"
-    else
-      run_id="$(active_run)"
-    fi
+    resolve_summary_run "$run_id"
     # Aggregation is a pure function of one run's sink: enumerated keys in a
     # fixed order, and lines that are not this run's schema-1 JSON ignored.
     #
@@ -543,7 +557,7 @@ case "$subcommand" in
                else "partial" end)
           }
         }
-    ' <"$runs_root/$run_id.jsonl"
+    ' <"$summary_run_file"
     ;;
 
   *)

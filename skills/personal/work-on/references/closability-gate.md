@@ -105,7 +105,7 @@ Launch no implementation delegate, make no implementation edit, and create no
 implementation commit or pull request. Then:
 
 1. resolve the run's outcome in the sink this run already opened, with
-   `scripts/run-telemetry.sh finish --outcome aborted`;
+   `scripts/run-telemetry.sh finish --run "$RUN_ID" --outcome aborted`;
 2. name the exact criterion, prerequisite, command, or contract conflict that
    failed;
 3. explain why direct `tested` evidence is unavailable;

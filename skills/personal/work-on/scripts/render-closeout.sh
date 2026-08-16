@@ -13,6 +13,11 @@ fail() {
   exit 1
 }
 
+[[ "${1:-}" == --run && -n "${2:-}" ]] \
+  || fail "usage: render-closeout.sh --run ID <facts.json|-> <narrative.md> (--new-pr | --previous-body <old-body.md>)"
+run_id="$2"
+shift 2
+
 if [[ "$#" -eq 3 && "$3" == --new-pr ]]; then
   closeout_mode=new
   previous_body=""
@@ -21,7 +26,7 @@ elif [[ "$#" -eq 4 && "$3" == --previous-body ]]; then
   previous_body="$4"
   [[ -f "$previous_body" ]] || fail "previous body file does not exist: $previous_body"
 else
-  fail "usage: render-closeout.sh <facts.json|-> <narrative.md> (--new-pr | --previous-body <old-body.md>)"
+  fail "usage: render-closeout.sh --run ID <facts.json|-> <narrative.md> (--new-pr | --previous-body <old-body.md>)"
 fi
 
 facts_source="$1"
@@ -197,7 +202,7 @@ run_value="$("$script_root/workflow-provenance.sh" verify)" \
 # The bounded run-telemetry rows are aggregated from the run-scoped sink, never
 # from the facts file. run-telemetry.sh owns the sink, its schema, and the
 # aggregation; this renderer only formats the summary it returns.
-telemetry_summary="$("$script_root/run-telemetry.sh" summary)" \
+telemetry_summary="$("$script_root/run-telemetry.sh" summary --run "$run_id")" \
   || fail "run telemetry summary failed"
 
 # A closeout body reports a finished run. The run resolves its own outcome at
@@ -211,7 +216,7 @@ recorded_finishes="$(jq -r '.finish_events // 0' <<<"$telemetry_summary")"
 [[ "$recorded_finishes" =~ ^[0-9]+$ ]] \
   || fail "run telemetry did not report how the run finished"
 [[ "$recorded_finishes" -ne 0 ]] \
-  || fail "the run has not finished; record run-telemetry.sh finish at the closure gate"
+  || fail "the run has not finished; record run-telemetry.sh finish --run ID at the closure gate"
 [[ "$recorded_finishes" -eq 1 ]] \
   || fail "the run recorded $recorded_finishes final outcomes; exactly one is allowed"
 recorded_outcome="$(jq -r '.final_workflow_outcome // empty' \

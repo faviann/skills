@@ -51,7 +51,7 @@ The `work-on` telemetry fingerprint hashes the declared `work-on`, `tdd`, and `c
 _Avoid_: instruction version, risk-shapes provenance
 
 **Run telemetry sink**:
-The run-scoped, untracked JSON-lines file in the target repository's git-dir where one `work-on` run appends its subagent launches, reviews, and validation executions. It holds the events; the pull-request body holds only bounded summaries aggregated from it. Distinct from **Workflow provenance**, which fingerprints the instructions that governed the run rather than what the run did.
+The run-scoped, untracked JSON-lines file in the target repository's Git common directory where one `work-on` run appends its subagent launches, reviews, and validation executions. It holds the events; the pull-request body holds only bounded summaries aggregated from it. Distinct from **Workflow provenance**, which fingerprints the instructions that governed the run rather than what the run did.
 _Avoid_: event log, analytics store, telemetry ledger
 
 **Closability gate**:
