@@ -33,13 +33,13 @@ fail() {
 usage() {
   cat >&2 <<'USAGE'
 usage: run-telemetry.sh <subcommand>
-  start                                     begin a run; prints the run id
-  launch --run ID --role R --phase P --round N [--tokens-in N] [--tokens-out N]
-  review --run ID --kind K --phase P --round N --base REF (--head REF | --worktree)
-  exec --run ID --command-id ID --phase P --round N -- <command...>
+  start                                     begin a run; prints its bound handle
+  launch --run HANDLE --role R --phase P --round N [--tokens-in N] [--tokens-out N]
+  review --run HANDLE --kind K --phase P --round N --base REF (--head REF | --worktree)
+  exec --run HANDLE --command-id ID --phase P --round N -- <command...>
                                             run and time a validation command
-  finish --run ID --outcome (Closes|Progresses|aborted)
-  summary --run ID                          deterministic aggregate as JSON
+  finish --run HANDLE --outcome (Closes|Progresses|aborted)
+  summary --run HANDLE                      deterministic aggregate as JSON
 USAGE
   exit 1
 }
@@ -110,8 +110,12 @@ git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/n
   || fail "could not resolve the repository's Git common directory"
 telemetry_root="$git_common_dir/work-on-telemetry"
 runs_root="$telemetry_root/runs"
+repository_binding_file="$telemetry_root/repository-binding"
+repository_binding_lock="$telemetry_root/repository-binding.lock"
 
 readonly run_id_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$'
+readonly run_handle_pattern='^([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})@([0-9a-f]{32})$'
+readonly repository_binding_pattern='^[0-9a-f]{32}$'
 
 # The sink records what a workstation's runs did, so it is created for its owner
 # only. The umask closes the window between creation and the chmod; the chmod
@@ -127,33 +131,93 @@ create_private_file() {
   chmod 600 "$1"
 }
 
-require_run_id() {
-  local id="$1"
-  [[ -n "$id" ]] || fail "operation requires --run"
-  [[ "$id" =~ $run_id_pattern ]] || fail "run id is malformed: $id"
-  [[ -f "$runs_root/$id.jsonl" ]] \
-    || fail "telemetry sink is missing for run $id"
+# One opaque binding belongs to the Git common directory and therefore to all
+# of its linked worktrees. It lives beside the sinks rather than in schema-1
+# events: the handle proves routing authority without changing event semantics.
+repository_binding=""
+load_repository_binding() {
+  [[ -f "$repository_binding_file" ]] \
+    || fail "repository binding is missing; run start first"
+  IFS= read -r repository_binding <"$repository_binding_file" \
+    || fail "repository binding is unreadable"
+  [[ "$repository_binding" =~ $repository_binding_pattern ]] \
+    || fail "repository binding is malformed"
+}
+
+ensure_repository_binding() {
+  local binding_lock_fd staged binding=""
+  create_private_file "$repository_binding_lock"
+  exec {binding_lock_fd}>>"$repository_binding_lock"
+  flock -x "$binding_lock_fd" \
+    || fail "could not lock the repository binding"
+  if [[ ! -f "$repository_binding_file" ]]; then
+    if [[ -r /proc/sys/kernel/random/uuid ]]; then
+      IFS= read -r binding </proc/sys/kernel/random/uuid || true
+      binding="${binding//-/}"
+    fi
+    [[ "$binding" =~ $repository_binding_pattern ]] \
+      || binding="$(od -An -tx1 -N16 /dev/urandom 2>/dev/null | tr -d ' \n')"
+    [[ "$binding" =~ $repository_binding_pattern ]] \
+      || fail "could not mint a repository binding"
+    staged="$repository_binding_file.$$"
+    create_private_file "$staged"
+    printf '%s\n' "$binding" >"$staged"
+    mv -f "$staged" "$repository_binding_file"
+  fi
+  chmod 600 "$repository_binding_file"
+  load_repository_binding
+  exec {binding_lock_fd}>&-
+}
+
+resolved_run_id=""
+resolve_bound_handle() {
+  local handle="$1" supplied_binding
+  [[ -n "$handle" ]] || fail "operation requires --run"
+  [[ "$handle" =~ $run_handle_pattern ]] \
+    || fail "run handle is malformed"
+  resolved_run_id="${BASH_REMATCH[1]}"
+  supplied_binding="${BASH_REMATCH[2]}"
+  load_repository_binding
+  [[ "$supplied_binding" == "$repository_binding" ]] \
+    || fail "run handle belongs to another repository"
+}
+
+require_run_handle() {
+  resolve_bound_handle "$1"
+  run_id="$resolved_run_id"
+  [[ -f "$runs_root/$run_id.jsonl" ]] \
+    || fail "telemetry sink is missing for run $run_id"
 }
 
 # Aggregation alone can read a schema-1 sink from the location used before
 # linked worktrees adopted common-directory storage. The lookup is deliberately
 # limited to this worktree's own Git directory: it is not discovery, and every
-# writer still passes require_run_id above and therefore targets only runs_root.
+# writer still passes require_run_handle above and therefore targets only runs_root.
 summary_run_file=""
 resolve_summary_run() {
-  local id="$1" legacy_run_file
-  [[ -n "$id" ]] || fail "operation requires --run"
-  [[ "$id" =~ $run_id_pattern ]] || fail "run id is malformed: $id"
-  if [[ -f "$runs_root/$id.jsonl" ]]; then
-    summary_run_file="$runs_root/$id.jsonl"
+  local handle="$1" legacy_run_file
+  [[ -n "$handle" ]] || fail "operation requires --run"
+  if [[ "$handle" =~ $run_handle_pattern ]]; then
+    resolve_bound_handle "$handle"
+    run_id="$resolved_run_id"
+    [[ -f "$runs_root/$run_id.jsonl" ]] \
+      || fail "telemetry sink is missing for run $run_id"
+    summary_run_file="$runs_root/$run_id.jsonl"
     return 0
   fi
-  legacy_run_file="$git_dir/work-on-telemetry/runs/$id.jsonl"
+  [[ "$handle" =~ $run_id_pattern ]] \
+    || fail "run handle is malformed"
+  run_id="$handle"
+  if [[ -f "$runs_root/$run_id.jsonl" ]]; then
+    summary_run_file="$runs_root/$run_id.jsonl"
+    return 0
+  fi
+  legacy_run_file="$git_dir/work-on-telemetry/runs/$run_id.jsonl"
   if [[ "$git_dir" != "$git_common_dir" && -f "$legacy_run_file" ]]; then
     summary_run_file="$legacy_run_file"
     return 0
   fi
-  fail "telemetry sink is missing for run $id"
+  fail "telemetry sink is missing for run $run_id"
 }
 
 # Recording is concurrent: several subagents and validation wrappers may append
@@ -254,6 +318,7 @@ case "$subcommand" in
     [[ "$#" -eq 0 ]] || usage
     create_private_dir "$telemetry_root"
     create_private_dir "$runs_root"
+    ensure_repository_binding
     suffix="$(od -An -tx1 -N4 /dev/urandom 2>/dev/null | tr -d ' \n')"
     [[ "$suffix" =~ ^[0-9a-f]{8}$ ]] \
       || suffix="$(printf '%08x' $(( (RANDOM << 16 | RANDOM) & 0xffffffff )))"
@@ -266,7 +331,7 @@ case "$subcommand" in
       jq -cn --arg head "$head_sha" \
         '{workflow: "work-on"} + (if $head == "" then {} else {head: $head} end)'
     )"
-    printf '%s\n' "$run_id"
+    printf '%s@%s\n' "$run_id" "$repository_binding"
     ;;
 
   launch)
@@ -287,7 +352,7 @@ case "$subcommand" in
         *) usage ;;
       esac
     done
-    require_run_id "$run_id"
+    require_run_handle "$run_id"
     require_enum role "$role" "${roles[@]}"
     require_enum phase "$phase" "${phases[@]}"
     require_round "$round"
@@ -325,7 +390,7 @@ case "$subcommand" in
         *) usage ;;
       esac
     done
-    require_run_id "$run_id"
+    require_run_handle "$run_id"
     require_enum kind "$kind" "${review_kinds[@]}"
     require_enum phase "$phase" "${phases[@]}"
     require_round "$round"
@@ -376,7 +441,7 @@ case "$subcommand" in
         *) usage ;;
       esac
     done
-    require_run_id "$run_id"
+    require_run_handle "$run_id"
     # The identifier is validated before the command runs, so a run cannot
     # record executions the next run has no name for.
     require_command_id "$command_id"
@@ -453,7 +518,7 @@ case "$subcommand" in
         *) usage ;;
       esac
     done
-    require_run_id "$run_id"
+    require_run_handle "$run_id"
     require_enum outcome "$outcome" "${run_outcomes[@]}"
     # A run resolves its outcome exactly once. Checking for an existing
     # `run_finish` and writing this one happen under a single lock, so two

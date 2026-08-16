@@ -39,10 +39,10 @@ Procedure:
 2. Resolve the input above. Done with exactly one in-repo issue.
 3. Check the current worktree status, record the telemetry start time, start
    this run's telemetry sink with this skill's `scripts/run-telemetry.sh start`,
-   and retain the printed run id as the explicit handle supplied to every later
-   telemetry and closeout operation. Fetch the remote default branch and update
-   the current branch. Abort if unrelated changes cannot be avoided or the
-   update is unsafe. Done on a safely updated branch.
+   and retain the printed repository-bound handle for every later telemetry and
+   closeout operation. Fetch the remote default branch and update the current
+   branch. Abort if unrelated changes cannot be avoided or the update is unsafe.
+   Done on a safely updated branch.
 4. Build the trusted snapshot through GitHub's REST comments endpoint
    (`gh issue view` omits association). Done when no untrusted body/link is in
    context, the omitted count is reported, and every contract source has

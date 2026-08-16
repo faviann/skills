@@ -46,8 +46,12 @@ telemetry() {
     "$(dirname "$command_under_test")/run-telemetry.sh" "$@")
 }
 telemetry_dir="$target_checkout/.git/work-on-telemetry"
+run_id_from_handle() {
+  printf '%s\n' "${1%%@*}"
+}
 telemetry_sink() {
-  printf '%s/runs/%s.jsonl\n' "$telemetry_dir" "$1"
+  printf '%s/runs/%s.jsonl\n' "$telemetry_dir" \
+    "$(run_id_from_handle "$1")"
 }
 telemetry_run="$(telemetry start)"
 render_run="$telemetry_run"
@@ -165,7 +169,8 @@ No findings required adjudication.
 
 Run 1: PROVENANCE
 EOF
-awk -v provenance="$provenance" -v telemetry_run="$telemetry_run" \
+awk -v provenance="$provenance" \
+  -v telemetry_run="$(run_id_from_handle "$telemetry_run")" \
   '{ sub(/PROVENANCE/, provenance); sub(/TELEMETRY_RUN/, telemetry_run); print }' \
   "$fixture/expected.md" >"$fixture/expected.with-provenance.md"
 mv "$fixture/expected.with-provenance.md" "$fixture/expected.md"
@@ -173,6 +178,27 @@ mv "$fixture/expected.with-provenance.md" "$fixture/expected.md"
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/actual.md"
 diff -u "$fixture/expected.md" "$fixture/actual.md"
 "$(dirname "$command_under_test")/validate-closeout-body.sh" 164 "$fixture/actual.md"
+
+# The renderer forwards the repository-bound handle to summary. A wrong
+# binding is refused even when its run-id component names a local sink.
+local_render_binding="${render_run#*@}"
+if [[ "${local_render_binding:0:1}" == 0 ]]; then
+  foreign_render_binding="1${local_render_binding:1}"
+else
+  foreign_render_binding="0${local_render_binding:1}"
+fi
+foreign_render_run="$(run_id_from_handle "$render_run")@$foreign_render_binding"
+if (
+  cd "$target_checkout"
+  "$command_under_test" --run "$foreign_render_run" \
+    "$fixture/facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/foreign-binding.out" 2>"$fixture/foreign-binding.err"; then
+  printf 'FAIL[foreign-binding]: renderer accepted another repository binding\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/foreign-binding.out" ]]
+grep -Fq 'run handle belongs to another repository' \
+  "$fixture/foreign-binding.err"
 
 # A closeout rendered inside a still-existing linked worktree can summarize a
 # schema-1 sink left in that worktree's pre-common-directory location. Reading
@@ -253,7 +279,8 @@ grep -Fqx '| Reviews recorded | 2 (readiness=1, full=1, delta=0) |' \
   "$fixture/grown.md"
 grep -Fqx '| Validation executions recorded | 2 (passed=1, failed=1) |' \
   "$fixture/grown.md"
-grep -Fqx "| Telemetry run | $grown_run (schema 1) |" "$fixture/grown.md"
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$grown_run") (schema 1) |" \
+  "$fixture/grown.md"
 
 # No per-launch or per-command event material reaches the body.
 target_head="$(git -C "$target_checkout" rev-parse HEAD)"
@@ -300,7 +327,7 @@ if run_new "$fixture/facts.json" "$fixture/narrative.md" \
   exit 1
 fi
 [[ ! -s "$fixture/no-telemetry.out" ]]
-grep -Fq 'telemetry sink is missing for run' "$fixture/no-telemetry.err"
+grep -Fq 'repository binding is missing' "$fixture/no-telemetry.err"
 
 # A closeout body reports a finished run whose recorded outcome is the body's
 # outcome. Anything else — no outcome, two outcomes, or a different one — is
@@ -322,7 +349,7 @@ expect_run_failure() {
 }
 
 seed_finish() {
-  jq -cn --arg run "$1" --argjson extra "$2" \
+  jq -cn --arg run "$(run_id_from_handle "$1")" --argjson extra "$2" \
     '{schema: 1, run: $run, seq: 99, at: "2026-08-14T00:00:00Z",
       epoch_ms: 1755000000000, type: "run_finish"} + $extra' \
     >>"$(telemetry_sink "$1")"
@@ -335,7 +362,7 @@ jq '.outcome = "Progresses" | .telemetry.final_workflow_outcome = "Progresses"' 
 unfinished_run="$(telemetry start)"
 render_run="$unfinished_run"
 expect_run_failure unfinished \
-  'closeout invalid: the run has not finished; record run-telemetry.sh finish --run ID at the closure gate'
+  'closeout invalid: the run has not finished; record run-telemetry.sh finish --run HANDLE at the closure gate'
 
 # The sink says Progresses while the facts say Closes.
 telemetry finish --run "$render_run" --outcome Progresses
@@ -375,7 +402,8 @@ telemetry launch --run "$render_run" \
   --role implementation --phase implementation --round 1
 telemetry finish --run "$render_run" --outcome Closes
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/matching.md"
-grep -Fqx "| Telemetry run | $matching_run (schema 1) |" "$fixture/matching.md"
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$matching_run") (schema 1) |" \
+  "$fixture/matching.md"
 grep -Fqx '| Final workflow outcome | Closes |' "$fixture/matching.md"
 
 # The rendered rows are the run's final summary, not a snapshot of the moment

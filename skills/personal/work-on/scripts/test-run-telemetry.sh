@@ -10,6 +10,10 @@ readonly command_under_test="$source_script_root/run-telemetry.sh"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 
+run_id_from_handle() {
+  printf '%s\n' "${1%%@*}"
+}
+
 # A run begun in a disposable linked worktree is stored in the repository's
 # common Git directory, so the surviving worktree can still read it after the
 # linked worktree has been removed.
@@ -56,7 +60,7 @@ readonly emit_stderr_marker='printf "SYNTHETIC-%s-MARKER\n" DIAGNOSTIC >&2'
 
 # 1. A run is created, identified, and kept separate from any other run.
 first_run="$(telemetry start)"
-[[ "$first_run" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$ ]]
+[[ "$first_run" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}@[0-9a-f]{32}$ ]]
 telemetry launch --run "$first_run" \
   --role implementation --phase implementation --round 1
 telemetry launch --run "$first_run" \
@@ -80,26 +84,119 @@ second_summary="$(telemetry summary --run "$second_run")"
 [[ "$(jq -r '.subagent_launches.total' <<<"$second_summary")" -eq 1 ]]
 [[ "$(jq -r '.subagent_launches.by_role."review-spec"' <<<"$first_summary")" -eq 0 ]]
 [[ "$(jq -r '.subagent_launches.by_role.implementation' <<<"$second_summary")" -eq 0 ]]
-[[ "$(jq -r '.run' <<<"$first_summary")" == "$first_run" ]]
+[[ "$(jq -r '.run' <<<"$first_summary")" == \
+  "$(run_id_from_handle "$first_run")" ]]
 
 # Two live linked worktrees share one common Git directory but retain distinct
-# run sinks even when their events are interleaved.
+# run sinks while their public writers execute concurrently. Every writer first
+# announces readiness, then waits for one shared release, so both worktrees are
+# active before any telemetry command begins.
 linked_one="$fixture/linked-one"
 linked_two="$fixture/linked-two"
 git -C "$target" worktree add -q -b linked-one "$linked_one"
 git -C "$target" worktree add -q -b linked-two "$linked_two"
 linked_one_run="$(cd "$linked_one" && "$command_under_test" start)"
 linked_two_run="$(cd "$linked_two" && "$command_under_test" start)"
-(cd "$linked_one" && "$command_under_test" launch --run "$linked_one_run" \
-  --role implementation --phase implementation --round 1)
-(cd "$linked_two" && "$command_under_test" launch --run "$linked_two_run" \
-  --role review-spec --phase gate --round 1)
-(cd "$linked_one" && "$command_under_test" launch --run "$linked_one_run" \
-  --role implementation --phase implementation --round 2)
-[[ "$(cd "$linked_two" && "$command_under_test" summary \
-  --run "$linked_one_run" | jq -r '.subagent_launches.total')" -eq 2 ]]
-[[ "$(cd "$linked_one" && "$command_under_test" summary \
-  --run "$linked_two_run" | jq -r '.subagent_launches.total')" -eq 1 ]]
+[[ "${linked_one_run#*@}" == "${linked_two_run#*@}" ]]
+linked_sync="$fixture/linked-sync"
+mkdir "$linked_sync"
+readonly linked_writers_per_run=8
+linked_writer_pids=()
+for ((writer = 1; writer <= linked_writers_per_run; writer++)); do
+  (
+    touch "$linked_sync/one-$writer.ready"
+    while [[ ! -e "$linked_sync/release" ]]; do sleep 0.01; done
+    cd "$linked_one"
+    "$command_under_test" launch --run "$linked_one_run" \
+      --role implementation --phase implementation --round "$writer"
+  ) &
+  linked_writer_pids+=("$!")
+  (
+    touch "$linked_sync/two-$writer.ready"
+    while [[ ! -e "$linked_sync/release" ]]; do sleep 0.01; done
+    cd "$linked_two"
+    "$command_under_test" launch --run "$linked_two_run" \
+      --role review-spec --phase gate --round "$writer"
+  ) &
+  linked_writer_pids+=("$!")
+done
+for ((attempt = 0; attempt < 500; attempt++)); do
+  ready_count="$(find "$linked_sync" -name '*.ready' -type f | wc -l)"
+  [[ "$ready_count" -eq $(( linked_writers_per_run * 2 )) ]] && break
+  sleep 0.01
+done
+[[ "$ready_count" -eq $(( linked_writers_per_run * 2 )) ]]
+touch "$linked_sync/release"
+for writer_pid in "${linked_writer_pids[@]}"; do
+  wait "$writer_pid"
+done
+
+# Long-lived public exec writers prove the two worktrees' telemetry operations
+# overlap, rather than merely being scheduled from background shells together.
+linked_overlap_release="$linked_sync/overlap-release"
+linked_overlap_pids=()
+for linked_side in one two; do
+  if [[ "$linked_side" == one ]]; then
+    linked_worktree="$linked_one"
+    linked_run="$linked_one_run"
+  else
+    linked_worktree="$linked_two"
+    linked_run="$linked_two_run"
+  fi
+  (
+    cd "$linked_worktree"
+    "$command_under_test" exec --run "$linked_run" \
+      --command-id linked-overlap --phase gate --round 1 -- \
+      bash -c 'touch "$1"; while [[ ! -e "$2" ]]; do sleep 0.01; done' \
+      _ "$linked_sync/$linked_side.entered" "$linked_overlap_release"
+  ) &
+  linked_overlap_pids+=("$!")
+done
+for ((attempt = 0; attempt < 500; attempt++)); do
+  [[ -e "$linked_sync/one.entered" && -e "$linked_sync/two.entered" ]] && break
+  sleep 0.01
+done
+[[ -e "$linked_sync/one.entered" && -e "$linked_sync/two.entered" ]]
+touch "$linked_overlap_release"
+for writer_pid in "${linked_overlap_pids[@]}"; do
+  wait "$writer_pid"
+done
+
+linked_one_id="$(run_id_from_handle "$linked_one_run")"
+linked_two_id="$(run_id_from_handle "$linked_two_run")"
+linked_one_sink="$sink_root/runs/$linked_one_id.jsonl"
+linked_two_sink="$sink_root/runs/$linked_two_id.jsonl"
+linked_one_summary="$(cd "$linked_two" && "$command_under_test" summary \
+  --run "$linked_one_run")"
+linked_two_summary="$(cd "$linked_one" && "$command_under_test" summary \
+  --run "$linked_two_run")"
+[[ "$(jq -r '.subagent_launches.total' <<<"$linked_one_summary")" \
+  -eq "$linked_writers_per_run" ]]
+[[ "$(jq -r '.subagent_launches.total' <<<"$linked_two_summary")" \
+  -eq "$linked_writers_per_run" ]]
+[[ "$(jq -r '.subagent_launches.by_role.implementation' \
+  <<<"$linked_one_summary")" -eq "$linked_writers_per_run" ]]
+[[ "$(jq -r '.subagent_launches.by_role."review-spec"' \
+  <<<"$linked_one_summary")" -eq 0 ]]
+[[ "$(jq -r '.subagent_launches.by_role."review-spec"' \
+  <<<"$linked_two_summary")" -eq "$linked_writers_per_run" ]]
+[[ "$(jq -r '.subagent_launches.by_role.implementation' \
+  <<<"$linked_two_summary")" -eq 0 ]]
+[[ "$(jq -r '.validations.total' <<<"$linked_one_summary")" -eq 1 ]]
+[[ "$(jq -r '.validations.passed' <<<"$linked_one_summary")" -eq 1 ]]
+[[ "$(jq -r '.validations.total' <<<"$linked_two_summary")" -eq 1 ]]
+[[ "$(jq -r '.validations.passed' <<<"$linked_two_summary")" -eq 1 ]]
+for linked_sink_and_id in \
+    "$linked_one_sink:$linked_one_id" "$linked_two_sink:$linked_two_id"; do
+  linked_sink="${linked_sink_and_id%%:*}"
+  linked_id="${linked_sink_and_id#*:}"
+  [[ "$(wc -l <"$linked_sink")" -eq $(( linked_writers_per_run + 3 )) ]]
+  jq -e . "$linked_sink" >/dev/null
+  jq -s -e --arg run "$linked_id" \
+    'all(.[]; .run == $run)' "$linked_sink" >/dev/null
+  [[ "$(jq -r '.seq' "$linked_sink" | sort -u | wc -l)" \
+    -eq $(( linked_writers_per_run + 3 )) ]]
+done
 
 # Before durable common-directory storage, a linked worktree's recorder put its
 # schema-1 sink under that worktree's own absolute Git directory. While that
@@ -128,7 +225,7 @@ if (cd "$linked_one" && "$command_under_test" launch \
   exit 1
 fi
 [[ ! -s "$fixture/legacy-linked-write.out" ]]
-grep -Fq 'telemetry sink is missing for run' \
+grep -Fq 'run handle is malformed' \
   "$fixture/legacy-linked-write.err"
 [[ "$(sha256sum "$legacy_linked_sink")" == "$legacy_linked_checksum" ]]
 cmp "$fixture/legacy-linked-before.jsonl" "$legacy_linked_sink"
@@ -153,14 +250,17 @@ assert_private() {
   done
 }
 assert_private "$sink_root" "$sink_root/runs" \
-  "$sink_root/runs/$first_run.jsonl" "$sink_root/runs/$second_run.jsonl"
+  "$sink_root/repository-binding" "$sink_root/repository-binding.lock" \
+  "$sink_root/runs/$(run_id_from_handle "$first_run").jsonl" \
+  "$sink_root/runs/$(run_id_from_handle "$second_run").jsonl"
 
 # A directory an earlier version left readable is tightened rather than reused
 # as it is.
 chmod 755 "$sink_root" "$sink_root/runs"
 loose_run="$(telemetry start)"
 assert_private "$sink_root" "$sink_root/runs" \
-  "$sink_root/runs/$loose_run.jsonl"
+  "$sink_root/repository-binding" "$sink_root/repository-binding.lock" \
+  "$sink_root/runs/$(run_id_from_handle "$loose_run").jsonl"
 
 # 2. A launch retains its role, phase, and round.
 work_run="$(telemetry start)"
@@ -171,7 +271,12 @@ telemetry launch --run "$work_run" \
 telemetry launch --run "$work_run" --role review-spec --phase gate --round 2
 telemetry launch --run "$work_run" \
   --role closure-sweep --phase closeout --round 2
-sink="$sink_root/runs/$work_run.jsonl"
+sink="$sink_root/runs/$(run_id_from_handle "$work_run").jsonl"
+grep -Fqx "${work_run#*@}" "$sink_root/repository-binding"
+if grep -Fq "${work_run#*@}" "$sink"; then
+  printf 'FAIL[event-schema]: repository binding reached a schema-1 event\n' >&2
+  exit 1
+fi
 launch_rows="$(jq -c 'select(.type == "subagent_launch")
   | [.role, .phase, .round]' "$sink")"
 grep -Fqx '["implementation","implementation",1]' <<<"$launch_rows"
@@ -199,7 +304,8 @@ refuse bad-outcome finish --run "$work_run" --outcome merged
 refuse missing-run launch --role implementation --phase gate --round 1
 refuse malformed-run launch --run ../current-run \
   --role implementation --phase gate --round 1
-refuse unknown-run launch --run 20260101T000000Z-00000000 \
+refuse unknown-run launch \
+  --run "20260101T000000Z-00000000@${first_run#*@}" \
   --role implementation --phase gate --round 1
 
 foreign_repo="$fixture/foreign"
@@ -212,6 +318,85 @@ git -C "$foreign_repo" commit -qm 'first'
 foreign_run="$(cd "$foreign_repo" && "$command_under_test" start)"
 refuse foreign-run launch --run "$foreign_run" \
   --role implementation --phase gate --round 1
+
+# A run handle is repository-bound even when independent repositories mint the
+# same run-id component. Fixing the public clock and random boundary reproduces
+# the collision deterministically; repository B must not gain authority over
+# repository A's handle merely because B has a same-named sink.
+collision_bin="$fixture/collision-bin"
+mkdir "$collision_bin"
+cat >"$collision_bin/date" <<'EOF'
+#!/usr/bin/env bash
+case "${*: -1}" in
+  +%Y%m%dT%H%M%SZ) printf '20260816T180000Z\n' ;;
+  +%Y-%m-%dT%H:%M:%SZ) printf '2026-08-16T18:00:00Z\n' ;;
+  +%s) printf '1786903200\n' ;;
+  *) exit 1 ;;
+esac
+EOF
+cat >"$collision_bin/od" <<'EOF'
+#!/usr/bin/env bash
+if [[ " $* " == *' -N4 '* ]]; then
+  printf ' aa bb cc dd\n'
+else
+  /usr/bin/od "$@"
+fi
+EOF
+chmod +x "$collision_bin/date" "$collision_bin/od"
+
+collision_a="$fixture/collision-a"
+collision_b="$fixture/collision-b"
+for collision_repo in "$collision_a" "$collision_b"; do
+  git init -q -b main "$collision_repo"
+  git -C "$collision_repo" config user.name 'Telemetry Test'
+  git -C "$collision_repo" config user.email telemetry@example.invalid
+  printf 'collision\n' >"$collision_repo/file.txt"
+  git -C "$collision_repo" add .
+  git -C "$collision_repo" commit -qm 'first'
+done
+collision_a_run="$(cd "$collision_a" && \
+  PATH="$collision_bin:$PATH" "$command_under_test" start)"
+collision_b_run="$(cd "$collision_b" && \
+  PATH="$collision_bin:$PATH" "$command_under_test" start)"
+[[ "$(run_id_from_handle "$collision_a_run")" == \
+  20260816T180000Z-aabbccdd ]]
+[[ "$(run_id_from_handle "$collision_b_run")" == \
+  "$(run_id_from_handle "$collision_a_run")" ]]
+[[ "$collision_b_run" != "$collision_a_run" ]]
+(cd "$collision_a" && "$command_under_test" launch \
+  --run "$collision_a_run" \
+  --role implementation --phase implementation --round 1)
+(cd "$collision_b" && "$command_under_test" launch \
+  --run "$collision_b_run" \
+  --role review-spec --phase gate --round 1)
+
+refuse_collision() {
+  local label="$1"
+  shift
+  if (cd "$collision_b" && "$command_under_test" "$@") \
+      >"$fixture/collision-$label.out" \
+      2>"$fixture/collision-$label.err"; then
+    printf 'FAIL[repository-binding-%s]: repository B accepted repository A handle\n' \
+      "$label" >&2
+    exit 1
+  fi
+  [[ ! -s "$fixture/collision-$label.out" ]]
+  grep -Fq 'run handle belongs to another repository' \
+    "$fixture/collision-$label.err"
+}
+refuse_collision launch launch --run "$collision_a_run" \
+  --role implementation --phase implementation --round 2
+refuse_collision review review --run "$collision_a_run" \
+  --kind full --phase gate --round 2 --base HEAD --head HEAD
+refuse_collision exec exec --run "$collision_a_run" \
+  --command-id foreign-check --phase gate --round 2 -- true
+refuse_collision finish finish --run "$collision_a_run" --outcome Closes
+refuse_collision summary summary --run "$collision_a_run"
+
+[[ "$(cd "$collision_a" && "$command_under_test" summary \
+  --run "$collision_a_run" | jq -r '.subagent_launches.total')" -eq 1 ]]
+[[ "$(cd "$collision_b" && "$command_under_test" summary \
+  --run "$collision_b_run" | jq -r '.subagent_launches.total')" -eq 1 ]]
 
 # 3. A review retains kind, compared SHAs, and input byte count.
 base_sha="$(git -C "$target" rev-parse HEAD)"
@@ -429,7 +614,8 @@ telemetry launch --run "$token_free_run" \
   --role implementation --phase implementation --round 1
 token_free_summary="$(telemetry summary --run "$token_free_run")"
 [[ "$(jq -r '.tokens.coverage' <<<"$token_free_summary")" == none ]]
-[[ "$(jq -r '.run' <<<"$token_free_summary")" == "$token_free_run" ]]
+[[ "$(jq -r '.run' <<<"$token_free_summary")" == \
+  "$(run_id_from_handle "$token_free_run")" ]]
 
 # 7/8. Secrets, command output, and repository content stay out of the sink,
 # while the command itself is unaffected by being wrapped.
@@ -494,7 +680,7 @@ done
 
 # Nothing of the command line reaches the sink: not an argument, not a flag, not
 # a path, and not the program either. Only the supplied identifier is stored.
-secret_sink="$sink_root/runs/$token_free_run.jsonl"
+secret_sink="$sink_root/runs/$(run_id_from_handle "$token_free_run").jsonl"
 for fragment in Authorization Bearer --header --bearer \
     AWS_SECRET_ACCESS_KEY GH_TOKEN /home/example apiKey \
     first.txt second.txt third.txt argv-echo.sh \
@@ -585,7 +771,7 @@ done
 # 10. Concurrent writers do not lose, fuse, or duplicate events. Several
 # subagents and validation wrappers recording at once is the ordinary case.
 concurrent_run="$(telemetry start)"
-concurrent_sink="$sink_root/runs/$concurrent_run.jsonl"
+concurrent_sink="$sink_root/runs/$(run_id_from_handle "$concurrent_run").jsonl"
 readonly writers=12
 for ((writer = 0; writer < writers; writer++)); do
   telemetry launch --run "$concurrent_run" \
@@ -628,8 +814,9 @@ assert_private "$concurrent_sink"
 # append closes it off rather than fusing with it, so one torn line costs one
 # malformed line and nothing else.
 torn_run="$(telemetry start)"
-torn_sink="$sink_root/runs/$torn_run.jsonl"
-printf '{"schema":1,"run":"%s","seq":2,"type":"subagent_lau' "$torn_run" \
+torn_run_id="$(run_id_from_handle "$torn_run")"
+torn_sink="$sink_root/runs/$torn_run_id.jsonl"
+printf '{"schema":1,"run":"%s","seq":2,"type":"subagent_lau' "$torn_run_id" \
   >>"$torn_sink"
 telemetry launch --run "$torn_run" --role other --phase closeout --round 1
 torn_summary="$(telemetry summary --run "$torn_run")"
@@ -639,7 +826,7 @@ torn_summary="$(telemetry summary --run "$torn_run")"
 # The recovered event is a whole line of its own, and the torn one still ends
 # where it was cut.
 [[ "$(wc -l <"$torn_sink")" -eq 3 ]]
-grep -Fqx '{"schema":1,"run":"'"$torn_run"'","seq":2,"type":"subagent_lau' \
+grep -Fqx '{"schema":1,"run":"'"$torn_run_id"'","seq":2,"type":"subagent_lau' \
   "$torn_sink"
 [[ "$(jq -R -r 'fromjson? // empty
   | select(.type == "subagent_launch") | .seq' "$torn_sink")" -eq 3 ]]
@@ -648,14 +835,14 @@ grep -Fqx '{"schema":1,"run":"'"$torn_run"'","seq":2,"type":"subagent_lau' \
 bare="$fixture/bare"
 git init -q -b main "$bare"
 if (cd "$bare" && "$command_under_test" launch \
-    --run 20260101T000000Z-00000000 \
+    --run 20260101T000000Z-00000000@00000000000000000000000000000000 \
     --role implementation --phase gate --round 1) \
     >"$fixture/bare.out" 2>"$fixture/bare.err"; then
   printf 'FAIL[bare]: telemetry recorded without a started run\n' >&2
   exit 1
 fi
 [[ ! -s "$fixture/bare.out" ]]
-grep -Fq 'telemetry sink is missing for run' "$fixture/bare.err"
+grep -Fq 'repository binding is missing' "$fixture/bare.err"
 
 # Telemetry requires a Git-backed target repository.
 if (cd "$fixture" && "$command_under_test" start) \

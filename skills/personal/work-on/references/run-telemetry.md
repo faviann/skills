@@ -11,6 +11,7 @@ One run is one append-only JSON-lines file:
 
 ```text
 $(git rev-parse --path-format=absolute --git-common-dir)/work-on-telemetry/
+  repository-binding       # opaque binding shared by linked worktrees
   runs/<run-id>.jsonl      # that run's events, one JSON object per line
 ```
 
@@ -18,7 +19,9 @@ It sits in the target repository's absolute Git common directory, so it is
 untracked by construction, survives a branch switch and linked-worktree
 removal, and never reaches a published artifact. A run id is
 `<UTC timestamp>-<8 hex>`; starting a run mints a new id and a new file, so two
-runs never share events.
+runs never share events. The owner-only repository binding is outside the event
+schema; `start` combines it with the run id as `<run-id>@<binding>`, so a handle
+minted by another repository cannot select a same-named local sink.
 
 Every line carries `schema`, `run`, `seq`, `at`, `epoch_ms`, and `type`. The
 current schema version is **1**; the rendered pull-request body names it.
@@ -28,8 +31,9 @@ sequence numbers, execution ids, the single final outcome, and the append itself
 are allocated under an exclusive lock on the run's file. Two writers can never
 be handed the same number, and no append can land inside another.
 
-The directory and every sink are created for their owner only — `0700` and
-`0600`. A run's record of a workstation's work is not group- or world-readable.
+The directory, binding, lock, and every sink are created for their owner only —
+`0700` and `0600`. A run's record of a workstation's work is not group- or
+world-readable.
 
 ## Recording a run
 
@@ -38,17 +42,18 @@ buffered, so an abandoned run leaves exactly what it had recorded.
 
 | When | Command |
 |---|---|
-| Once, when the run begins | `RUN_ID="$(run-telemetry.sh start)"` |
-| Every top-level subagent launch | `run-telemetry.sh launch --run "$RUN_ID" --role R --phase P --round N [--tokens-in N --tokens-out N]` |
-| Every review handed to a subagent | `run-telemetry.sh review --run "$RUN_ID" --kind K --phase P --round N --base REF (--head REF \| --worktree)` |
-| Every top-level validation command | `run-telemetry.sh exec --run "$RUN_ID" --command-id ID --phase P --round N -- <command>` |
-| Once, when the run's outcome resolves | `run-telemetry.sh finish --run "$RUN_ID" --outcome (Closes\|Progresses\|aborted)` |
+| Once, when the run begins | `RUN_HANDLE="$(run-telemetry.sh start)"` |
+| Every top-level subagent launch | `run-telemetry.sh launch --run "$RUN_HANDLE" --role R --phase P --round N [--tokens-in N --tokens-out N]` |
+| Every review handed to a subagent | `run-telemetry.sh review --run "$RUN_HANDLE" --kind K --phase P --round N --base REF (--head REF \| --worktree)` |
+| Every top-level validation command | `run-telemetry.sh exec --run "$RUN_HANDLE" --command-id ID --phase P --round N -- <command>` |
+| Once, when the run's outcome resolves | `run-telemetry.sh finish --run "$RUN_HANDLE" --outcome (Closes\|Progresses\|aborted)` |
 
-Keep the printed run id as this operation's explicit run handle. Every
-recording, summary, render, and closeout command requires it; none consults a
-mutable current-run selection. A malformed id or one with neither a sink in
-this repository's common directory nor a legacy read-only schema-1 sink in the
-current linked worktree's Git directory is refused.
+Keep the printed handle for this operation. Every recording, summary, render,
+and closeout command requires it; none consults a mutable current-run selection.
+A malformed handle, a handle bound to another repository, or one whose sink is
+missing from this repository's common directory is refused. A plain schema-1 id
+remains accepted only for read-only summary and renderer access to forensic
+sinks in the common directory or the current linked worktree's legacy location.
 
 - `--role` is one of `implementation`, `readiness`, `review-standards`,
   `review-spec`, `closure-sweep`, `other`.
@@ -151,9 +156,9 @@ its stdout, stderr, and exit status pass straight through.
 
 ## Bounded closeout summaries
 
-`run-telemetry.sh summary --run "$RUN_ID"` aggregates one run's sink into a
+`run-telemetry.sh summary --run "$RUN_HANDLE"` aggregates one run's sink into a
 deterministic JSON document: the same sink always produces the same summary.
-`render-closeout.sh --run "$RUN_ID" ...` calls it and renders five bounded rows
+`render-closeout.sh --run "$RUN_HANDLE" ...` calls it and renders five bounded rows
 into the mechanically owned
 `## Workflow telemetry` section — telemetry run and schema, launches with a
 by-role breakdown, reviews by kind, validation executions with outcomes, and
