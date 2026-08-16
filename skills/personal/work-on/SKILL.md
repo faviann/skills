@@ -1,6 +1,7 @@
 ---
 name: work-on
-description: Work a GitHub issue through repository workflow and closeout. Use when the user asks to implement an issue or an AFK worker receives a selected issue.
+description: Work a GitHub issue through implementation, independent review, and closeout.
+disable-model-invocation: true
 ---
 
 Inputs:

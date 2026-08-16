@@ -39,8 +39,8 @@ assert_explicit_only() {
 assert_implicit personal/select-issue
 echo "ok - selector skill is available to noninteractive Codex"
 
-assert_implicit personal/work-on
-echo "ok - worker skill is available to noninteractive Codex"
+assert_explicit_only personal/work-on
+echo "ok - worker skill remains explicit-only"
 
 assert_implicit engineering/tdd
 if grep -Eq '(^|[^[:alnum:]])[$/]implement([^[:alnum:]]|$)' \
