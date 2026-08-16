@@ -46,20 +46,27 @@ telemetry() {
     "$(dirname "$command_under_test")/run-telemetry.sh" "$@")
 }
 telemetry_dir="$target_checkout/.git/work-on-telemetry"
+run_id_from_handle() {
+  printf '%s\n' "${1%%@*}"
+}
 telemetry_sink() {
-  printf '%s/runs/%s.jsonl\n' "$telemetry_dir" "$1"
+  printf '%s/runs/%s.jsonl\n' "$telemetry_dir" \
+    "$(run_id_from_handle "$1")"
 }
 telemetry_run="$(telemetry start)"
-telemetry launch --role implementation --phase implementation --round 1
-telemetry launch --role review-standards --phase gate --round 1
-telemetry review --kind full --phase gate --round 1 \
+render_run="$telemetry_run"
+telemetry launch --run "$render_run" \
+  --role implementation --phase implementation --round 1
+telemetry launch --run "$render_run" \
+  --role review-standards --phase gate --round 1
+telemetry review --run "$render_run" --kind full --phase gate --round 1 \
   --base HEAD --head HEAD
-telemetry finish --outcome Closes
+telemetry finish --run "$render_run" --outcome Closes
 
 run_new() {
   (
     cd "$target_checkout"
-    "$command_under_test" "$@" --new-pr
+    "$command_under_test" --run "$render_run" "$@" --new-pr
   )
 }
 
@@ -162,7 +169,8 @@ No findings required adjudication.
 
 Run 1: PROVENANCE
 EOF
-awk -v provenance="$provenance" -v telemetry_run="$telemetry_run" \
+awk -v provenance="$provenance" \
+  -v telemetry_run="$(run_id_from_handle "$telemetry_run")" \
   '{ sub(/PROVENANCE/, provenance); sub(/TELEMETRY_RUN/, telemetry_run); print }' \
   "$fixture/expected.md" >"$fixture/expected.with-provenance.md"
 mv "$fixture/expected.with-provenance.md" "$fixture/expected.md"
@@ -170,6 +178,85 @@ mv "$fixture/expected.with-provenance.md" "$fixture/expected.md"
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/actual.md"
 diff -u "$fixture/expected.md" "$fixture/actual.md"
 "$(dirname "$command_under_test")/validate-closeout-body.sh" 164 "$fixture/actual.md"
+
+# The renderer forwards the repository-bound handle to summary. A wrong
+# binding is refused even when its run-id component names a local sink.
+local_render_binding="${render_run#*@}"
+if [[ "${local_render_binding:0:1}" == 0 ]]; then
+  foreign_render_binding="1${local_render_binding:1}"
+else
+  foreign_render_binding="0${local_render_binding:1}"
+fi
+foreign_render_run="$(run_id_from_handle "$render_run")@$foreign_render_binding"
+if (
+  cd "$target_checkout"
+  "$command_under_test" --run "$foreign_render_run" \
+    "$fixture/facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/foreign-binding.out" 2>"$fixture/foreign-binding.err"; then
+  printf 'FAIL[foreign-binding]: renderer accepted another repository binding\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/foreign-binding.out" ]]
+grep -Fq 'run handle belongs to another repository' \
+  "$fixture/foreign-binding.err"
+
+# A closeout rendered inside a still-existing linked worktree can independently
+# select two schema-1 sinks with the same textual run ID. The plain ID selects
+# that worktree's legacy source; the repository-bound handle selects the common-
+# directory canonical source. Neither forensic read may change either file.
+legacy_render_worktree="$fixture/legacy-render-worktree"
+git -C "$target_checkout" worktree add -q -b legacy-render \
+  "$legacy_render_worktree"
+(
+  cd "$legacy_render_worktree"
+  "$(dirname "$command_under_test")/workflow-provenance.sh" capture
+)
+legacy_render_run=20000101T000000Z-00000003
+legacy_render_git_dir="$(git -C "$legacy_render_worktree" \
+  rev-parse --absolute-git-dir)"
+legacy_render_sink="$legacy_render_git_dir/work-on-telemetry/runs/$legacy_render_run.jsonl"
+canonical_render_sink="$telemetry_dir/runs/$legacy_render_run.jsonl"
+canonical_render_handle="$legacy_render_run@${render_run#*@}"
+mkdir -p "$(dirname "$legacy_render_sink")"
+printf '%s\n' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":1,"at":"2000-01-01T00:00:00Z","epoch_ms":946684800000,"type":"run_start","workflow":"work-on"}' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":2,"at":"2000-01-01T00:00:01Z","epoch_ms":946684801000,"type":"subagent_launch","role":"implementation","phase":"implementation","round":1}' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":3,"at":"2000-01-01T00:00:02Z","epoch_ms":946684802000,"type":"run_finish","outcome":"Closes"}' \
+  >"$legacy_render_sink"
+printf '%s\n' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":1,"at":"2000-01-01T00:00:00Z","epoch_ms":946684800000,"type":"run_start","workflow":"work-on"}' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":2,"at":"2000-01-01T00:00:01Z","epoch_ms":946684801000,"type":"subagent_launch","role":"review-spec","phase":"gate","round":1}' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":3,"at":"2000-01-01T00:00:02Z","epoch_ms":946684802000,"type":"subagent_launch","role":"review-spec","phase":"gate","round":2}' \
+  '{"schema":1,"run":"20000101T000000Z-00000003","seq":4,"at":"2000-01-01T00:00:03Z","epoch_ms":946684803000,"type":"run_finish","outcome":"Closes"}' \
+  >"$canonical_render_sink"
+chmod 600 "$legacy_render_sink" "$canonical_render_sink"
+cp "$legacy_render_sink" "$fixture/legacy-render-before.jsonl"
+cp "$canonical_render_sink" "$fixture/canonical-render-before.jsonl"
+legacy_render_checksum="$(sha256sum "$legacy_render_sink")"
+canonical_render_checksum="$(sha256sum "$canonical_render_sink")"
+(
+  cd "$legacy_render_worktree"
+  "$command_under_test" --run "$legacy_render_run" \
+    "$fixture/facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/legacy-render.md"
+grep -Fqx "| Telemetry run | $legacy_render_run (schema 1) |" \
+  "$fixture/legacy-render.md"
+grep -Fqx '| Subagent launches | 1 (implementation=1) |' \
+  "$fixture/legacy-render.md"
+(
+  cd "$legacy_render_worktree"
+  "$command_under_test" --run "$canonical_render_handle" \
+    "$fixture/facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/canonical-render.md"
+grep -Fqx "| Telemetry run | $legacy_render_run (schema 1) |" \
+  "$fixture/canonical-render.md"
+grep -Fqx '| Subagent launches | 2 (review-spec=2) |' \
+  "$fixture/canonical-render.md"
+[[ "$(sha256sum "$legacy_render_sink")" == "$legacy_render_checksum" ]]
+[[ "$(sha256sum "$canonical_render_sink")" == "$canonical_render_checksum" ]]
+cmp "$fixture/legacy-render-before.jsonl" "$legacy_render_sink"
+cmp "$fixture/canonical-render-before.jsonl" "$canonical_render_sink"
+git -C "$target_checkout" worktree remove "$legacy_render_worktree"
 
 # stdin is the other documented input mode.
 run_new - "$fixture/narrative.md" <"$fixture/facts.json" >"$fixture/stdin.md"
@@ -188,17 +275,25 @@ telemetry_section() {
 [[ "$(telemetry_section "$fixture/actual.md" | wc -l)" -eq 18 ]]
 
 grown_run="$(telemetry start)"
-telemetry launch --role implementation --phase implementation --round 1
-telemetry launch --role review-standards --phase gate --round 1
-telemetry launch --role review-spec --phase gate --round 1
-telemetry launch --role closure-sweep --phase closeout --round 1
-telemetry review --kind full --phase gate --round 1 --base HEAD --head HEAD
-telemetry review --kind readiness --phase checkpoint --round 1 \
+render_run="$grown_run"
+telemetry launch --run "$render_run" \
+  --role implementation --phase implementation --round 1
+telemetry launch --run "$render_run" \
+  --role review-standards --phase gate --round 1
+telemetry launch --run "$render_run" --role review-spec --phase gate --round 1
+telemetry launch --run "$render_run" \
+  --role closure-sweep --phase closeout --round 1
+telemetry review --run "$render_run" \
+  --kind full --phase gate --round 1 --base HEAD --head HEAD
+telemetry review --run "$render_run" \
+  --kind readiness --phase checkpoint --round 1 \
   --base HEAD --worktree
-telemetry exec --command-id passing-check --phase closeout --round 1 -- true
-telemetry exec --command-id failing-check --phase closeout --round 1 -- false \
+telemetry exec --run "$render_run" \
+  --command-id passing-check --phase closeout --round 1 -- true
+telemetry exec --run "$render_run" \
+  --command-id failing-check --phase closeout --round 1 -- false \
   || true
-telemetry finish --outcome Closes
+telemetry finish --run "$render_run" --outcome Closes
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/grown.md"
 [[ "$(telemetry_section "$fixture/grown.md" | wc -l)" -eq 18 ]]
 grep -Fqx '| Subagent launches | 4 (implementation=1, review-standards=1, review-spec=1, closure-sweep=1) |' \
@@ -207,7 +302,8 @@ grep -Fqx '| Reviews recorded | 2 (readiness=1, full=1, delta=0) |' \
   "$fixture/grown.md"
 grep -Fqx '| Validation executions recorded | 2 (passed=1, failed=1) |' \
   "$fixture/grown.md"
-grep -Fqx "| Telemetry run | $grown_run (schema 1) |" "$fixture/grown.md"
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$grown_run") (schema 1) |" \
+  "$fixture/grown.md"
 
 # No per-launch or per-command event material reaches the body.
 target_head="$(git -C "$target_checkout" rev-parse HEAD)"
@@ -254,7 +350,7 @@ if run_new "$fixture/facts.json" "$fixture/narrative.md" \
   exit 1
 fi
 [[ ! -s "$fixture/no-telemetry.out" ]]
-grep -Fq 'no active telemetry run' "$fixture/no-telemetry.err"
+grep -Fq 'repository binding is missing' "$fixture/no-telemetry.err"
 
 # A closeout body reports a finished run whose recorded outcome is the body's
 # outcome. Anything else — no outcome, two outcomes, or a different one — is
@@ -276,7 +372,7 @@ expect_run_failure() {
 }
 
 seed_finish() {
-  jq -cn --arg run "$1" --argjson extra "$2" \
+  jq -cn --arg run "$(run_id_from_handle "$1")" --argjson extra "$2" \
     '{schema: 1, run: $run, seq: 99, at: "2026-08-14T00:00:00Z",
       epoch_ms: 1755000000000, type: "run_finish"} + $extra' \
     >>"$(telemetry_sink "$1")"
@@ -287,59 +383,65 @@ jq '.outcome = "Progresses" | .telemetry.final_workflow_outcome = "Progresses"' 
 
 # A run that never finished has nothing to report.
 unfinished_run="$(telemetry start)"
+render_run="$unfinished_run"
 expect_run_failure unfinished \
-  'closeout invalid: the run has not finished; record run-telemetry.sh finish at the closure gate'
+  'closeout invalid: the run has not finished; record run-telemetry.sh finish --run HANDLE at the closure gate'
 
 # The sink says Progresses while the facts say Closes.
-telemetry finish --outcome Progresses
+telemetry finish --run "$render_run" --outcome Progresses
 expect_run_failure sink-progresses \
   'closeout invalid: outcome Closes contradicts recorded run outcome Progresses'
 
 # The sink says Closes while the facts say Progresses.
-telemetry start >/dev/null
-telemetry finish --outcome Closes
+render_run="$(telemetry start)"
+telemetry finish --run "$render_run" --outcome Closes
 expect_run_failure sink-closes \
   'closeout invalid: outcome Progresses contradicts recorded run outcome Closes' \
   "$fixture/progresses-facts.json"
 
 # Two recorded outcomes are not an outcome.
-duplicate_run="$(telemetry run-id)"
+duplicate_run="$render_run"
 seed_finish "$duplicate_run" '{"outcome": "Closes"}'
 expect_run_failure duplicate-finish \
   'closeout invalid: the run recorded 2 final outcomes; exactly one is allowed'
 
 # A finish record with no outcome in it leaves the run without one.
-telemetry start >/dev/null
-seed_finish "$(telemetry run-id)" '{}'
+render_run="$(telemetry start)"
+seed_finish "$render_run" '{}'
 expect_run_failure outcomeless-finish \
   'closeout invalid: the run recorded no final outcome'
 
 # A finish record carrying something outside the outcome enum contradicts the
 # body rather than being read as agreement.
-telemetry start >/dev/null
-seed_finish "$(telemetry run-id)" '{"outcome": "merged"}'
+render_run="$(telemetry start)"
+seed_finish "$render_run" '{"outcome": "merged"}'
 expect_run_failure unrecognized-finish \
   'closeout invalid: outcome Closes contradicts recorded run outcome merged'
 
 # A finished run whose recorded outcome matches renders.
 matching_run="$(telemetry start)"
-telemetry launch --role implementation --phase implementation --round 1
-telemetry finish --outcome Closes
+render_run="$matching_run"
+telemetry launch --run "$render_run" \
+  --role implementation --phase implementation --round 1
+telemetry finish --run "$render_run" --outcome Closes
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/matching.md"
-grep -Fqx "| Telemetry run | $matching_run (schema 1) |" "$fixture/matching.md"
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$matching_run") (schema 1) |" \
+  "$fixture/matching.md"
 grep -Fqx '| Final workflow outcome | Closes |' "$fixture/matching.md"
 
 # The rendered rows are the run's final summary, not a snapshot of the moment
 # the body was rendered: work recorded after the gate cannot change a body the
 # run already published.
-telemetry launch --role other --phase closeout --round 2
-telemetry exec --command-id after-the-gate --phase closeout --round 2 -- true
+telemetry launch --run "$render_run" --role other --phase closeout --round 2
+telemetry exec --run "$render_run" \
+  --command-id after-the-gate --phase closeout --round 2 -- true
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/re-rendered.md"
 diff -u "$fixture/matching.md" "$fixture/re-rendered.md"
 [[ "$unfinished_run" != "$matching_run" ]]
 
 rm -rf "$telemetry_dir"
 mv "$fixture/saved-telemetry" "$telemetry_dir"
+render_run="$grown_run"
 
 # A paragraph-first narrative must be placed behind a renderer-owned H2
 # boundary so it remains outside the mechanically owned Issues section.
@@ -422,7 +524,7 @@ cp "$ledger" "$fixture/original-ledger.json"
   "$drifted_script_root/workflow-provenance.sh" capture
 )
 if (cd "$target_checkout" && \
-    "$drifted_script_root/render-closeout.sh" \
+    "$drifted_script_root/render-closeout.sh" --run "$render_run" \
       "$fixture/facts.json" "$fixture/narrative.md" --new-pr) \
     >"$fixture/drifted.out" 2>"$fixture/drifted.err"; then
   printf 'FAIL[validator-drift]: renderer emitted a rejected candidate\n' >&2
@@ -562,7 +664,7 @@ jq '
 ' "$fixture/facts.json" >"$fixture/cumulative-counts.json"
 (
   cd "$target_checkout"
-  "$command_under_test" \
+  "$command_under_test" --run "$render_run" \
     "$fixture/cumulative-counts.json" "$fixture/narrative.md" \
     --previous-body "$fixture/actual.md" \
     >"$fixture/cumulative-counts.md"
@@ -575,7 +677,7 @@ jq '.telemetry.implementation_rounds = 0' \
   "$fixture/facts.json" >"$fixture/decreased-count.json"
 if (
   cd "$target_checkout"
-  "$command_under_test" \
+  "$command_under_test" --run "$render_run" \
     "$fixture/decreased-count.json" "$fixture/narrative.md" \
     --previous-body "$fixture/actual.md"
 ) >"$fixture/decreased-count.out" 2>"$fixture/decreased-count.err"; then
@@ -591,7 +693,8 @@ grep -Fqx \
 # governing fingerprint matches the previous run.
 (
   cd "$target_checkout"
-  "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" \
+  "$command_under_test" --run "$render_run" \
+    "$fixture/facts.json" "$fixture/narrative.md" \
     --previous-body "$fixture/actual.md" >"$fixture/resumed.md"
 )
 grep -Fqx '| Workflow provenance | 2 runs |' "$fixture/resumed.md"
@@ -602,7 +705,8 @@ grep -Fqx '| Workflow provenance | 2 runs |' "$fixture/resumed.md"
 # run even when all three governing fingerprints are equal.
 (
   cd "$target_checkout"
-  "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" \
+  "$command_under_test" --run "$render_run" \
+    "$fixture/facts.json" "$fixture/narrative.md" \
     --previous-body "$fixture/resumed.md" >"$fixture/resumed-again.md"
 )
 grep -Fqx '| Workflow provenance | 3 runs |' \
@@ -617,7 +721,8 @@ printf 'mid-run change\n' \
   >>"$(dirname "$command_under_test")/../references/github-closeout.md"
 if (
   cd "$target_checkout"
-  "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md" \
+  "$command_under_test" --run "$render_run" \
+    "$fixture/facts.json" "$fixture/narrative.md" \
     --previous-body "$fixture/actual.md"
 ) >"$fixture/previous-mismatch.out" 2>"$fixture/previous-mismatch.err"; then
   printf 'FAIL[previous-mismatch]: renderer accepted changed provenance\n' >&2
@@ -640,7 +745,8 @@ grep -Fqx \
 
 # A mode is mandatory, and the frozen-run ledger is mandatory at closeout.
 if (cd "$target_checkout" && \
-    "$command_under_test" "$fixture/facts.json" "$fixture/narrative.md") \
+    "$command_under_test" --run "$render_run" \
+      "$fixture/facts.json" "$fixture/narrative.md") \
     >"$fixture/no-mode.out" 2>"$fixture/no-mode.err"; then
   printf 'FAIL[no-mode]: renderer accepted a mode-less closeout\n' >&2
   exit 1

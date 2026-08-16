@@ -137,7 +137,7 @@ Render the complete human-readable pull-request body:
 
 ```sh
 ~/.agents/skills/work-on/scripts/render-closeout.sh \
-  <untracked-facts.json> <untracked-narrative.md> --new-pr \
+  --run "$RUN_HANDLE" <untracked-facts.json> <untracked-narrative.md> --new-pr \
   > <untracked-pr-body.md>
 ```
 
@@ -220,12 +220,12 @@ report every shard and the sum. The outcome must match the issue mapping.
 The renderer aggregates those five rows itself and rejects facts that try to
 supply them; see `references/run-telemetry.md`. Individual launches, reviews,
 and validation executions stay in the sink. Record the run's outcome there with
-`scripts/run-telemetry.sh finish` as soon as the gate resolves it and before any
-body is rendered: a run resolves its outcome once, and rendering fails when the
-run has not finished, has finished more than once, or recorded an outcome that
-differs from the issue mapping or the `Final workflow outcome` field. The rows
-summarize the run as it stood at that gate, so re-rendering the same run cannot
-change them.
+`scripts/run-telemetry.sh finish --run "$RUN_HANDLE"` as soon as the gate resolves
+it and before any body is rendered: a run resolves its outcome once, and
+rendering fails when the run has not finished, has finished more than once, or
+recorded an outcome that differs from the issue mapping or the `Final workflow
+outcome` field. The rows summarize the run as it stood at that gate, so
+re-rendering the same run cannot change them.
 
 Create or update the pull request, then read back its final body and validate
 the exact content returned by GitHub:
