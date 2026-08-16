@@ -112,9 +112,10 @@ certified total resource measurements.
   three review events. Both event types depended on agent-side instrumentation
   without harness corroboration, so neither stream is authoritative; this
   document reports exactly what each contains.
-- `20260814T211832Z-305e545f` records no readiness launch or readiness review.
-  Surviving evidence cannot establish whether readiness was validly inherited,
-  skipped, or simply unrecorded.
+- For `20260814T211832Z-305e545f`, the frozen workflow required a fresh
+  readiness sweep, but this run records neither a readiness launch nor a
+  readiness review. Surviving evidence cannot establish whether the sweep
+  occurred but was unrecorded, or was skipped.
 - `20260814T201335Z-ebdea38d` records implementation, review, validation, and
   remediation before resolving to `aborted`. That conflicts with A2's
   documented use of `aborted` as a pre-implementation hand-back, but schema 1
