@@ -98,6 +98,7 @@ Put the closeout facts in an untracked JSON file with this shape:
 
 ```json
 {
+  "repository": "owner/repository",
   "issue_number": 123,
   "outcome": "Closes",
   "acceptance_criteria": [
@@ -145,8 +146,9 @@ For an existing pull request, first save its live body, then render with
 `--previous-body <old-body.md>` in place of `--new-pr`. Exactly one mode is
 required. The renderer accepts `-` instead of the facts path to read facts from
 stdin. It fails before writing any body when the run's frozen provenance cannot
-be verified, the run has no telemetry sink, the run has not finished or recorded
-a different outcome, the facts are malformed, the authoritative criteria and
+be verified, the run has no telemetry sink, schema-2 integrity is not valid,
+repository/issue/outcome identity differs, the facts are malformed, the
+authoritative criteria and
 closure rows do not match exactly once, a required acceptance row or telemetry
 value is absent, a status is outside
 `tested`/`failing`/`inferred`/`unverified`, a `Closes` row is not `tested`, the
@@ -205,7 +207,7 @@ rows come from the run's telemetry sink instead:
 | Blocking findings resolved | <count or unknown> |
 | Findings rejected at adjudication | <count or unknown> |
 | Final workflow outcome | Closes or Progresses |
-| Telemetry run | <run id> (schema <version>) |
+| Telemetry run | <run id> (schema <version>, integrity <state>) |
 | Subagent launches | <total and by-role breakdown> |
 | Reviews recorded | <total and readiness/full/delta breakdown> |
 | Validation executions recorded | <total and outcome breakdown> |
@@ -219,13 +221,13 @@ report every shard and the sum. The outcome must match the issue mapping.
 
 The renderer aggregates those five rows itself and rejects facts that try to
 supply them; see `references/run-telemetry.md`. Individual launches, reviews,
-and validation executions stay in the sink. Record the run's outcome there with
-`scripts/run-telemetry.sh finish --run "$RUN_HANDLE"` as soon as the gate resolves
-it and before any body is rendered: a run resolves its outcome once, and
-rendering fails when the run has not finished, has finished more than once, or
-recorded an outcome that differs from the issue mapping or the `Final workflow
-outcome` field. The rows summarize the run as it stood at that gate, so
-re-rendering the same run cannot change them.
+and validation executions stay in the sink. Record the run's outcome with
+`scripts/run-telemetry.sh resolve --run "$RUN_HANDLE"` as soon as the gate
+resolves it. Record legitimate closeout evidence, then run
+`scripts/run-telemetry.sh seal --run "$RUN_HANDLE"` before rendering. Schema-2
+rendering fails unless integrity is `valid`, repository/issue/outcome identity
+matches the facts, and the run has exactly one compatible resolution and seal.
+Rendering never repairs the sink.
 
 Create or update the pull request, then read back its final body and validate
 the exact content returned by GitHub:

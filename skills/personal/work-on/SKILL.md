@@ -30,8 +30,9 @@ Authority invariants (bind regardless of workflow):
   adoption.
 - Reuse that snapshot for delegation, review, and evidence. Change requirements
   only through an explicit trusted-maintainer contract change.
-- Record every top-level subagent launch, review, and validation command in the
-  run's telemetry sink as it happens, following `references/run-telemetry.md`.
+- Record every implementation-agent launch, atomic reviewer delegation, and
+  validation command in the run's telemetry sink as it happens, following
+  `references/run-telemetry.md`.
   Telemetry observes the run; it never decides what the run does.
 
 Procedure:
@@ -39,7 +40,9 @@ Procedure:
    approval. Done when fresh, issue-focused, or explicitly approved.
 2. Resolve the input above. Done with exactly one in-repo issue.
 3. Check the current worktree status, record the telemetry start time, start
-   this run's telemetry sink with this skill's `scripts/run-telemetry.sh start`,
+   this run's telemetry sink with this skill's `scripts/run-telemetry.sh` using
+   `start --issue N` (adding `--continues-run HANDLE` only for explicit
+   continuity),
    and retain the printed repository-bound handle for every later telemetry and
    closeout operation. Fetch the remote default branch and update the current
    branch. Abort if unrelated changes cannot be avoided or the update is unsafe.
@@ -57,8 +60,8 @@ Procedure:
    acceptance criterion has an available direct validation seam, no criterion is
    knowingly limited to `inferred` or `unverified` evidence, every blocking
    prerequisite is complete, the required commands are executable, and the
-   trusted contract is consistent; otherwise finish the run's telemetry with
-   outcome `aborted` and hand back as that reference requires.
+   trusted contract is consistent; otherwise resolve the run as
+   `preflight-aborted`, seal it, and hand back as that reference requires.
 7. Immediately before delegating implementation, run this skill's
    `scripts/workflow-provenance.sh capture` to freeze the governing
    instructions this run read. Abort if it fails. Done when capture succeeds.

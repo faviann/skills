@@ -23,11 +23,18 @@ runs never share events. The owner-only repository binding is outside the event
 schema; `start` combines it with the run id as `<run-id>@<binding>`, so a handle
 minted by another repository cannot select a same-named local sink.
 
-Every line carries `schema`, `run`, `seq`, `at`, `epoch_ms`, and `type`. The
-current schema version is **1**; the rendered pull-request body names it.
+Every line carries `schema`, `run`, `seq`, `at`, `epoch_ms`, and `type`. New
+runs use schema **2**; the rendered pull-request body names the schema and its
+bounded integrity state. Schema-1 sinks remain read-only forensic inputs.
+
+Schema-2 `run_start` records the normalized lowercase GitHub slug from `origin`,
+the positive issue number, committed starting HEAD, and run identity. Optional
+`continues_run` is accepted only when its repository-bound handle names a
+schema-2 run for the same repository and issue. It records continuity only;
+readiness is neither skipped nor reused because a continuation exists.
 
 Several subagents and validation wrappers may record at the same time, so
-sequence numbers, execution ids, the single final outcome, and the append itself
+sequence numbers, execution ids, lifecycle transitions, and the append itself
 are allocated under an exclusive lock on the run's file. Two writers can never
 be handed the same number, and no append can land inside another.
 
@@ -42,11 +49,12 @@ buffered, so an abandoned run leaves exactly what it had recorded.
 
 | When | Command |
 |---|---|
-| Once, when the run begins | `RUN_HANDLE="$(run-telemetry.sh start)"` |
-| Every top-level subagent launch | `run-telemetry.sh launch --run "$RUN_HANDLE" --role R --phase P --round N [--tokens-in N --tokens-out N]` |
-| Every review handed to a subagent | `run-telemetry.sh review --run "$RUN_HANDLE" --kind K --phase P --round N --base REF (--head REF \| --worktree)` |
+| Once, when the run begins | `RUN_HANDLE="$(run-telemetry.sh start --issue N [--continues-run HANDLE])"` |
+| Every implementation-agent launch | `run-telemetry.sh launch --run "$RUN_HANDLE" --role implementation --phase P --round N [--tokens-in N --tokens-out N]` |
+| Every reviewer delegation | `run-telemetry.sh review-delegation --run "$RUN_HANDLE" --role R --kind K --phase P --round N --base REF (--head REF \| --worktree)` |
 | Every top-level validation command | `run-telemetry.sh exec --run "$RUN_HANDLE" --command-id ID --phase P --round N -- <command>` |
-| Once, when the run's outcome resolves | `run-telemetry.sh finish --run "$RUN_HANDLE" --outcome (Closes\|Progresses\|aborted)` |
+| Once, when the run's outcome resolves | `run-telemetry.sh resolve --run "$RUN_HANDLE" --outcome (Closes\|Progresses\|preflight-aborted\|abandoned\|failed)` |
+| Once, after final evidence is recorded | `run-telemetry.sh seal --run "$RUN_HANDLE"` |
 
 Keep the printed handle for this operation. Every recording, summary, render,
 and closeout command requires it; none consults a mutable current-run selection.
@@ -55,15 +63,21 @@ missing from this repository's common directory is refused. A plain schema-1 id
 remains accepted only for read-only summary and renderer access to forensic
 sinks in the common directory or the current linked worktree's legacy location.
 
-- `--role` is one of `implementation`, `readiness`, `review-standards`,
-  `review-spec`, `closure-sweep`, `other`.
+- `launch --role` is `implementation` or `other`. Reviewer roles cannot be
+  launched separately from their measured scope.
+- `review-delegation --role` is one of `readiness`, `review-standards`,
+  `review-spec`, or `closure-sweep`. One invocation is exactly one reviewer.
 - `--phase` is one of `orient`, `implementation`, `checkpoint`, `gate`,
   `remediation`, `closeout`.
 - `--kind` is one of `readiness`, `full`, `delta`. `delta` exists in the schema
   so the recorder does not need changing later; the current workflow never
   emits it.
-- `review` resolves both refs to full SHAs itself and measures the reviewed
-  artifact's byte count itself. Use `--worktree` for a sweep that reads
+- The accepted review combinations are readiness/readiness/checkpoint;
+  Standards, Spec, or closure/full/gate; Standards, Spec, or
+  closure/delta/remediation; and closure/full/closeout. Recording delta does
+  not authorize a delta-review workflow.
+- `review-delegation` resolves both refs to full SHAs itself and measures the
+  reviewed artifact's byte count itself. Use `--worktree` for a sweep that reads
   uncommitted work; the [worktree-review bundle](#the-worktree-review-bundle)
   below defines exactly what is measured.
 - `--command-id` names the validation: lowercase alphanumeric words joined by
@@ -75,10 +89,9 @@ sinks in the common directory or the current linked worktree's legacy location.
 - `exec` runs the command, passes its stdout, stderr, and exit status straight
   through, and records the execution around it. Wrap the top-level command, not
   its child processes.
-- `finish` is recorded once, when the run's outcome resolves: at the closure
-  gate before the body is rendered, or as `aborted` when the pre-implementation
-  closability gate hands the issue back. See
-  [The run's outcome](#the-runs-outcome).
+- `resolve` is recorded once when the run's outcome becomes known. `seal` is a
+  separate, singular end-of-recording transition. See
+  [The run's outcome and seal](#the-runs-outcome-and-seal).
 
 Token counts are optional. A runtime that does not expose them records launches
 without `--tokens-in`/`--tokens-out`; the summary then reports token coverage as
@@ -102,20 +115,52 @@ it streams and is never written anywhere.
 Measuring `git diff` alone would report a readiness sweep whose whole subject is
 new code as a zero-byte review, which is the opposite of what it cost.
 
-## The run's outcome
+## The run's outcome and seal
 
-A run resolves its outcome exactly once. `finish` refuses a second call, so a
-run cannot hold two answers, and the summary of a finished run is **final**: the
-aggregation window closes at `run_finish`. The same finished run therefore
-summarizes identically however often the body is re-rendered, and every
-validation counted in a published body ran before the gate that closed the run.
-Anything recorded after `finish` is reported separately as `events_after_finish`
-and is not folded into counts an already-published body reported.
+A run resolves exactly one of `Closes`, `Progresses`, `preflight-aborted`,
+`abandoned`, or `failed`. `preflight-aborted` is refused after an implementation
+launch or reviewer delegation. Outcome resolution does not end recording:
+closeout validation and evidence may follow it. `seal` explicitly ends the
+record; every later event is an integrity violation. Duplicate resolutions and
+seals are refused.
 
-Rendering a closeout requires a finished run. `render-closeout.sh` refuses a
-body when the run never finished, when it recorded more than one final outcome,
-or when the recorded outcome differs from either the issue mapping's outcome or
-the observed `Final workflow outcome` field.
+Rendering a schema-2 `Closes` or `Progresses` closeout requires one compatible
+resolution, one seal, and `integrity=valid`. Its normalized repository, issue,
+and outcome must match the structured closeout facts.
+
+## Deterministic integrity
+
+`summary` evaluates schema 2 as `valid`, `incomplete`, or `invalid` and returns
+only bounded reason codes. It checks the unique start identity, schema and run
+consistency, event shapes and sequence, review combinations, validation pairs,
+lifecycle order, outcome resolution, sealing, and post-seal events. An
+unfinished outcome, unsealed resolved run, or dangling validation is
+`incomplete`; malformed or contradictory evidence is `invalid`. Invalidity
+dominates incompleteness.
+
+Reason codes are closed and machine-readable:
+
+- incomplete — `OUTCOME_UNRESOLVED`, `RUN_UNSEALED`,
+  `VALIDATION_INCOMPLETE`;
+- invalid structure/identity — `MALFORMED_LINE`, `MIXED_SCHEMA`,
+  `RUN_START_COUNT_INVALID`, `RUN_START_IDENTITY_INVALID`,
+  `RUN_IDENTITY_MISMATCH`, `SEQUENCE_INVALID`, `EVENT_SHAPE_INVALID`;
+- invalid review/validation — `REVIEW_DELEGATION_INVALID`,
+  `VALIDATION_PAIR_INVALID`, `VALIDATION_IDENTITY_MISMATCH`,
+  `VALIDATION_COMPLETION_INVALID`;
+- invalid lifecycle — `OUTCOME_RESOLUTION_COUNT_INVALID`,
+  `OUTCOME_RESOLUTION_INVALID`, `SEAL_COUNT_INVALID`,
+  `LIFECYCLE_TRANSITION_INVALID`, `EVENT_AFTER_SEAL`, and
+  `PREFLIGHT_ABORT_AFTER_WORK`.
+
+Schema-1 summaries report `legacy-unverifiable`. They retain historical launch
+and review event counts as recorded observations, never exact reviewer counts,
+and reads never rewrite their source sinks.
+
+This is sink-only integrity. It can prove contradictions and omissions that
+leave a partial event pair, but it cannot prove that a caller made every
+required instrumentation call. A wholly omitted delegation or validation
+leaves no sink evidence to distinguish it from work that never occurred.
 
 ## Interruption
 
@@ -139,8 +184,9 @@ for free-form text, so none of the following can be stored even by mistake:
 
 - prompts, contracts, briefs, or subagent reports;
 - issue bodies, comments, or repository documentation;
-- diffs, file contents, or test output — a review records only how many bytes
-  were compared, and `exec` records only an exit status and a duration;
+- diffs, file contents, or test output — a reviewer delegation records only how
+  many bytes were compared, and `exec` records only an exit status and a
+  duration;
 - environment variables, credentials, or raw untrusted diagnostics;
 - **a validation's command line** — neither its arguments nor its program.
 
@@ -160,21 +206,18 @@ its stdout, stderr, and exit status pass straight through.
 deterministic JSON document: the same sink always produces the same summary.
 `render-closeout.sh --run "$RUN_HANDLE" ...` calls it and renders five bounded rows
 into the mechanically owned
-`## Workflow telemetry` section — telemetry run and schema, launches with a
-by-role breakdown, reviews by kind, validation executions with outcomes, and
-measured elapsed time per phase that recorded events. Per-launch and
+`## Workflow telemetry` section — telemetry run, schema and integrity;
+implementation launches; reviewer delegations by kind; validation executions;
+and measured elapsed time per phase that recorded events. Per-launch and
 per-command events stay in the sink.
 
 Those rows are never supplied through the facts file; the renderer refuses facts
 that try. The existing observed-value rows and the workflow-provenance runs are
 unchanged.
 
-## Why this lands first
+## Where this fits
 
-This is the mechanical foundation of
-[#9](https://github.com/faviann/skills/issues/9), consumed by
-[#64](https://github.com/faviann/skills/issues/64)'s review-topology work. It
-exists to establish an attributable control period: runs measured under today's
-implementation, readiness, review, remediation, and closeout semantics, before
-any of those semantics change. A change measured against no control cannot be
-shown to have helped.
+This is the attributable schema owned by
+[#9](https://github.com/faviann/skills/issues/9). The later #72 lifecycle
+registry may observe these sealed runs, and #73 may consume them for the #64
+experiment; neither mechanism is part of this sink or its integrity result.

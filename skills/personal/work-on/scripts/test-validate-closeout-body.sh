@@ -33,7 +33,7 @@ Readable narrative stays readable.
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
-| Telemetry run | 20260813T101500Z-0123abcd (schema 1) |
+| Telemetry run | 20260813T101500Z-0123abcd (schema 1, integrity legacy-unverifiable) |
 | Subagent launches | 4 (implementation=2, review-standards=1, review-spec=1) |
 | Reviews recorded | 2 (readiness=1, full=1, delta=0) |
 | Validation executions recorded | 3 (passed=3, failed=0) |
@@ -122,7 +122,7 @@ cat >>"$fixture/pr-162.md" <<'EOF'
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
-| Telemetry run | 20260813T101500Z-0123abcd (schema 1) |
+| Telemetry run | 20260813T101500Z-0123abcd (schema 1, integrity legacy-unverifiable) |
 | Subagent launches | 4 (implementation=2, review-standards=1, review-spec=1) |
 | Reviews recorded | 2 (readiness=1, full=1, delta=0) |
 | Validation executions recorded | 3 (passed=3, failed=0) |
@@ -182,7 +182,7 @@ expect_failure short-telemetry-table \
 # The sink-derived rows are mechanically rendered, so a hand-written value in
 # any of them is rejected rather than published as observed telemetry.
 sink_rows=(
-  "Telemetry run|not-a-run-id (schema 1)"
+  "Telemetry run|not-a-run-id (schema 1, integrity legacy-unverifiable)"
   "Telemetry run|20260813T101500Z-0123abcd"
   "Subagent launches|four"
   "Subagent launches|4 (implementation=2"

@@ -51,7 +51,7 @@ The `work-on` telemetry fingerprint hashes the declared `work-on`, `tdd`, and `c
 _Avoid_: instruction version, risk-shapes provenance
 
 **Run telemetry sink**:
-The run-scoped, untracked JSON-lines file in the target repository's Git common directory where one `work-on` run appends its subagent launches, reviews, and validation executions. It holds the events; the pull-request body holds only bounded summaries aggregated from it. Distinct from **Workflow provenance**, which fingerprints the instructions that governed the run rather than what the run did.
+The run-scoped, untracked JSON-lines file in the target repository's Git common directory where one `work-on` run appends implementation launches, atomic reviewer delegations, validation executions, outcome resolution, and its seal. It holds the events and deterministic integrity result; the pull-request body holds only bounded summaries aggregated from it. Distinct from **Workflow provenance**, which fingerprints the instructions that governed the run rather than what the run did.
 _Avoid_: event log, analytics store, telemetry ledger
 
 **Closability gate**:
@@ -73,7 +73,7 @@ _Avoid_: model kind, model family
 - A **Correctness contract** has one or more **Responsibilities**, and several **Correctness contracts** may share one **Responsibility**
 - A **Risk shape** helps locate **Correctness contracts** but does not determine how many a slice contains
 - A `work-on` run has one **Run telemetry sink** and one **Workflow provenance** value
-- A `work-on` run passes one **Closability gate** before it delegates implementation; a run that fails it finishes as `aborted` and never reaches the closure gate
+- A `work-on` run passes one **Closability gate** before it delegates implementation; a run that fails it resolves as `preflight-aborted`, seals, and never reaches the closure gate
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
 - A **Map** holds many **Decision tickets** and one **Not yet specified** section
