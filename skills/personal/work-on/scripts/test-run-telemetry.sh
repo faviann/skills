@@ -246,6 +246,38 @@ canonical_colliding_summary="$(cd "$linked_one" && "$command_under_test" summary
   "$canonical_colliding_checksum" ]]
 cmp "$fixture/legacy-linked-before.jsonl" "$legacy_linked_sink"
 cmp "$fixture/canonical-colliding-before.jsonl" "$canonical_colliding_sink"
+refuse_bound_legacy_write() {
+  local label="$1"
+  shift
+  if (cd "$linked_one" && "$command_under_test" "$@") \
+      >"$fixture/canonical-schema1-$label.out" \
+      2>"$fixture/canonical-schema1-$label.err"; then
+    printf 'FAIL[canonical-schema1-%s]: schema-2 writer accepted schema 1\n' \
+      "$label" >&2
+    exit 1
+  fi
+  [[ ! -s "$fixture/canonical-schema1-$label.out" ]]
+  grep -Fq 'schema-2 writer requires a schema-2 run' \
+    "$fixture/canonical-schema1-$label.err"
+  [[ "$(sha256sum "$legacy_linked_sink")" == "$legacy_linked_checksum" ]]
+  [[ "$(sha256sum "$canonical_colliding_sink")" == \
+    "$canonical_colliding_checksum" ]]
+  cmp "$fixture/legacy-linked-before.jsonl" "$legacy_linked_sink"
+  cmp "$fixture/canonical-colliding-before.jsonl" "$canonical_colliding_sink"
+}
+refuse_bound_legacy_write launch launch --run "$canonical_colliding_handle" \
+  --role implementation --phase implementation --round 2
+refuse_bound_legacy_write review review-delegation \
+  --run "$canonical_colliding_handle" --role review-spec --kind full \
+  --phase gate --round 2 --base HEAD --head HEAD
+legacy_exec_marker="$fixture/schema1-exec-ran"
+refuse_bound_legacy_write exec exec --run "$canonical_colliding_handle" \
+  --command-id schema-one-check --phase gate --round 2 -- \
+  bash -c 'touch "$1"' _ "$legacy_exec_marker"
+[[ ! -e "$legacy_exec_marker" ]]
+refuse_bound_legacy_write resolve resolve --run "$canonical_colliding_handle" \
+  --outcome Closes
+refuse_bound_legacy_write seal seal --run "$canonical_colliding_handle"
 refuse_legacy_write() {
   local label="$1"
   shift

@@ -332,6 +332,28 @@ well_framed_summary="$(telemetry summary --run "$well_framed_run")"
     "$fixture/narrative.md" --new-pr
 ) >"$fixture/well-framed-render.md"
 [[ -s "$fixture/well-framed-render.md" ]]
+well_framed_id="${well_framed_run%%@*}"
+if telemetry summary --run "$well_framed_id" \
+    >"$fixture/bare-schema2-summary.out" \
+    2>"$fixture/bare-schema2-summary.err"; then
+  printf 'FAIL[bare-schema2-summary]: summary accepted an unbound schema-2 id\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/bare-schema2-summary.out" ]]
+grep -Fq 'schema-2 summary requires a repository-bound handle' \
+  "$fixture/bare-schema2-summary.err"
+if (
+  cd "$repo"
+  "$renderer_script" --run "$well_framed_id" "$fixture/facts.json" \
+    "$fixture/narrative.md" --new-pr
+) >"$fixture/bare-schema2-render.out" \
+    2>"$fixture/bare-schema2-render.err"; then
+  printf 'FAIL[bare-schema2-render]: renderer accepted an unbound schema-2 id\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/bare-schema2-render.out" ]]
+grep -Fq 'schema-2 summary requires a repository-bound handle' \
+  "$fixture/bare-schema2-render.err"
 
 blank_line_run="$(telemetry start --issue 71)"
 resolve_and_seal "$blank_line_run" Closes

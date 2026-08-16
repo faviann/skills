@@ -186,6 +186,9 @@ Rules:
 - Issue category and labels do not change these semantics.
 - Omit `Follow-ups` when empty.
 
+Retain the gate's one result as `OUTCOME` (`Closes` or `Progresses`) and use it
+for both outcome fields in the facts file and the telemetry resolution below.
+
 Include `## Finding adjudications` in the narrative with the ledger's rationale
 lines and the sweep's trace table; omit it when no blocking findings were
 adjudicated.
@@ -222,8 +225,8 @@ report every shard and the sum. The outcome must match the issue mapping.
 The renderer aggregates those five rows itself and rejects facts that try to
 supply them; see `references/run-telemetry.md`. Individual launches, reviews,
 and validation executions stay in the sink. Record the run's outcome with
-`scripts/run-telemetry.sh resolve --run "$RUN_HANDLE"` as soon as the gate
-resolves it. Record legitimate closeout evidence, then run
+`scripts/run-telemetry.sh resolve --run "$RUN_HANDLE" --outcome "$OUTCOME"` as
+soon as the gate resolves it. Record legitimate closeout evidence, then run
 `scripts/run-telemetry.sh seal --run "$RUN_HANDLE"` before rendering. Schema-2
 rendering fails unless integrity is `valid`, repository/issue/outcome identity
 matches the facts, and the run has exactly one compatible resolution and seal.

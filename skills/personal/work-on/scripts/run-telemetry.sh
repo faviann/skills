@@ -226,10 +226,12 @@ require_run_handle() {
 # this worktree's own Git directory: it is not discovery, and every writer still
 # passes require_run_handle above and therefore targets only runs_root.
 summary_run_file=""
+summary_handle_is_bound=false
 resolve_summary_run() {
   local handle="$1" legacy_run_file
   [[ -n "$handle" ]] || fail "operation requires --run"
   if [[ "$handle" =~ $run_handle_pattern ]]; then
+    summary_handle_is_bound=true
     resolve_bound_handle "$handle"
     run_id="$resolved_run_id"
     [[ -f "$runs_root/$run_id.jsonl" ]] \
@@ -269,11 +271,23 @@ repair_partial_line() {
     || printf '\n' >&"$sink_lock_fd"
 }
 
-open_sink() {
+lock_sink() {
   sink_run_file="$runs_root/$1.jsonl"
   exec {sink_lock_fd}>>"$sink_run_file"
   flock -x "$sink_lock_fd" \
     || fail "could not lock the telemetry sink: $sink_run_file"
+}
+
+open_schema2_sink() {
+  local observed_schemas
+  lock_sink "$1"
+  observed_schemas="$(jq -n -R -c \
+    '[inputs | fromjson? // empty | select(type == "object") | .schema]
+    | unique' <"$sink_run_file")"
+  if [[ "$observed_schemas" != '[2]' ]]; then
+    close_sink
+    fail "schema-2 writer requires a schema-2 run"
+  fi
   repair_partial_line
 }
 
@@ -302,7 +316,9 @@ write_event() {
 }
 
 append_event() {
-  open_sink "$1"
+  # start owns the only empty sink initialization path. Existing-run writers
+  # must use open_schema2_sink so they cannot modify historical schema 1.
+  lock_sink "$1"
   write_event "$@"
   close_sink
 }
@@ -333,7 +349,7 @@ require_event_lifecycle_locked() {
 
 append_recording_event() {
   local target_run="$1" type="$2" extra="$3" phase="${4:-}" role="${5:-}"
-  open_sink "$target_run"
+  open_schema2_sink "$target_run"
   require_event_lifecycle_locked "$type" "$phase" "$role"
   write_event "$target_run" "$type" "$extra"
   close_sink
@@ -563,7 +579,7 @@ case "$subcommand" in
     # Counting prior executions and writing this one's start happen under a
     # single lock, so two wrappers starting at once cannot be handed the same
     # execution id.
-    open_sink "$run_id"
+    open_schema2_sink "$run_id"
     require_event_lifecycle_locked validation_start "$phase"
     execution_index="$(
       jq -n -R '[inputs | fromjson? // empty
@@ -631,7 +647,7 @@ case "$subcommand" in
     # A run resolves its outcome exactly once. Checking for an existing
     # resolution and writing this one happen under a single lock, so two
     # closers cannot both find none and both write.
-    open_sink "$run_id"
+    open_schema2_sink "$run_id"
     require_recording_open_locked
     resolution_count="$(event_count_locked outcome_resolved)"
     if [[ "$resolution_count" -ne 0 ]]; then
@@ -663,7 +679,7 @@ case "$subcommand" in
       esac
     done
     require_run_handle "$run_id"
-    open_sink "$run_id"
+    open_schema2_sink "$run_id"
     seal_count="$(event_count_locked run_sealed)"
     [[ "$seal_count" -eq 0 ]] || {
       close_sink
@@ -710,6 +726,10 @@ case "$subcommand" in
     observed_schemas="$(jq -n -R -c \
       '[inputs | fromjson? // empty | select(type == "object") | .schema]
       | unique' <"$summary_run_file")"
+    if [[ "$summary_handle_is_bound" == false \
+        && "$observed_schemas" != '[1]' ]]; then
+      fail "schema-2 summary requires a repository-bound handle"
+    fi
     if [[ "$observed_schemas" == '[1]' ]]; then
       # Schema 1 is historical evidence. Preserve its aggregation window and
       # recorded-event counts, but never promote those observations into exact

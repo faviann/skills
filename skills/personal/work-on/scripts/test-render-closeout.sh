@@ -21,6 +21,9 @@ git -C "$skills_checkout" remote add origin \
   'https://github.com/example/skills.git'
 
 readonly command_under_test="$skills_checkout/skills/personal/work-on/scripts/render-closeout.sh"
+readonly closeout_reference="$skills_checkout/skills/personal/work-on/references/github-closeout.md"
+grep -Fq 'resolve --run "$RUN_HANDLE" --outcome "$OUTCOME"' \
+  "$closeout_reference"
 target_checkout="$fixture/target-checkout"
 git init -q -b main "$target_checkout"
 git -C "$target_checkout" config user.name 'Closeout Test'
@@ -434,7 +437,8 @@ matching_run="$(telemetry start --issue 164)"
 render_run="$matching_run"
 telemetry launch --run "$render_run" \
   --role implementation --phase implementation --round 1
-telemetry resolve --run "$render_run" --outcome Closes
+OUTCOME=Closes
+telemetry resolve --run "$render_run" --outcome "$OUTCOME"
 telemetry seal --run "$render_run"
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/matching.md"
 grep -Fqx "| Telemetry run | $(run_id_from_handle "$matching_run") (schema 2, integrity valid) |" \
@@ -445,7 +449,8 @@ progresses_run="$(telemetry start --issue 164)"
 render_run="$progresses_run"
 telemetry launch --run "$render_run" \
   --role implementation --phase implementation --round 1
-telemetry resolve --run "$render_run" --outcome Progresses
+OUTCOME=Progresses
+telemetry resolve --run "$render_run" --outcome "$OUTCOME"
 telemetry seal --run "$render_run"
 run_new "$fixture/progresses-facts.json" "$fixture/narrative.md" \
   >"$fixture/matching-progresses.md"

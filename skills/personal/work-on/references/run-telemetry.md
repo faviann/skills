@@ -62,6 +62,8 @@ A malformed handle, a handle bound to another repository, or one whose sink is
 missing from this repository's common directory is refused. A plain schema-1 id
 remains accepted only for read-only summary and renderer access to forensic
 sinks in the common directory or the current linked worktree's legacy location.
+A bound handle that selects schema 1 is likewise forensic-only; schema-2
+writers refuse it before torn-line repair or append.
 
 - `launch --role` is `implementation` or `other`. Reviewer roles cannot be
   launched separately from their measured scope.
