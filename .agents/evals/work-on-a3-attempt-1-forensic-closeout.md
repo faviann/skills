@@ -84,7 +84,7 @@ the compact columns below, launch roles are `impl/readiness/standards/spec/closu
 review kinds are `readiness/full/delta`; validations are
 `passed/failed/interrupted/incomplete`; and phases retain their full names.
 
-| Repository | Run | Schema | Started / finished | Outcome | Launches by role | Reviews by kind; bytes | Validations; duration ms | `phase_elapsed_ms` | Tokens | Malformed / after finish | Remediation | Summary SHA-256 |
+| Repository | Run | Schema | Started / finished | Outcome | Recorded launches by role | Recorded reviews by kind; bytes | Recorded validations; duration ms | Recorded `phase_elapsed_ms` | Tokens | Malformed / after finish | Remediation | Summary SHA-256 |
 |---|---|---:|---|---|---|---|---|---|---|---|---|---|
 | homelab-iac | `20260814T200522Z-5860eb43` | 1 | `2026-08-14T20:05:22Z` / `null` | `null` | 0: `0/0/0/0/0` | 0: `0/0/0`; 0 | 0: `0/0/0/0`; 0 | `{}` | `0/0`, none | `0/0` | no | `d5811d8a4e15e01eb609ffd137bbad3020ec0f20c946a9005591b461bb901def` |
 | homelab-iac | `20260814T201131Z-501c84ce` | 1 | `2026-08-14T20:11:31Z` / `2026-08-14T22:14:15Z` | Closes | 14: `4/1/3/3/3` | 4: `1/3/0`; 19,368 | 10: `10/0/0/0`; 859,110 | `orient=33681, implementation=0, checkpoint=170062, gate=3863982, remediation=4411077, closeout=829132` | `0/0`, none | `0/0` | yes | `eeaac1244d88ed26993e263b3f350f493b6bba7137662a9e3a0575fd05669b50` |
@@ -101,11 +101,34 @@ established by the five surviving finished candidates, so it is out of the
 window. The other
 dispositions cannot be certified without the unavailable overmind population.
 
-The two finished `aborted` runs are
-`20260814T201142Z-ae348f0e` and
-`20260814T201335Z-ebdea38d`. Neither has an exact mechanically rendered
-Telemetry-run-to-PR mapping, so their issue and PR remain unavailable rather
-than inferred from timing or worktree names.
+## Observed telemetry-integrity limitations
+
+The tables are deterministic aggregates of surviving recorded events. They do
+not prove that every delegation or review was instrumented and are not
+certified total resource measurements.
+
+- `20260814T201131Z-501c84ce` records ten review-role launches but four review
+  events. `20260816T132643Z-370ae380` records seven review-role launches but
+  three review events. Both event types depended on agent-side instrumentation
+  without harness corroboration, so neither stream is authoritative; this
+  document reports exactly what each contains.
+- `20260814T211832Z-305e545f` records no readiness launch or readiness review.
+  Surviving evidence cannot establish whether readiness was validly inherited,
+  skipped, or simply unrecorded.
+- `20260814T201335Z-ebdea38d` records implementation, review, validation, and
+  remediation before resolving to `aborted`. That conflicts with A2's
+  documented use of `aborted` as a pre-implementation hand-back, but schema 1
+  cannot represent or recover the actual late non-success reason.
+- Repository attribution comes from each preserved sink's location. Exact
+  Telemetry run rows in PR bodies corroborate issue and PR attribution for the
+  successful candidates. The two aborted runs have no mechanically recoverable
+  issue or PR identity.
+
+Consequently, launches, reviews, reviewed bytes, validations, and phase timings
+are recorded-event observations, not certified complete resource totals. These
+limitations affect resource analysis only. They do not weaken the decisive
+**INVALID** verdict, which follows independently from the complete absence of
+mandatory publication records.
 
 ## Provisional reconstruction from surviving evidence
 
