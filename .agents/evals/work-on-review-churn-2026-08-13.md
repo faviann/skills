@@ -27,3 +27,4 @@ Together these files preserve the source artifacts, representative PR telemetry,
 ## Stage artifacts
 
 - [A3 instrumented control window](work-on-a3-control-window.md) — the pre-registered protocol fixing which runs count, how many are collected, and what would make the control insufficient or invalid. Frozen before the window starts; B1 stays blocked until its results are accepted.
+- [A3 attempt 1 forensic closeout](work-on-a3-attempt-1-forensic-closeout.md) — attempt 1 was invalid because its mandatory dual-surface records were not produced; the unavailable overmind telemetry also leaves the exact sample indeterminate.
