@@ -34,6 +34,10 @@ Authority invariants (bind regardless of workflow):
   validation command in the run's telemetry sink as it happens, following
   `references/run-telemetry.md`.
   Telemetry observes the run; it never decides what the run does.
+- Register the run's lifecycle before implementation and finalize it on every
+  hand-back, following `references/run-registry.md`. Registration may refuse a
+  run whose predecessor left an unfinished obligation; it never changes what an
+  admitted run does.
 
 Procedure:
 1. Continue only in a fresh or issue-focused context; otherwise require user
@@ -44,9 +48,11 @@ Procedure:
    `start --issue N` (adding `--continues-run HANDLE` only for explicit
    continuity),
    and retain the printed repository-bound handle for every later telemetry and
-   closeout operation. Fetch the remote default branch and update the current
+   closeout operation. Register that handle with this skill's
+   `scripts/run-registry.sh register --run "$RUN_HANDLE"` and abort if it
+   refuses. Fetch the remote default branch and update the current
    branch. Abort if unrelated changes cannot be avoided or the update is unsafe.
-   Done on a safely updated branch.
+   Done on a safely updated branch and a registered run.
 4. Build the trusted snapshot through GitHub's REST comments endpoint
    (`gh issue view` omits association). Done when no untrusted body/link is in
    context, the omitted count is reported, and every contract source has
@@ -60,8 +66,8 @@ Procedure:
    acceptance criterion has an available direct validation seam, no criterion is
    knowingly limited to `inferred` or `unverified` evidence, every blocking
    prerequisite is complete, the required commands are executable, and the
-   trusted contract is consistent; otherwise resolve the run as
-   `preflight-aborted`, seal it, and hand back as that reference requires.
+   trusted contract is consistent; otherwise finalize the run as
+   `preflight-aborted` and hand back as that reference requires.
 7. Immediately before delegating implementation, run this skill's
    `scripts/workflow-provenance.sh capture` to freeze the governing
    instructions this run read. Abort if it fails. Done when capture succeeds.

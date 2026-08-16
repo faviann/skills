@@ -104,17 +104,18 @@ pass records nothing; the run's outcome remains the closure gate's to resolve.
 Launch no implementation delegate, make no implementation edit, and create no
 implementation commit or pull request. Then:
 
-1. resolve the run's outcome in the sink this run already opened, with
-   `scripts/run-telemetry.sh resolve --run "$RUN_HANDLE" --outcome preflight-aborted`;
-2. seal the sink with `scripts/run-telemetry.sh seal --run "$RUN_HANDLE"`;
-3. name the exact criterion, prerequisite, command, or contract conflict that
+1. finalize the run this hand-back ends, with
+   `scripts/run-registry.sh finalize --run "$RUN_HANDLE" --outcome preflight-aborted`,
+   which resolves that outcome in the sink this run already opened, seals it,
+   and discharges the run's registered lifecycle in one step;
+2. name the exact criterion, prerequisite, command, or contract conflict that
    failed;
-4. explain why direct `tested` evidence is unavailable;
-5. name the one narrow route out — return to triage; split or amend the issue;
+3. explain why direct `tested` evidence is unavailable;
+4. name the one narrow route out — return to triage; split or amend the issue;
    complete a blocking prerequisite; obtain the explicitly required
    human/manual environment; create or identify a blocking tracker issue; or
    request a trusted-maintainer contract correction; and
-6. stop.
+5. stop.
 
 Do not convert the failure into a speculative implementation plan, weaken the
 criterion to continue, or manufacture a seam.

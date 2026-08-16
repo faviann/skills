@@ -227,7 +227,10 @@ supply them; see `references/run-telemetry.md`. Individual launches, reviews,
 and validation executions stay in the sink. Record the run's outcome with
 `scripts/run-telemetry.sh resolve --run "$RUN_HANDLE" --outcome "$OUTCOME"` as
 soon as the gate resolves it. Record legitimate closeout evidence, then run
-`scripts/run-telemetry.sh seal --run "$RUN_HANDLE"` before rendering. Schema-2
+`scripts/run-registry.sh finalize --run "$RUN_HANDLE"` before rendering: it
+seals the run and discharges its registered lifecycle from the sink's own
+sealed summary, and refuses to report success unless that summary is valid.
+Schema-2
 rendering fails unless integrity is `valid`, repository/issue/outcome identity
 matches the facts, and the run has exactly one compatible resolution and seal.
 Rendering never repairs the sink.

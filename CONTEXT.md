@@ -54,6 +54,14 @@ _Avoid_: instruction version, risk-shapes provenance
 The run-scoped, untracked JSON-lines file in the target repository's Git common directory where one `work-on` run appends implementation launches, atomic reviewer delegations, validation executions, outcome resolution, and its seal. It holds the events and deterministic integrity result; the pull-request body holds only bounded summaries aggregated from it. Distinct from **Workflow provenance**, which fingerprints the instructions that governed the run rather than what the run did.
 _Avoid_: event log, analytics store, telemetry ledger
 
+**Run registry**:
+The owner-only, bounded, user-level record of every `work-on` run's lifecycle, kept under the XDG state directory so a run stays visible after its worktree, branch, or clone is gone. It holds enumerated lifecycle and finalization states, repository/issue identity, a sink locator, and a hash of the sink's own summary — never the events themselves, which stay in the **Run telemetry sink**.
+_Avoid_: run database, telemetry registry, analytics store
+
+**Control observer**:
+The optional external program the **Run registry** asks whether a run carries a finalization obligation, and notifies when one is discharged. It answers with two bounded tokens — an observer id and a control id — and owns all policy; the registry knows nothing about what any observer measures.
+_Avoid_: experiment hook, control policy, publisher
+
 **Closability gate**:
 The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available in this run. It runs on the contract alone and produces no artifact; failing it aborts the run before any code exists. Distinct from the **closure gate**, which inspects a finished candidate's evidence at closeout — the closability gate asks whether `tested` evidence is *reachable*, the closure gate asks whether it was *produced*.
 _Avoid_: closure gate (for this), readiness gate, closability report
@@ -73,6 +81,7 @@ _Avoid_: model kind, model family
 - A **Correctness contract** has one or more **Responsibilities**, and several **Correctness contracts** may share one **Responsibility**
 - A **Risk shape** helps locate **Correctness contracts** but does not determine how many a slice contains
 - A `work-on` run has one **Run telemetry sink** and one **Workflow provenance** value
+- A `work-on` run has at most one **Run registry** record, which names at most one **Control observer**; the record is registered before implementation and finalized on hand-back
 - A `work-on` run passes one **Closability gate** before it delegates implementation; a run that fails it resolves as `preflight-aborted`, seals, and never reaches the closure gate
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**

@@ -221,6 +221,7 @@ unchanged.
 ## Where this fits
 
 This is the attributable schema owned by
-[#9](https://github.com/faviann/skills/issues/9). The later #72 lifecycle
-registry may observe these sealed runs, and #73 may consume them for the #64
-experiment; neither mechanism is part of this sink or its integrity result.
+[#9](https://github.com/faviann/skills/issues/9). The lifecycle registry in
+[`run-registry.md`](./run-registry.md) observes these sealed runs from outside
+the repository, and #73 may consume them for the #64 experiment; neither
+mechanism is part of this sink or its integrity result.
