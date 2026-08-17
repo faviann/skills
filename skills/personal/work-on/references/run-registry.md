@@ -194,9 +194,18 @@ guard's printed command executable in every state it can report:
 - `recover --outcome X` **offers** X, and only for a run that resolved no
   outcome of its own. A run that already resolved one is finished as it is.
 
-A finalized run answers the assertion too: repeating the same `finalize` is
-idempotent, and asserting a different outcome is refused rather than
-acknowledged. Recovery keeps its offer-only meaning there as well.
+A finalized run answers the assertion too, and answers it from the sink. Before
+any successful retry — `finalize` or `recover` — the record is reconciled with
+the canonical summary: the run, repository, and issue must match, the sink must
+be sealed, its lifecycle and outcome must agree with the record, its integrity
+must be valid, and its summary must still hash to the stored `summary_sha256`.
+Only then is repeating the same `finalize` idempotent; a different asserted
+outcome is refused, and the sink's outcome — never the row's — is what the
+assertion is checked against. A record is a commitment to sink facts, not a
+second source of them, so corruption appended after finalization, an edited row,
+or a stale hash all refuse rather than succeed, and evidence that has gone
+missing takes the bounded `unreproducible` path. Recovery keeps its offer-only
+meaning throughout.
 
 `Closes`, `Progresses`, and `preflight-aborted` reach finalization through the
 ordinary hand-backs in [`github-closeout.md`](./github-closeout.md) and
@@ -272,14 +281,20 @@ that still owes an observer something is never dropped, and when nothing is safe
 to drop, registration of a governed run refuses with the capacity-specific
 diagnostic rather than losing the evidence.
 
-An ordinary run is never blocked by control-support pressure: admission says so,
-the run continues **unregistered**, and its hand-back still completes — with no
+An ordinary run is never blocked by the registry: once applicability has
+established that nothing observes it, control-support pressure *and* local
+storage trouble — an unusable state root, an unusable lock, a record that cannot
+be written — all take the same route. Admission says so, the run continues
+**unregistered**, and its hand-back still completes — with no
 registry row, `finalize` performs #71's own resolve/seal directly and reports
 `finalized <run-id> unregistered`. Skipping the registry is all that path skips:
 it rereads the sink afterwards and requires the same run identity, the same
 asserted outcome, a sealed lifecycle, and `integrity=valid` before reporting
 success, so it is never a weaker substitute for #71's contract. A *governed* run that reaches hand-back with
 no record is the failure this mechanism exists to surface, and is refused.
+
+For a governed run those same failures stay fail-closed: an obligation that
+cannot be recorded is an obligation that must not be started.
 
 `prune --older-than-days N` applies the same safe-to-drop rule by age.
 

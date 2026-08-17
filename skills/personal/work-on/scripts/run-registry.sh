@@ -116,23 +116,53 @@ capacity="${WORK_ON_REGISTRY_CAPACITY:-$default_capacity}"
 [[ "$capacity" =~ ^[1-9][0-9]*$ ]] \
   || fail "WORK_ON_REGISTRY_CAPACITY must be a positive integer"
 
+# The registry is optional storage for a run nothing observes, and mandatory
+# storage for a governed one. Every failure to create, lock, or write it exits
+# with this status, so one caller can route it to the ordinary unregistered path
+# while a governed caller still fails closed.
+storage_failure_status=1
+storage_fail() {
+  printf 'run registry: %s\n' "$1" >&2
+  exit "$storage_failure_status"
+}
+
 # The registry records what a workstation's runs owe, so it is created for its
 # owner only. The umask closes the window between creation and the chmod; the
 # chmod also tightens anything an earlier version left readable.
 create_private_dir() {
-  [[ -d "$1" ]] || (umask 077 && mkdir -p "$1")
-  chmod 700 "$1"
+  [[ -d "$1" ]] || (umask 077 && mkdir -p "$1") \
+    || storage_fail "could not create the registry directory $1"
+  chmod 700 "$1" || storage_fail "could not secure the registry directory $1"
 }
 
 create_private_file() {
-  [[ -e "$1" ]] || (umask 077 && : >"$1")
-  chmod 600 "$1"
+  [[ -e "$1" ]] || (umask 077 && : >"$1") \
+    || storage_fail "could not create the registry file $1"
+  chmod 600 "$1" || storage_fail "could not secure the registry file $1"
 }
 
 ensure_registry_root() {
   create_private_dir "$registry_root"
   create_private_dir "$runs_root"
   create_private_file "$registry_lock"
+}
+
+# Finalization needs the registry only to look a record up. When the registry is
+# unavailable there is no record to find, and an ordinary run must still be able
+# to hand back, so its absence is reported and tolerated here; a governed run is
+# still refused further down, by the unregistered path itself.
+registry_available=true
+try_ensure_registry_root() {
+  if (
+    storage_failure_status=3
+    ensure_registry_root
+    [[ -f "$registry_lock" && -w "$registry_lock" ]] \
+      || storage_fail "the run registry lock is unavailable"
+  ); then
+    registry_available=true
+  else
+    registry_available=false
+  fi
 }
 
 now_iso() {
@@ -272,8 +302,10 @@ write_record() {
     || fail "refusing to write a registry record outside its bounded shape"
   staged_record_file="$(record_path "$key").staged.$$"
   create_private_file "$staged_record_file"
-  printf '%s\n' "$body" >"$staged_record_file"
-  mv -f "$staged_record_file" "$(record_path "$key")"
+  printf '%s\n' "$body" >"$staged_record_file" \
+    || storage_fail "could not stage the registry record for $key"
+  mv -f "$staged_record_file" "$(record_path "$key")" \
+    || storage_fail "could not store the registry record for $key"
   staged_record_file=""
 }
 
@@ -304,8 +336,11 @@ record_field() {
 registry_lock_fd=""
 lock_registry() {
   local mode="$1"
+  [[ -f "$registry_lock" && -w "$registry_lock" ]] \
+    || storage_fail "the run registry lock is unavailable"
   exec {registry_lock_fd}>>"$registry_lock"
-  flock "$mode" "$registry_lock_fd" || fail "could not lock the run registry"
+  flock "$mode" "$registry_lock_fd" \
+    || storage_fail "could not lock the run registry"
 }
 
 unlock_registry() {
@@ -318,8 +353,11 @@ record_lock_fd=""
 lock_record() {
   local key="$1"
   create_private_file "$(record_lock_path "$key")"
+  [[ -w "$(record_lock_path "$key")" ]] \
+    || storage_fail "the lock for registry record $key is unavailable"
   exec {record_lock_fd}>>"$(record_lock_path "$key")"
-  flock -x "$record_lock_fd" || fail "could not lock registry record $key"
+  flock -x "$record_lock_fd" \
+    || storage_fail "could not lock registry record $key"
 }
 
 unlock_record() {
@@ -758,22 +796,6 @@ drive_finalization() {
   current="$(read_record "$key")" \
     || fail "registry record $key disappeared before it could be locked"
 
-  # Only an identical retry is idempotent. A finalized run still answers a
-  # caller's assertion about it, so a contradictory outcome is refused here
-  # rather than acknowledged as success.
-  if [[ "$(record_field "$current" finalization)" == finalized ]]; then
-    printf '%s' "$current" | validate_record \
-      || fail "the finalized record for run $run_id is not internally valid"
-    if [[ "$outcome_is_assertion" == true && -n "$requested_outcome" \
-      && "$requested_outcome" != "$(record_field "$current" outcome)" ]]; then
-      unlock_record
-      fail "run $run_id already finalized as $(record_field "$current" outcome); refusing to finalize as $requested_outcome"
-    fi
-    unlock_record
-    printf 'finalized %s\n' "$run_id"
-    return 0
-  fi
-
   observer_id="$(record_field "$current" observer)"
   control_id="$(record_field "$current" control_id)"
   resolve_observer_program
@@ -808,6 +830,39 @@ drive_finalization() {
     sink_outcome=""
     halt_finalization "$key" "$current" failed IDENTITY_MISMATCH \
       "run $run_id does not match the identity recorded for it"
+  fi
+
+  # A finalized record is a commitment to what the sink said, not a substitute
+  # for it. An idempotent retry therefore re-derives the canonical facts and
+  # succeeds only while the sink still bears them out; the row alone can never
+  # certify a run, and it can never outvote the sink about an assertion.
+  if [[ "$(record_field "$current" finalization)" == finalized ]]; then
+    printf '%s' "$current" | validate_record \
+      || halt_finalization "$key" "$current" failed IDENTITY_MISMATCH \
+        "the finalized record for run $run_id is not internally valid"
+    [[ "$sink_lifecycle" == sealed \
+      && "$sink_outcome" == "$(record_field "$current" outcome)" ]] \
+      || halt_finalization "$key" "$current" failed IDENTITY_MISMATCH \
+        "run $run_id is recorded as finalized, but its sink no longer agrees"
+    case "$(jq -r '.integrity.state' <<<"$summary_json")" in
+      valid) ;;
+      incomplete) halt_finalization "$key" "$current" failed INTEGRITY_INCOMPLETE \
+        "run $run_id is recorded as finalized, but its telemetry is incomplete" ;;
+      *) halt_finalization "$key" "$current" failed INTEGRITY_INVALID \
+        "run $run_id is recorded as finalized, but its telemetry integrity is not valid" ;;
+    esac
+    [[ "$(printf '%s' "$summary_json" | sha256_of_stdin)" == \
+      "$(record_field "$current" summary_sha256)" ]] \
+      || halt_finalization "$key" "$current" failed IDENTITY_MISMATCH \
+        "run $run_id no longer summarizes to the hash recorded for it"
+    if [[ "$outcome_is_assertion" == true && -n "$requested_outcome" \
+      && "$requested_outcome" != "$sink_outcome" ]]; then
+      unlock_record
+      fail "run $run_id already finalized as $sink_outcome; refusing to finalize as $requested_outcome"
+    fi
+    unlock_record
+    printf 'finalized %s\n' "$run_id"
+    return 0
   fi
 
   # An interrupted finalization is visible as such, so a recovery can tell a
@@ -933,101 +988,109 @@ case "$subcommand" in
 
     resolve_observer_applicability "$repository" "$issue"
 
-    # A governed run may not proceed on an unrecorded obligation. A run nothing
-    # observes owes nobody anything, so a registry problem is reported and the
-    # run continues exactly as it would have before the registry existed; its
-    # hand-back still completes through the unregistered path above.
-    registration_problem() {
-      [[ -z "$control_id" ]] || fail "$1"
-      printf 'run registry: %s\n' "$1" >&2
-      printf 'run registry: run %s continues unregistered\n' "$run_id" >&2
-      exit 0
-    }
+    # Admission runs in a subshell so that a storage failure inside it — an
+    # unusable state root, an unusable lock, a record that cannot be written, or
+    # capacity with nothing safe to evict — can be routed rather than ending the
+    # command. A contract refusal keeps its own exit status and is never routed.
+    admit_run() {
+      storage_failure_status=3
+      ensure_registry_root
+      lock_registry -x
+      reap_staged_records
+      existing="$(read_record "$key")" || existing=""
 
-    ensure_registry_root
-    lock_registry -x
-    reap_staged_records
-    existing="$(read_record "$key")" || existing=""
-
-    if [[ -n "$existing" ]]; then
-      # A retry is the same run or nothing: every immutable field must agree
-      # with the sink this handle selects.
-      [[ "$(record_field "$existing" repository)" == "$repository" \
-        && "$(record_field "$existing" issue)" == "$issue" \
-        && "$(record_field "$existing" sink)" == "$sink" \
-        && "$(record_field "$existing" repository_binding)" == "$record_binding" ]] \
-        || fail "run $run_id is already registered with a different identity"
-      # Applicability is part of that identity. Governance cannot be retrofitted
-      # onto a run that already did work under none, nor removed from one that
-      # owes an obligation, nor moved to another observer or control.
-      registered_observer="$(record_field "$existing" observer)"
-      registered_control="$(record_field "$existing" control_id)"
-      if [[ "$registered_observer" != "$observer_id" \
-        || "$registered_control" != "$control_id" ]]; then
-        unlock_registry
-        fail "run $run_id is registered to ${registered_observer:-no observer}/${registered_control:-no control}; refusing a retry under ${observer_id:-no observer}/${control_id:-no control}"
-      fi
-    else
-      if [[ -n "$control_id" ]]; then
-        # A governed run may not begin while a prior run under the same control
-        # still owes its observer a finalization. The scan and this run's
-        # admission happen under one exclusive lock, so two competing starts
-        # cannot both find no obligation and both be admitted.
-        blocking="$(all_records | jq -rs --arg control "$control_id" \
-          --arg key "$key" '
-          [.[] | select(.control_id == $control
-            and ("\(.run_id)@\(.repository_binding)") != $key
-            and (.finalization | IN("pending","finalizing","failed")))]
-          | sort_by(.updated_epoch, .run_id) | .[0] // empty | tojson')"
-        if [[ -n "$blocking" ]]; then
+      if [[ -n "$existing" ]]; then
+        # A retry is the same run or nothing: every immutable field must agree
+        # with the sink this handle selects.
+        [[ "$(record_field "$existing" repository)" == "$repository" \
+          && "$(record_field "$existing" issue)" == "$issue" \
+          && "$(record_field "$existing" sink)" == "$sink" \
+          && "$(record_field "$existing" repository_binding)" == "$record_binding" ]] \
+          || fail "run $run_id is already registered with a different identity"
+        # Applicability is part of that identity. Governance cannot be retrofitted
+        # onto a run that already did work under none, nor removed from one that
+        # owes an obligation, nor moved to another observer or control.
+        registered_observer="$(record_field "$existing" observer)"
+        registered_control="$(record_field "$existing" control_id)"
+        if [[ "$registered_observer" != "$observer_id" \
+          || "$registered_control" != "$control_id" ]]; then
           unlock_registry
-          {
-            printf 'run registry: a prior observed run has an unfinished obligation\n'
-            printf '  run: %s (%s#%s)\n' \
-              "$(handle_of_record "$blocking")" \
-              "$(record_field "$blocking" repository)" \
-              "$(record_field "$blocking" issue)"
-            printf '  lifecycle: %s, finalization: %s, failure: %s\n' \
-              "$(record_field "$blocking" lifecycle)" \
-              "$(record_field "$blocking" finalization)" \
-              "$(jq -r '.failure_code // "none"' <<<"$blocking")"
-            printf '  recover with: %s\n' "$(recovery_command_for "$blocking")"
-          } >&2
-          exit 1
+          fail "run $run_id is registered to ${registered_observer:-no observer}/${registered_control:-no control}; refusing a retry under ${observer_id:-no observer}/${control_id:-no control}"
+        fi
+      else
+        if [[ -n "$control_id" ]]; then
+          # A governed run may not begin while a prior run under the same control
+          # still owes its observer a finalization. The scan and this run's
+          # admission happen under one exclusive lock, so two competing starts
+          # cannot both find no obligation and both be admitted.
+          blocking="$(all_records | jq -rs --arg control "$control_id" \
+            --arg key "$key" '
+            [.[] | select(.control_id == $control
+              and ("\(.run_id)@\(.repository_binding)") != $key
+              and (.finalization | IN("pending","finalizing","failed")))]
+            | sort_by(.updated_epoch, .run_id) | .[0] // empty | tojson')"
+          if [[ -n "$blocking" ]]; then
+            unlock_registry
+            {
+              printf 'run registry: a prior observed run has an unfinished obligation\n'
+              printf '  run: %s (%s#%s)\n' \
+                "$(handle_of_record "$blocking")" \
+                "$(record_field "$blocking" repository)" \
+                "$(record_field "$blocking" issue)"
+              printf '  lifecycle: %s, finalization: %s, failure: %s\n' \
+                "$(record_field "$blocking" lifecycle)" \
+                "$(record_field "$blocking" finalization)" \
+                "$(jq -r '.failure_code // "none"' <<<"$blocking")"
+              printf '  recover with: %s\n' "$(recovery_command_for "$blocking")"
+            } >&2
+            exit 1
+          fi
+
+          # Registration must be provably before implementation, and the sink is
+          # the only evidence of that. Registry timestamps prove nothing about
+          # what the run had already done.
+          pristine="$(jq -r '
+            if (.subagent_launches.total == 0 and .review_delegations.total == 0
+              and .validations.total == 0 and .outcome_resolution_events == 0
+              and .seal_events == 0 and .events == 1)
+            then "pristine"
+            elif .subagent_launches.total > 0 then "subagent launches"
+            elif .review_delegations.total > 0 then "reviewer delegations"
+            elif .validations.total > 0 then "validation executions"
+            elif .outcome_resolution_events > 0 then "a resolved outcome"
+            elif .seal_events > 0 then "a seal"
+            else "recorded work" end' <<<"$summary_json")"
+          [[ "$pristine" == pristine ]] || {
+            unlock_registry
+            fail "run $run_id already recorded $pristine; a governed run must be registered before implementation"
+          }
         fi
 
-        # Registration must be provably before implementation, and the sink is
-        # the only evidence of that. Registry timestamps prove nothing about
-        # what the run had already done.
-        pristine="$(jq -r '
-          if (.subagent_launches.total == 0 and .review_delegations.total == 0
-            and .validations.total == 0 and .outcome_resolution_events == 0
-            and .seal_events == 0 and .events == 1)
-          then "pristine"
-          elif .subagent_launches.total > 0 then "subagent launches"
-          elif .review_delegations.total > 0 then "reviewer delegations"
-          elif .validations.total > 0 then "validation executions"
-          elif .outcome_resolution_events > 0 then "a resolved outcome"
-          elif .seal_events > 0 then "a seal"
-          else "recorded work" end' <<<"$summary_json")"
-        [[ "$pristine" == pristine ]] || {
+        evict_for_capacity || {
           unlock_registry
-          fail "run $run_id already recorded $pristine; a governed run must be registered before implementation"
+          storage_fail \
+            "registry capacity $capacity is exhausted by unfinished obligations; discharge them with $registry_script recover --all"
         }
+        write_record "$key" "$(initial_record "$run_id" "$repository" "$issue" \
+          "$sink" "$worktree" "$record_binding")"
       fi
 
-      evict_for_capacity || {
-        unlock_registry
-        registration_problem \
-          "registry capacity $capacity is exhausted by unfinished obligations; discharge them with $registry_script recover --all"
-      }
-      write_record "$key" "$(initial_record "$run_id" "$repository" "$issue" \
-        "$sink" "$worktree" "$record_binding")"
-    fi
+      unlock_registry
+    }
 
-    unlock_registry
-    printf 'registered %s observer=%s control=%s\n' "$run_id" \
-      "${observer_id:-none}" "${control_id:-none}"
+    # A governed run may not proceed on an unrecorded obligation. A run nothing
+    # observes owes nobody anything: the problem is reported and the run
+    # continues exactly as it would have before the registry existed, and its
+    # hand-back still completes through the unregistered path.
+    if ( admit_run ); then
+      printf 'registered %s observer=%s control=%s\n' "$run_id" \
+        "${observer_id:-none}" "${control_id:-none}"
+    else
+      admission_status=$?
+      [[ "$admission_status" -eq 3 ]] || exit "$admission_status"
+      [[ -z "$control_id" ]] || exit 1
+      printf 'run registry: run %s continues unregistered\n' "$run_id" >&2
+    fi
     ;;
 
   finalize)
@@ -1044,8 +1107,8 @@ case "$subcommand" in
     [[ -z "$outcome" ]] \
       || contains "$outcome" "${run_outcomes[@]}" \
       || fail "outcome must be one of: ${run_outcomes[*]}"
-    ensure_registry_root
-    lock_registry -s
+    try_ensure_registry_root
+    [[ "$registry_available" == false ]] || lock_registry -s
     drive_finalization "$record_key" "$outcome" true
     ;;
 
@@ -1064,8 +1127,8 @@ case "$subcommand" in
     [[ -z "$outcome" ]] \
       || contains "$outcome" "${run_outcomes[@]}" \
       || fail "outcome must be one of: ${run_outcomes[*]}"
-    ensure_registry_root
-    lock_registry -s
+    try_ensure_registry_root
+    [[ "$registry_available" == false ]] || lock_registry -s
     if [[ "$recover_all" == true ]]; then
       [[ -z "$handle" ]] || fail "recover takes --all or one run, not both"
       status=0

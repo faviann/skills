@@ -1363,4 +1363,138 @@ registry_in "$repo" recover --run "$handle" --outcome Progresses >/dev/null \
   || fail "recovery stopped being an offer on a finalized run"
 assert_field "$handle" outcome Closes
 
+# --- maintainer-directed corrections ----------------------------------------
+
+scenario finalized-retries-reconcile-with-the-sink
+repo="$fixture/reconcile"
+new_repo "$repo" 'git@github.com:Example/Other.git'
+finalized_run() {
+  local handle
+  handle="$(telemetry "$repo" start --issue "$1")"
+  registry_in "$repo" register --run "$handle" >/dev/null
+  registry_in "$repo" finalize --run "$handle" --outcome "${2:-Closes}" >/dev/null
+  printf '%s\n' "$handle"
+}
+# C. An unchanged sink and row stay idempotently successful.
+happy="$(finalized_run 71)"
+[[ "$(registry_in "$repo" finalize --run "$happy")" == "finalized ${happy%@*}" ]] \
+  || fail "an unchanged finalized retry stopped being idempotent"
+[[ "$(registry_in "$repo" finalize --run "$happy" --outcome Closes)" \
+  == "finalized ${happy%@*}" ]] \
+  || fail "an unchanged finalized assertion stopped being idempotent"
+assert_field "$happy" finalization finalized
+# A. Corruption appended after the recorded finalization must not be blessed.
+corrupted="$(finalized_run 72)"
+printf 'not json\n' >>"$(sink_of "$repo" "$corrupted")"
+! registry_in "$repo" finalize --run "$corrupted" >"$fixture/reconcile-a.out" 2>&1 \
+  || fail "a finalized retry succeeded for a sink corrupted after finalization"
+! grep -Fq 'finalized ' "$fixture/reconcile-a.out" \
+  || fail "the retry printed successful finalized status for a corrupted sink"
+assert_field "$corrupted" finalization failed
+assert_field "$corrupted" failure_code INTEGRITY_INVALID
+# D. Recovery reconciles the same way.
+recovered="$(finalized_run 73)"
+printf 'not json\n' >>"$(sink_of "$repo" "$recovered")"
+! registry_in "$repo" recover --run "$recovered" >"$fixture/reconcile-d.out" 2>&1 \
+  || fail "a finalized recovery succeeded for a corrupted sink"
+! grep -Fq 'finalized ' "$fixture/reconcile-d.out" \
+  || fail "recovery printed successful finalized status for a corrupted sink"
+assert_field "$recovered" failure_code INTEGRITY_INVALID
+# B. A row edited to another schema-valid outcome cannot outvote the sink, and
+# the false assertion that matches the row is refused.
+outvoted="$(finalized_run 74 Closes)"
+record_file="$(registry_root)/runs/$outvoted.json"
+jq -c '.outcome = "Progresses"' "$record_file" >"$record_file.rewritten"
+mv "$record_file.rewritten" "$record_file"
+! registry_in "$repo" finalize --run "$outvoted" --outcome Progresses \
+  >"$fixture/reconcile-b.out" 2>&1 \
+  || fail "a stale registry outcome outvoted the canonical sink"
+! grep -Fq 'finalized ' "$fixture/reconcile-b.out" \
+  || fail "the retry printed successful finalized status for a stale row"
+assert_field "$outvoted" failure_code IDENTITY_MISMATCH
+[[ "$(telemetry "$repo" summary --run "$outvoted" | jq -r '.final_workflow_outcome')" == Closes ]] \
+  || fail "the canonical sink outcome changed"
+# E. A stored hash that no longer matches the canonical summary is rejected.
+rehashed="$(finalized_run 75)"
+record_file="$(registry_root)/runs/$rehashed.json"
+jq -c '.summary_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' \
+  "$record_file" >"$record_file.rewritten"
+mv "$record_file.rewritten" "$record_file"
+! registry_in "$repo" finalize --run "$rehashed" >/dev/null 2>&1 \
+  || fail "a finalized retry accepted a summary hash that no longer matches"
+assert_field "$rehashed" failure_code IDENTITY_MISMATCH
+# F. Missing canonical evidence takes the bounded unreproducible path.
+vanished="$(finalized_run 76)"
+rm -f "$(sink_of "$repo" "$vanished")"
+registry_in "$repo" finalize --run "$vanished" >"$fixture/reconcile-f.out" 2>&1
+! grep -Fq 'finalized ' "$fixture/reconcile-f.out" \
+  || fail "a finalized retry claimed success with no canonical evidence"
+assert_field "$vanished" finalization unreproducible
+assert_field "$vanished" failure_code SINK_MISSING
+
+scenario ordinary-runs-survive-registry-storage-failure
+enable_observer
+governed="$fixture/storage-governed"
+ordinary="$fixture/storage-ordinary"
+new_repo "$governed" 'git@github.com:Example/Telemetry.git'
+new_repo "$ordinary" 'git@github.com:Example/Other.git'
+break_state_root() {
+  mkdir -p "$XDG_STATE_HOME/work-on"
+  chmod 500 "$XDG_STATE_HOME/work-on"
+}
+repair_state_root() {
+  chmod 700 "$XDG_STATE_HOME/work-on"
+}
+# A. No observer applies, and the registry cannot be created at all.
+break_state_root
+ordinary_handle="$(telemetry "$ordinary" start --issue 72)"
+admission="$fixture/storage-admission"
+registry_in "$ordinary" register --run "$ordinary_handle" >"$admission" 2>&1 \
+  || fail "an ordinary run failed because optional registry storage was unavailable"
+grep -Fq 'continues unregistered' "$admission" \
+  || fail "the ordinary run was not routed to the unregistered path"
+# E. Nothing is claimed or created that could not be persisted.
+! grep -Fq 'registered ' "$admission" \
+  || fail "admission claimed a registration it could not persist"
+[[ ! -e "$(registry_root)" ]] || fail "a registry was created despite the failure"
+# D. Its hand-back still completes through the hardened unregistered path.
+telemetry "$ordinary" launch --run "$ordinary_handle" --role implementation \
+  --phase implementation --round 1
+[[ "$(registry_in "$ordinary" finalize --run "$ordinary_handle" --outcome Closes)" \
+  == "finalized ${ordinary_handle%@*} unregistered" ]] \
+  || fail "the ordinary hand-back did not complete without registry storage"
+summary="$(telemetry "$ordinary" summary --run "$ordinary_handle")"
+[[ "$(jq -r '.integrity.state' <<<"$summary")" == valid \
+  && "$(jq -r '.final_workflow_outcome' <<<"$summary")" == Closes \
+  && "$(jq -r '.sealed_at' <<<"$summary")" != null ]] \
+  || fail "the storage-failure hand-back did not produce a sealed valid sink"
+# B. The same failure is fatal for a governed run, before implementation.
+governed_handle="$(telemetry "$governed" start --issue 72)"
+! registry_in "$governed" register --run "$governed_handle" >/dev/null 2>&1 \
+  || fail "a governed run proceeded without a recorded obligation"
+repair_state_root
+# C. A failure beyond root creation: the registry lock cannot be acquired.
+seed="$fixture/storage-seed"
+new_repo "$seed" 'git@github.com:Example/Other.git'
+seed_handle="$(telemetry "$seed" start --issue 72)"
+registry_in "$seed" register --run "$seed_handle" >/dev/null
+rm -f "$(registry_root)/registry.lock"
+mkdir "$(registry_root)/registry.lock"
+locked_ordinary="$(telemetry "$ordinary" start --issue 73)"
+locked_admission="$fixture/storage-locked-admission"
+registry_in "$ordinary" register --run "$locked_ordinary" >"$locked_admission" 2>&1 \
+  || fail "an ordinary run failed because the registry lock was unusable"
+grep -Fq 'continues unregistered' "$locked_admission" \
+  || fail "an unusable registry lock did not route the ordinary run"
+locked_governed="$(telemetry "$governed" start --issue 73)"
+! registry_in "$governed" register --run "$locked_governed" >/dev/null 2>&1 \
+  || fail "a governed run proceeded with an unusable registry lock"
+[[ "$(registry_in "$ordinary" finalize --run "$locked_ordinary" --outcome Progresses)" \
+  == "finalized ${locked_ordinary%@*} unregistered" ]] \
+  || fail "the ordinary hand-back did not complete with an unusable registry lock"
+rmdir "$(registry_root)/registry.lock"
+# F. The capacity fallback is unchanged: the seeded record is still there.
+[[ -n "$(record_of "$seed_handle")" ]] \
+  || fail "the seeded registry record did not survive the storage failures"
+
 printf 'run registry scenarios passed\n'
