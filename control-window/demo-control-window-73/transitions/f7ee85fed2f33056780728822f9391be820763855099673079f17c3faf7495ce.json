@@ -1,0 +1,11 @@
+{
+  "control_id": "demo-control-window-73",
+  "idempotency_key": "prepare:demo-control-window-73",
+  "kind": "control-prepared",
+  "mode": "demo",
+  "policy_digest": "5cc6426f7955c4c1a16a107166ed40364e4ef9e95a8004ab9c32e5e8fb08787c",
+  "schema": 1,
+  "target_issue": 73,
+  "target_repository": "faviann/skills",
+  "transition_id": "f7ee85fed2f33056780728822f9391be820763855099673079f17c3faf7495ce"
+}
