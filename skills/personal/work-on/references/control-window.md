@@ -84,7 +84,11 @@ adopts the draft PR, and verifies its exact branch, base, title, body, draft
 state, generated title/body, number, and URL. The PR title and body are generated
 only from bounded identifiers, mode, and target, and the body begins
 `PREPARED / NON-OBSERVING`.
-Preparation stores phase `prepared`; it never makes `applies` match.
+Preparation stores phase `prepared`; it never makes `applies` match. One
+observer domain has one production-policy slot: preparing another production
+policy is refused while the configured control is prepared, active, or closing.
+Only a remotely reconciled `control-closed` transition releases the slot. Demo
+preparation remains descriptor-free.
 
 For a production policy, preparation also configures the adapter at the generic
 #72 observer seam and installs one absolute policy descriptor. That is safe in
@@ -94,23 +98,35 @@ Existing different observer configuration is refused.
 `activate` is a separate operation. It accepts only a production policy, proves
 the prepared branch/PR and local descriptor still agree, appends and reads back
 the exact `control-activated` transition, and only then changes local phase to
-`active`. The transition id it prints is the opening identity. A demo policy is
+`active`. The activation pins the verified prepared PR number, and the
+transition id it prints is the opening identity. A demo policy is
 mechanically non-activatable: its id must start `demo-`, its branch must start
 `demo/`, its match hook must be `never-v1`, and preparation installs no observer
 or control descriptor.
 
+The append-only remote history is authoritative for control phase; local state
+is its owner-readable projection. `prepare`, `activate`, `status`, matching
+`applies`, registration, and closing reconcile that history before trusting a
+local phase. A process lost after a successful activation or closing write is
+therefore recovered from the one existing transition. Missing or stale local
+state cannot hide an opened or closing control.
+
 Closing is likewise two transitions. `control-closing` requires no outstanding
-registry obligations and immediately makes the observer non-matching;
-`control-closed` can follow only that exact predecessor.
+registry obligations and makes public registration refuse new matching work;
+`control-closed` can follow only that exact predecessor. The observer continues
+to identify the control for #72 recovery of an obligation registered before the
+barrier.
 
 ## Registration and finalization
 
 The wrapper uses #72 in this order:
 
-1. `run-registry.sh register --run HANDLE` acquires the matching control lease;
-2. `run-registry.sh status --run HANDLE` supplies the bounded registered row;
-3. the adapter publishes and reads back `run-registered`; and
-4. only then does `control-window.sh register` return success to `work-on`.
+1. the adapter reconciles the remote control while holding the control admission
+   lock shared by public registration and closing;
+2. `run-registry.sh register --run HANDLE` acquires the matching control lease;
+3. `run-registry.sh status --run HANDLE` supplies the bounded registered row;
+4. the adapter publishes and reads back `run-registered`; and
+5. only then does `control-window.sh register` return success to `work-on`.
 
 A publication failure leaves #72's row pending, so implementation does not
 begin and the existing next-run guard blocks another matching run. Retrying the
@@ -130,6 +146,10 @@ from the run's workflow outcome; #72 preserves the registry row and raw sink and
 keeps the next-run guard engaged. `control-window.sh recover` drives the same
 generic run identity. Missing repository/sink evidence becomes one bounded
 `run-unreproducible` transition rather than disappearing.
+If #72 later reconciles a previously finalized row to `unreproducible` because
+its canonical repository or sink disappeared, the adapter preserves the
+historical terminal record and appends one `run-evidence-lost` successor naming
+that terminal transition. Repeated recovery adopts the same successor.
 
 ## Append-only publication
 
@@ -151,6 +171,20 @@ paths and serializers, content and idempotency identities, and compatible state
 predecessors. Any mismatch fails closed. The publisher has no
 amend, rebase, squash, force-push, reorder, or automatic history-repair path.
 
+The remote compare-and-append predicate enforces the manifest's
+`maximum_active_runs` across independent local registry domains. #72 remains the
+lease authority inside each domain; the remote bound decides which fully
+registered transition can become implementation-eligible globally. A losing
+domain retains its #72 obligation and can retry the same registration after
+remote capacity reopens.
+
+Public registration and closing additionally hold one local control admission
+lock across the #72 admission/pending check and exact remote publication.
+Closing therefore cannot pass its empty-obligation check while a matching
+registration in that observer domain is between generic admission and durable
+publication. Remote closing is reconciled before a later registration may call
+#72.
+
 ## Privacy boundary
 
 Publication serializers construct new JSON objects from a closed allowlist.
@@ -159,6 +193,11 @@ and issue attribution, enumerated lifecycle/outcome/integrity values, and
 summary/transition hashes only. It never receives the sink or worktree path,
 raw JSONL, prompts, diffs or source content, commands, output, credentials, raw
 diagnostics, or reviewer prose. Per-run issue comments are not used.
+Every evidence commit also forces the fixed author and committer identity
+`Control Window Publisher <control-window@invalid.local>` and a generated
+bounded message. Ambient Git identity/configuration and `CONTROL_WINDOW_GIT_*`
+values cannot enter published commit metadata; history validation rejects a
+different identity or message.
 
 ## Where this fits
 

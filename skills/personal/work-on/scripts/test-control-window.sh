@@ -113,6 +113,52 @@ chmod +x "$fake_bin/gh"
 cat >"$fake_bin/git" <<'GIT'
 #!/usr/bin/env bash
 set -euo pipefail
+repository=""
+arguments=("$@")
+for ((index = 0; index < ${#arguments[@]}; index++)); do
+  if [[ "${arguments[$index]}" == -C ]]; then
+    repository="${arguments[$((index + 1))]}"
+    break
+  fi
+done
+if [[ -n "${CONTROL_WINDOW_KILL_AFTER_ACTIVATION_MARKER:-}" ]]; then
+  for argument in "$@"; do
+    if [[ "$argument" == push && -n "$repository" \
+      && "$("$CONTROL_WINDOW_REAL_GIT" -C "$repository" log -1 --format=%s)" \
+        == "Append control-activated: fixture-b2-comparison" ]]; then
+      "$CONTROL_WINDOW_REAL_GIT" "$@"
+      : >"$CONTROL_WINDOW_KILL_AFTER_ACTIVATION_MARKER"
+      kill -KILL "$PPID"
+      exit 1
+    fi
+  done
+fi
+if [[ -n "${CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER:-}" ]]; then
+  for argument in "$@"; do
+    if [[ "$argument" == push && -n "$repository" \
+      && "$("$CONTROL_WINDOW_REAL_GIT" -C "$repository" log -1 --format=%s)" \
+        == Append\ control-closing:* ]]; then
+      "$CONTROL_WINDOW_REAL_GIT" "$@"
+      : >"$CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER"
+      kill -KILL "$PPID"
+      exit 1
+    fi
+  done
+fi
+if [[ -n "${CONTROL_WINDOW_CLOSING_BARRIER:-}" ]]; then
+  for argument in "$@"; do
+    if [[ "$argument" == push && -n "$repository" \
+      && "$("$CONTROL_WINDOW_REAL_GIT" -C "$repository" log -1 --format=%s)" \
+        == Append\ control-closing:* ]]; then
+      mkdir -p "$CONTROL_WINDOW_CLOSING_BARRIER"
+      : >"$CONTROL_WINDOW_CLOSING_BARRIER/entered"
+      while [[ ! -e "$CONTROL_WINDOW_CLOSING_BARRIER/release" ]]; do
+        sleep 0.02
+      done
+      break
+    fi
+  done
+fi
 if [[ -n "${CONTROL_WINDOW_AMBIGUOUS_PUSH_MARKER:-}" ]]; then
   for argument in "$@"; do
     if [[ "$argument" == push && ! -e "$CONTROL_WINDOW_AMBIGUOUS_PUSH_MARKER" ]]; then
@@ -159,6 +205,53 @@ after_count="$(git --git-dir="$remote" rev-list --count main..demo/control-windo
   && ! -e "$XDG_CONFIG_HOME/work-on/control-policy" ]] \
   || fail "demo preparation installed a real observer/control descriptor"
 
+scenario publisher-commit-metadata-is-closed-and-bounded
+privacy_policy="$test_root/privacy-demo-policy.json"
+jq --arg control demo-control-window-privacy \
+  --arg branch demo/control-window-privacy \
+  '.control_id = $control | .results.branch = $branch' \
+  "$fixtures/demo-policy.json" >"$privacy_policy"
+privacy_git_config="$test_root/privacy-gitconfig"
+printf '[user]\n\tname = AMBIENT PROMPT SENTINEL\n\temail = ambient-credential@example.invalid\n' \
+  >"$privacy_git_config"
+export GIT_CONFIG_GLOBAL="$privacy_git_config"
+export CONTROL_WINDOW_GIT_NAME='CONTROL REVIEWER PROSE SENTINEL'
+export CONTROL_WINDOW_GIT_EMAIL='control-credential@example.invalid'
+export GIT_AUTHOR_NAME='AUTHOR PROMPT SENTINEL'
+export GIT_AUTHOR_EMAIL='author-credential@example.invalid'
+export GIT_COMMITTER_NAME='COMMITTER DIAGNOSTIC SENTINEL'
+export GIT_COMMITTER_EMAIL='committer-credential@example.invalid'
+rm -f "$CONTROL_WINDOW_FAKE_GH_STATE"
+"$adapter" prepare --policy "$privacy_policy" >/dev/null
+privacy_surface="$test_root/privacy-surface"
+{
+  git --git-dir="$remote" log --format=fuller --stat -p \
+    main..demo/control-window-privacy
+  cat "$CONTROL_WINDOW_FAKE_GH_STATE"
+} >"$privacy_surface"
+for sentinel in \
+  'AMBIENT PROMPT SENTINEL' 'ambient-credential@example.invalid' \
+  'CONTROL REVIEWER PROSE SENTINEL' 'control-credential@example.invalid' \
+  'AUTHOR PROMPT SENTINEL' 'author-credential@example.invalid' \
+  'COMMITTER DIAGNOSTIC SENTINEL' 'committer-credential@example.invalid'; do
+  ! grep -Fq "$sentinel" "$privacy_surface" \
+    || fail "publisher retained prohibited Git metadata: $sentinel"
+done
+privacy_head="$(git --git-dir="$remote" rev-parse demo/control-window-privacy)"
+[[ "$(git --git-dir="$remote" show -s --format=%an "$privacy_head")" \
+    == 'Control Window Publisher' \
+  && "$(git --git-dir="$remote" show -s --format=%ae "$privacy_head")" \
+    == 'control-window@invalid.local' \
+  && "$(git --git-dir="$remote" show -s --format=%cn "$privacy_head")" \
+    == 'Control Window Publisher' \
+  && "$(git --git-dir="$remote" show -s --format=%ce "$privacy_head")" \
+    == 'control-window@invalid.local' \
+  && "$(git --git-dir="$remote" show -s --format=%s "$privacy_head")" \
+    == 'Prepare control results: demo-control-window-privacy' ]] \
+  || fail "publisher did not force its bounded commit identity and message"
+unset GIT_CONFIG_GLOBAL CONTROL_WINDOW_GIT_NAME CONTROL_WINDOW_GIT_EMAIL \
+  GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
+
 scenario activation-readback-precedes-matching
 rm -f "$CONTROL_WINDOW_FAKE_GH_STATE"
 production_policy="$test_root/production-policy.json"
@@ -187,6 +280,84 @@ rm -f "$CONTROL_WINDOW_FAKE_GH_STATE"
 ! "$adapter" activate --policy "$production_policy" >/dev/null 2>&1 \
   || fail "activation proceeded without the prepared results PR"
 "$adapter" prepare --policy "$production_policy" >/dev/null
+scenario remote-activation-is-authoritative-after-local-state-loss
+activation_crash_target="$test_root/activation-crash-target"
+mkdir -p "$activation_crash_target"
+git -C "$activation_crash_target" init -q
+git -C "$activation_crash_target" config user.name tester
+git -C "$activation_crash_target" config user.email tester@example.invalid
+git -C "$activation_crash_target" remote add origin \
+  git@github.com:example/comparison-repository.git
+printf 'activation crash target\n' >"$activation_crash_target/README.md"
+git -C "$activation_crash_target" add README.md
+git -C "$activation_crash_target" commit -qm base
+activation_crash_handle="$(cd "$activation_crash_target" \
+  && "$script_root/run-telemetry.sh" start --issue 101)"
+export GIT_CONFIG_GLOBAL="$privacy_git_config"
+export CONTROL_WINDOW_GIT_NAME='CONTROL REVIEWER PROSE SENTINEL'
+export CONTROL_WINDOW_GIT_EMAIL='control-credential@example.invalid'
+export GIT_AUTHOR_NAME='AUTHOR PROMPT SENTINEL'
+export GIT_AUTHOR_EMAIL='author-credential@example.invalid'
+export GIT_COMMITTER_NAME='COMMITTER DIAGNOSTIC SENTINEL'
+export GIT_COMMITTER_EMAIL='committer-credential@example.invalid'
+export CONTROL_WINDOW_KILL_AFTER_ACTIVATION_MARKER="$test_root/activation-killed"
+! "$adapter" activate --policy "$production_policy" >/dev/null 2>&1 \
+  || fail "activation caller survived the injected post-push loss"
+unset CONTROL_WINDOW_KILL_AFTER_ACTIVATION_MARKER
+[[ -e "$test_root/activation-killed" ]] \
+  || fail "activation crash did not occur after the remote write"
+state_file="$XDG_STATE_HOME/work-on/control-windows/fixture-b2-comparison.json"
+[[ "$(jq -r .phase "$state_file")" == prepared ]] \
+  || fail "the crash fixture did not preserve stale prepared local state"
+activation_count_before_registration="$(git --git-dir="$remote" grep -l \
+  '"kind": "control-activated"' experiment/fixture-b2-activation-test \
+  | wc -l)"
+crash_registration="$(cd "$activation_crash_target" \
+  && "$adapter" register --run "$activation_crash_handle")"
+[[ "$crash_registration" == "registered ${activation_crash_handle%@*}" ]] \
+  || fail "post-activation matching registration escaped control governance"
+[[ "$(cd "$activation_crash_target" && "$script_root/run-registry.sh" status \
+  --run "$activation_crash_handle" | jq -r .control_id)" == fixture-b2-comparison ]] \
+  || fail "post-activation matching registration became ungoverned"
+activation_id="$($adapter activate --policy "$production_policy")"
+activation_count_after_retry="$(git --git-dir="$remote" grep -l \
+  '"kind": "control-activated"' experiment/fixture-b2-activation-test \
+  | wc -l)"
+[[ "$activation_count_before_registration" -eq 1 \
+  && "$activation_count_after_retry" -eq 1 ]] \
+  || fail "activation recovery produced another logical transition"
+rm -f "$state_file"
+"$adapter" prepare --policy "$production_policy" >/dev/null
+[[ "$(jq -r .phase "$state_file")" == active ]] \
+  || fail "prepare hid an already-active remote control behind prepared state"
+rm -f "$state_file"
+[[ "$($adapter applies --repository example/comparison-repository --issue 101)" \
+  == $'observer=control-window-publisher\ncontrol=fixture-b2-comparison' ]] \
+  || fail "missing local state hid an already-active remote control"
+[[ "$(jq -r .phase "$state_file")" == active ]] \
+  || fail "remote activation did not reconstruct missing local state"
+"$adapter" finalize --run "$activation_crash_handle" --outcome abandoned >/dev/null
+git --git-dir="$remote" log --format=fuller --stat -p \
+  main..experiment/fixture-b2-activation-test >"$test_root/append-privacy-surface"
+cat "$CONTROL_WINDOW_FAKE_GH_STATE" >>"$test_root/append-privacy-surface"
+for sentinel in \
+  'AMBIENT PROMPT SENTINEL' 'ambient-credential@example.invalid' \
+  'CONTROL REVIEWER PROSE SENTINEL' 'control-credential@example.invalid' \
+  'AUTHOR PROMPT SENTINEL' 'author-credential@example.invalid' \
+  'COMMITTER DIAGNOSTIC SENTINEL' 'committer-credential@example.invalid'; do
+  ! grep -Fq "$sentinel" "$test_root/append-privacy-surface" \
+    || fail "append publication retained prohibited Git metadata: $sentinel"
+done
+while IFS='|' read -r author_name author_email committer_name committer_email; do
+  [[ "$author_name" == 'Control Window Publisher' \
+    && "$author_email" == 'control-window@invalid.local' \
+    && "$committer_name" == 'Control Window Publisher' \
+    && "$committer_email" == 'control-window@invalid.local' ]] \
+    || fail "an append commit escaped the fixed publisher identity"
+done < <(git --git-dir="$remote" log --format='%an|%ae|%cn|%ce' \
+  main..experiment/fixture-b2-activation-test)
+unset GIT_CONFIG_GLOBAL CONTROL_WINDOW_GIT_NAME CONTROL_WINDOW_GIT_EMAIL \
+  GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
 activation_output="$test_root/activation-output"
 if ! "$adapter" activate --policy "$production_policy" >"$activation_output" 2>&1; then
   fail "verified activation failed: $(cat "$activation_output")"
@@ -194,13 +365,12 @@ fi
 activation_id="$(cat "$activation_output")"
 [[ "$activation_id" =~ ^[0-9a-f]{64}$ ]] \
   || fail "activation did not return its opening identity"
-state_file="$XDG_STATE_HOME/work-on/control-windows/fixture-b2-comparison.json"
 [[ "$(jq -r .phase "$state_file")" == active \
   && "$(jq -r .activation_transition "$state_file")" == "$activation_id" ]] \
   || fail "active state was not installed after verified publication"
 activation_head="$(git --git-dir="$remote" rev-parse refs/heads/experiment/fixture-b2-activation-test)"
-[[ "$(git --git-dir="$remote" ls-tree -r --name-only "$activation_head" \
-  | grep -c '/transitions/')" -eq 2 ]] \
+[[ "$(git --git-dir="$remote" grep -l '"kind": "control-activated"' \
+  "$activation_head" | wc -l)" -eq 1 ]] \
   || fail "activation did not append exactly one immutable transition"
 unset WORK_ON_CONTROL_POLICY
 [[ "$($adapter applies --repository example/comparison-repository --issue 101)" \
@@ -230,7 +400,9 @@ registration_head="$(git --git-dir="$remote" rev-parse refs/heads/experiment/fix
 registered_file="$(git --git-dir="$remote" ls-tree -r --name-only "$registration_head" \
   | while read -r candidate; do
       [[ "$candidate" == */transitions/*.json ]] || continue
-      [[ "$(git --git-dir="$remote" show "$registration_head:$candidate" | jq -r .kind)" == run-registered ]] \
+      candidate_transition="$(git --git-dir="$remote" show "$registration_head:$candidate")"
+      [[ "$(jq -r .kind <<<"$candidate_transition")" == run-registered \
+        && "$(jq -r .run_id <<<"$candidate_transition")" == "${handle%@*}" ]] \
         && printf '%s\n' "$candidate"
     done || true)"
 [[ -n "$registered_file" ]] || fail "registration returned before its transition existed"
@@ -252,8 +424,11 @@ final_head="$(git --git-dir="$remote" rev-parse refs/heads/experiment/fixture-b2
 final_file="$(git --git-dir="$remote" ls-tree -r --name-only "$final_head" \
   | while read -r candidate; do
       [[ "$candidate" == */transitions/*.json ]] || continue
-      kind="$(git --git-dir="$remote" show "$final_head:$candidate" | jq -r .kind)"
-      [[ "$kind" == run-finalized ]] && printf '%s\n' "$candidate"
+      candidate_transition="$(git --git-dir="$remote" show "$final_head:$candidate")"
+      kind="$(jq -r .kind <<<"$candidate_transition")"
+      [[ "$kind" == run-finalized \
+        && "$(jq -r .run_id <<<"$candidate_transition")" == "${handle%@*}" ]] \
+        && printf '%s\n' "$candidate"
     done || true)"
 [[ -n "$final_file" ]] || fail "finalization did not publish a terminal transition"
 published_final="$(git --git-dir="$remote" show "$final_head:$final_file")"
@@ -270,6 +445,41 @@ before_retry="$(git --git-dir="$remote" rev-list --count main..experiment/fixtur
 after_retry="$(git --git-dir="$remote" rev-list --count main..experiment/fixture-b2-activation-test)"
 [[ "$before_retry" == "$after_retry" ]] \
   || fail "idempotent finalization appended a duplicate transition"
+
+scenario finalized-evidence-loss-appends-one-bounded-successor
+finalized_row="$(cd "$target" && "$script_root/run-registry.sh" status --run "$handle")"
+rm -f "$(jq -r .sink <<<"$finalized_row")"
+before_evidence_loss="$(git --git-dir="$remote" rev-list --count \
+  main..experiment/fixture-b2-activation-test)"
+(cd "$target" && "$adapter" recover --run "$handle") >/dev/null
+[[ "$(cd "$target" && "$script_root/run-registry.sh" status --run "$handle" \
+  | jq -r .finalization)" == unreproducible ]] \
+  || fail "#72 did not reconcile finalized evidence loss to unreproducible"
+evidence_loss_head="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)"
+evidence_loss_files="$(git --git-dir="$remote" ls-tree -r --name-only \
+  "$evidence_loss_head" | while read -r candidate; do
+    [[ "$candidate" == */transitions/*.json ]] || continue
+    [[ "$(git --git-dir="$remote" show "$evidence_loss_head:$candidate" \
+      | jq -r .kind)" == run-evidence-lost ]] && printf '%s\n' "$candidate"
+  done || true)"
+[[ "$(awk 'NF { count++ } END { print count + 0 }' <<<"$evidence_loss_files")" -eq 1 ]] \
+  || fail "finalized evidence loss did not publish exactly one successor"
+evidence_loss="$(git --git-dir="$remote" show \
+  "$evidence_loss_head:$evidence_loss_files")"
+[[ "$(jq -r .predecessor_transition <<<"$evidence_loss")" \
+    == "$(jq -r .transition_id <<<"$published_final")" \
+  && "$(jq -r .failure_code <<<"$evidence_loss")" == SINK_MISSING \
+  && "$(jq -r .finalization <<<"$evidence_loss")" == unreproducible ]] \
+  || fail "evidence-loss successor does not name the canonical predecessor/state"
+after_evidence_loss="$(git --git-dir="$remote" rev-list --count \
+  main..experiment/fixture-b2-activation-test)"
+[[ "$after_evidence_loss" -eq $(( before_evidence_loss + 1 )) ]] \
+  || fail "evidence loss appended more than one correction"
+(cd "$target" && "$adapter" recover --run "$handle") >/dev/null
+[[ "$(git --git-dir="$remote" rev-list --count \
+  main..experiment/fixture-b2-activation-test)" -eq "$after_evidence_loss" ]] \
+  || fail "repeated evidence-loss recovery duplicated its successor"
 
 scenario registration-publication-failure-fails-closed-and-recovers
 reject_hook="$remote/hooks/pre-receive"
@@ -399,8 +609,8 @@ scenario conflicting-remote-content-is-rejected
 good_head="$(git --git-dir="$remote" rev-parse refs/heads/experiment/fixture-b2-activation-test)"
 attack="$test_root/attack"
 git clone -q "$remote" "$attack"
-git -C "$attack" config user.name attacker
-git -C "$attack" config user.email attacker@example.invalid
+git -C "$attack" config user.name 'Control Window Publisher'
+git -C "$attack" config user.email control-window@invalid.local
 git -C "$attack" switch -q experiment/fixture-b2-activation-test
 victim="$(git -C "$attack" ls-tree -r --name-only HEAD \
   | while read -r candidate; do
@@ -439,26 +649,182 @@ git --git-dir="$remote" update-ref refs/heads/experiment/fixture-b2-activation-t
 (cd "$target" && "$adapter" register --run "$rewrite_run") >/dev/null
 (cd "$target" && "$adapter" finalize --run "$rewrite_run" --outcome abandoned) >/dev/null
 
-scenario closing-and-closed-are-distinct-append-only-transitions
-closing_id="$($adapter close --policy "$production_policy")"
-[[ "$closing_id" =~ ^[0-9a-f]{64}$ \
-  && "$(jq -r .phase "$state_file")" == closing ]] \
-  || fail "control closing was not durably distinct"
-if "$adapter" applies --repository example/comparison-repository --issue 101 >/dev/null; then
-  fail "a closing control still matched new work"
+scenario independent-registry-domains-share-the-remote-active-run-bound
+domain_a_state="$test_root/domain-a-state"
+domain_a_config="$test_root/domain-a-config"
+domain_b_state="$test_root/domain-b-state"
+domain_b_config="$test_root/domain-b-config"
+env XDG_STATE_HOME="$domain_a_state" XDG_CONFIG_HOME="$domain_a_config" \
+  WORK_ON_CONTROL_POLICY="$production_policy" "$adapter" prepare \
+  --policy "$production_policy" >/dev/null
+env XDG_STATE_HOME="$domain_b_state" XDG_CONFIG_HOME="$domain_b_config" \
+  WORK_ON_CONTROL_POLICY="$production_policy" "$adapter" prepare \
+  --policy "$production_policy" >/dev/null
+domain_a_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
+domain_b_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
+(cd "$target" && env XDG_STATE_HOME="$domain_a_state" \
+  XDG_CONFIG_HOME="$domain_a_config" WORK_ON_CONTROL_POLICY="$production_policy" \
+  "$adapter" register --run "$domain_a_handle") \
+  >"$test_root/domain-a.out" 2>"$test_root/domain-a.err" &
+domain_a_pid=$!
+(cd "$target" && env XDG_STATE_HOME="$domain_b_state" \
+  XDG_CONFIG_HOME="$domain_b_config" WORK_ON_CONTROL_POLICY="$production_policy" \
+  "$adapter" register --run "$domain_b_handle") \
+  >"$test_root/domain-b.out" 2>"$test_root/domain-b.err" &
+domain_b_pid=$!
+domain_a_status=0; wait "$domain_a_pid" || domain_a_status=$?
+domain_b_status=0; wait "$domain_b_pid" || domain_b_status=$?
+[[ "$(( (domain_a_status == 0) + (domain_b_status == 0) ))" -eq 1 ]] \
+  || fail "independent registry domains produced more than one eligible run"
+if [[ "$domain_a_status" -eq 0 ]]; then
+  domain_winner_handle="$domain_a_handle"
+  domain_winner_state="$domain_a_state"
+  domain_winner_config="$domain_a_config"
+  domain_loser_handle="$domain_b_handle"
+  domain_loser_state="$domain_b_state"
+  domain_loser_config="$domain_b_config"
 else
-  [[ "$?" -eq 3 ]] || fail "closing applicability returned a policy error"
+  domain_winner_handle="$domain_b_handle"
+  domain_winner_state="$domain_b_state"
+  domain_winner_config="$domain_b_config"
+  domain_loser_handle="$domain_a_handle"
+  domain_loser_state="$domain_a_state"
+  domain_loser_config="$domain_a_config"
 fi
+(cd "$target" && env XDG_STATE_HOME="$domain_winner_state" \
+  XDG_CONFIG_HOME="$domain_winner_config" WORK_ON_CONTROL_POLICY="$production_policy" \
+  "$adapter" finalize --run "$domain_winner_handle" --outcome abandoned) >/dev/null
+[[ "$(cd "$target" && env XDG_STATE_HOME="$domain_loser_state" \
+  XDG_CONFIG_HOME="$domain_loser_config" WORK_ON_CONTROL_POLICY="$production_policy" \
+  "$adapter" register --run "$domain_loser_handle")" \
+  == "registered ${domain_loser_handle%@*}" ]] \
+  || fail "the losing registry domain could not retry after remote capacity reopened"
+(cd "$target" && env XDG_STATE_HOME="$domain_loser_state" \
+  XDG_CONFIG_HOME="$domain_loser_config" WORK_ON_CONTROL_POLICY="$production_policy" \
+  "$adapter" finalize --run "$domain_loser_handle" --outcome abandoned) >/dev/null
+
+post_close_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
+(cd "$target" && "$adapter" register --run "$post_close_handle") >/dev/null
+(cd "$target" && "$adapter" finalize --run "$post_close_handle" --outcome abandoned) >/dev/null
+post_close_row="$(cd "$target" && "$script_root/run-registry.sh" status \
+  --run "$post_close_handle")"
+
+scenario configured-active-control-cannot-be-silently-replaced
+second_policy="$test_root/second-production-policy.json"
+jq --arg control fixture-second-control \
+  --arg branch experiment/fixture-second-control \
+  --arg arm second-fixture \
+  '.control_id = $control | .results.branch = $branch | .arm.id = $arm' \
+  "$fixtures/b2-like-policy.json" >"$second_policy"
+! "$adapter" prepare --policy "$second_policy" >"$test_root/second-active.out" 2>&1 \
+  || fail "preparing a second policy replaced an active control"
+grep -Fq 'still active' "$test_root/second-active.out" \
+  || fail "second-policy refusal did not identify the active predecessor"
+[[ "$($adapter applies --repository example/comparison-repository --issue 101)" \
+  == $'observer=control-window-publisher\ncontrol=fixture-b2-comparison' ]] \
+  || fail "refused replacement stopped the active control from matching"
+
+scenario ambiguous-remote-closing-is-reconciled-before-admission
+closing_crash_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
+export CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER="$test_root/closing-killed"
+! "$adapter" close --policy "$production_policy" >/dev/null 2>&1 \
+  || fail "closing caller survived the injected post-push loss"
+unset CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER
+[[ -e "$test_root/closing-killed" ]] \
+  || fail "closing crash did not occur after the remote write"
+[[ "$(jq -r .phase "$state_file")" == active ]] \
+  || fail "the closing crash fixture did not leave stale active local state"
+! (cd "$target" && "$adapter" register --run "$closing_crash_handle") \
+  >"$test_root/post-closing-register.out" 2>&1 \
+  || fail "stale local active state admitted work after remote closing"
+grep -Fq 'not open for registration' "$test_root/post-closing-register.out" \
+  || fail "post-closing admission lacked its fail-closed diagnostic"
+[[ -z "$(cd "$target" && "$script_root/run-registry.sh" status \
+  --run "$closing_crash_handle")" ]] \
+  || fail "post-closing refusal created a generic registry obligation"
+closing_count_before_retry="$(git --git-dir="$remote" grep -l \
+  '"kind": "control-closing"' experiment/fixture-b2-activation-test | wc -l)"
+closing_id="$($adapter close --policy "$production_policy")"
+closing_count_after_retry="$(git --git-dir="$remote" grep -l \
+  '"kind": "control-closing"' experiment/fixture-b2-activation-test | wc -l)"
+[[ "$closing_id" =~ ^[0-9a-f]{64}$ \
+  && "$closing_count_before_retry" -eq 1 && "$closing_count_after_retry" -eq 1 \
+  && "$(jq -r .phase "$state_file")" == closing ]] \
+  || fail "ambiguous closing did not reconcile to one durable transition"
+! "$adapter" prepare --policy "$second_policy" >"$test_root/second-closing.out" 2>&1 \
+  || fail "preparing a second policy replaced a closing control"
+grep -Fq 'still closing' "$test_root/second-closing.out" \
+  || fail "second-policy refusal did not identify the closing predecessor"
 closed_id="$($adapter close --policy "$production_policy" --complete)"
 [[ "$closed_id" =~ ^[0-9a-f]{64}$ \
   && "$(jq -r .phase "$state_file")" == closed ]] \
   || fail "control closed was not durably distinct"
+rm -f "$(jq -r .sink <<<"$post_close_row")"
+if ! (cd "$target" && "$adapter" recover --run "$post_close_handle") \
+  >"$test_root/post-close-recover.out" 2>&1; then
+  fail "closed-control evidence-loss recovery failed: $(cat "$test_root/post-close-recover.out")"
+fi
+[[ "$(cd "$target" && "$script_root/run-registry.sh" status --run "$post_close_handle" \
+  | jq -r .finalization)" == unreproducible ]] \
+  || fail "a closed control hid #72's later canonical evidence loss"
+post_close_head="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)"
+post_close_loss_files="$(git --git-dir="$remote" ls-tree -r --name-only \
+  "$post_close_head" | while read -r candidate; do
+    [[ "$candidate" == */transitions/*.json ]] || continue
+    candidate_transition="$(git --git-dir="$remote" show "$post_close_head:$candidate")"
+    [[ "$(jq -r .kind <<<"$candidate_transition")" == run-evidence-lost \
+      && "$(jq -r .run_id <<<"$candidate_transition")" == "${post_close_handle%@*}" ]] \
+      && printf 'one\n'
+  done || true)"
+post_close_loss_count="$(awk 'NF { count++ } END { print count + 0 }' \
+  <<<"$post_close_loss_files")"
+[[ "$post_close_loss_count" -eq 1 ]] \
+  || fail "closed-control recovery did not publish one evidence-loss successor"
+
+scenario closed-control-releases-the-single-production-policy-slot
+"$adapter" prepare --policy "$second_policy" >/dev/null
+second_state_file="$XDG_STATE_HOME/work-on/control-windows/fixture-second-control.json"
+[[ "$(cat "$XDG_CONFIG_HOME/work-on/control-policy")" == "$second_policy" \
+  && "$(jq -r .phase "$second_state_file")" == prepared ]] \
+  || fail "a durably closed control did not release the production policy slot"
+"$adapter" activate --policy "$second_policy" >/dev/null
+
+scenario public-registration-and-closing-share-one-admission-boundary
+race_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
+export CONTROL_WINDOW_CLOSING_BARRIER="$test_root/closing-barrier"
+"$adapter" close --policy "$second_policy" \
+  >"$test_root/race-close.out" 2>"$test_root/race-close.err" &
+race_close_pid=$!
+for _ in $(seq 1 200); do
+  [[ -e "$CONTROL_WINDOW_CLOSING_BARRIER/entered" ]] && break
+  sleep 0.02
+done
+[[ -e "$CONTROL_WINDOW_CLOSING_BARRIER/entered" ]] \
+  || fail "close did not reach the synchronized publication boundary"
+(cd "$target" && "$adapter" register --run "$race_handle") \
+  >"$test_root/race-register.out" 2>"$test_root/race-register.err" &
+race_register_pid=$!
+sleep 0.25
+kill -0 "$race_close_pid" 2>/dev/null && kill -0 "$race_register_pid" 2>/dev/null \
+  || fail "register and close were not simultaneously live at the boundary"
+[[ -z "$(cd "$target" && "$script_root/run-registry.sh" status --run "$race_handle")" ]] \
+  || fail "registration acquired a generic lease while closing held admission"
+: >"$CONTROL_WINDOW_CLOSING_BARRIER/release"
+race_close_status=0; wait "$race_close_pid" || race_close_status=$?
+race_register_status=0; wait "$race_register_pid" || race_register_status=$?
+unset CONTROL_WINDOW_CLOSING_BARRIER
+[[ "$race_close_status" -eq 0 && "$race_register_status" -ne 0 ]] \
+  || fail "the synchronized register/close race did not close without admission"
+[[ -z "$(cd "$target" && "$script_root/run-registry.sh" status --run "$race_handle")" ]] \
+  || fail "the losing registration left a generic obligation"
+"$adapter" close --policy "$second_policy" --complete >/dev/null
 
 scenario unexpected-demo-branch-content-fails-closed
 demo_attack="$test_root/demo-attack"
 git clone -q "$remote" "$demo_attack"
-git -C "$demo_attack" config user.name attacker
-git -C "$demo_attack" config user.email attacker@example.invalid
+git -C "$demo_attack" config user.name 'Control Window Publisher'
+git -C "$demo_attack" config user.email control-window@invalid.local
 git -C "$demo_attack" switch -q demo/control-window-prepared-test
 printf 'unexpected\n' >"$demo_attack/unexpected.txt"
 git -C "$demo_attack" add unexpected.txt

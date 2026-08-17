@@ -10,6 +10,8 @@ readonly observer_not_applicable=3
 readonly token_pattern='^[a-z0-9]+(-[a-z0-9]+)*$'
 readonly repository_pattern='^[a-z0-9_.-]+/[a-z0-9_.-]+$'
 readonly branch_pattern='^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$'
+readonly publisher_name='Control Window Publisher'
+readonly publisher_email='control-window@invalid.local'
 
 fail() {
   printf 'control window: %s\n' "$1" >&2
@@ -36,9 +38,11 @@ USAGE
 
 command -v jq >/dev/null 2>&1 || fail "requires jq"
 command -v git >/dev/null 2>&1 || fail "requires git"
+command -v flock >/dev/null 2>&1 || fail "requires flock"
 
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly registry_script="$script_root/run-registry.sh"
+readonly telemetry_script="$script_root/run-telemetry.sh"
 
 require_absolute_file() {
   local name="$1" path="$2"
@@ -109,7 +113,7 @@ load_policy() {
 }
 
 resolve_policy_path() {
-  local supplied="${1:-}" candidate descriptor root
+  local supplied="${1:-}" candidate descriptor
   if [[ -n "$supplied" ]]; then
     printf '%s\n' "$supplied"
     return
@@ -119,9 +123,7 @@ resolve_policy_path() {
     printf '%s\n' "$candidate"
     return
   fi
-  root="${XDG_CONFIG_HOME:-${HOME:-}/.config}"
-  [[ "$root" == /* ]] || fail "XDG_CONFIG_HOME or HOME must resolve to an absolute path"
-  descriptor="$root/work-on/control-policy"
+  descriptor="$(configured_policy_descriptor)"
   [[ -f "$descriptor" ]] || return 1
   IFS= read -r candidate <"$descriptor"
   [[ -n "$candidate" && "$candidate" == /* \
@@ -145,6 +147,36 @@ read_state() {
   file="$(state_file "$control_id")"
   [[ -f "$file" ]] || return 1
   cat "$file"
+}
+
+configuration_root() {
+  local root="${XDG_CONFIG_HOME:-${HOME:-}/.config}"
+  [[ "$root" == /* ]] || fail "XDG_CONFIG_HOME or HOME must resolve to an absolute path"
+  printf '%s/work-on\n' "$root"
+}
+
+configured_policy_descriptor() {
+  printf '%s/control-policy\n' "$(configuration_root)"
+}
+
+admission_lock_fd=""
+lock_control_admission() {
+  local directory lock
+  directory="$(configuration_root)"
+  lock="$directory/control-window.lock"
+  (umask 077 && mkdir -p "$directory") \
+    || fail "could not create control admission lock directory"
+  chmod 700 "$directory" || fail "could not secure control admission lock directory"
+  (umask 077 && touch "$lock") || fail "could not create control admission lock"
+  chmod 600 "$lock" || fail "could not secure control admission lock"
+  exec {admission_lock_fd}>>"$lock"
+  flock -x "$admission_lock_fd" || fail "could not lock control admission"
+}
+
+unlock_control_admission() {
+  [[ -n "$admission_lock_fd" ]] || return 0
+  exec {admission_lock_fd}>&-
+  admission_lock_fd=""
 }
 
 sha256_of_stdin() {
@@ -189,14 +221,19 @@ prepared_transition() {
 }
 
 activation_transition() {
-  local prepared
+  local prepared pr_number
   prepared="$(jq -r .transition_id <<<"$(prepared_transition)")"
+  [[ -n "${prepared_pr_json:-}" ]] \
+    || fail "activation requires an exactly verified prepared PR identity"
+  pr_number="$(jq -r '.number // 0' <<<"$prepared_pr_json")"
+  [[ "$pr_number" =~ ^[1-9][0-9]*$ ]] \
+    || fail "activation requires an exactly verified prepared PR identity"
   transition_with_identity "$(jq -cn \
     --arg control "$control_id" --arg digest "$(policy_digest)" \
-    --arg prepared "$prepared" '
+    --arg prepared "$prepared" --argjson pr_number "$pr_number" '
     {schema:1,control_id:$control,transition_id:null,kind:"control-activated",
      idempotency_key:("activate:" + $control),policy_digest:$digest,
-     prepared_transition:$prepared}')"
+     prepared_transition:$prepared,prepared_pr_number:$pr_number}')"
 }
 
 run_identity_for_handle() {
@@ -259,6 +296,27 @@ failure_transition() {
      failure_code:$code}')"
 }
 
+evidence_loss_transition() {
+  local record="$1" predecessor="$2" handle run_identity code
+  handle="$(jq -r '"\(.run_id)@\(.repository_binding)"' <<<"$record")"
+  run_identity="$(run_identity_for_handle "$handle")"
+  code="$(jq -r '.failure_code // "UNKNOWN"' <<<"$record")"
+  transition_with_identity "$(jq -cn \
+    --arg control "$control_id" --arg predecessor "$predecessor" \
+    --arg code "$code" --arg run_identity "$run_identity" \
+    --arg run_id "$(jq -r .run_id <<<"$record")" \
+    --arg repository "$(jq -r .repository <<<"$record")" \
+    --argjson issue "$(jq -r .issue <<<"$record")" \
+    --arg lifecycle "$(jq -r .lifecycle <<<"$record")" \
+    --arg outcome "$(jq -r '.outcome // ""' <<<"$record")" '
+    def maybe: if . == "" then null else . end;
+    {schema:1,control_id:$control,transition_id:null,kind:"run-evidence-lost",
+     idempotency_key:("evidence-lost:" + $run_identity + ":" + $predecessor + ":" + $code),
+     predecessor_transition:$predecessor,run_identity:$run_identity,run_id:$run_id,
+     repository:$repository,issue:$issue,lifecycle:$lifecycle,
+     finalization:"unreproducible",outcome:($outcome|maybe),failure_code:$code}')"
+}
+
 control_transition() {
   local kind="$1" predecessor="$2"
   transition_with_identity "$(jq -cn \
@@ -292,12 +350,10 @@ write_state() {
 }
 
 install_observer_configuration() {
-  local root directory observer_link descriptor existing staged
-  root="${XDG_CONFIG_HOME:-${HOME:-}/.config}"
-  [[ "$root" == /* ]] || fail "XDG_CONFIG_HOME or HOME must resolve to an absolute path"
-  directory="$root/work-on"
+  local directory observer_link descriptor existing staged
+  directory="$(configuration_root)"
   observer_link="$directory/observer"
-  descriptor="$directory/control-policy"
+  descriptor="$(configured_policy_descriptor)"
   (umask 077 && mkdir -p "$directory") \
     || fail "could not create work-on observer configuration"
   chmod 700 "$directory" || fail "could not secure observer configuration"
@@ -321,9 +377,8 @@ verify_observer_configuration() {
   if [[ -n "${WORK_ON_OBSERVER:-}" ]]; then
     configured="$(readlink -f "$WORK_ON_OBSERVER" 2>/dev/null || true)"
   else
-    root="${XDG_CONFIG_HOME:-${HOME:-}/.config}"
-    [[ "$root" == /* ]] || fail "XDG_CONFIG_HOME or HOME must resolve to an absolute path"
-    configured="$(readlink -f "$root/work-on/observer" 2>/dev/null || true)"
+    root="$(configuration_root)"
+    configured="$(readlink -f "$root/observer" 2>/dev/null || true)"
   fi
   [[ "$configured" == "$script_root/control-window.sh" ]] \
     || fail "the generic #72 observer is not configured to use this adapter"
@@ -331,6 +386,27 @@ verify_observer_configuration() {
   [[ "$(readlink -f "$selected" 2>/dev/null || true)" == \
     "$(readlink -f "$policy_path")" ]] \
     || fail "the configured observer policy differs from the activation policy"
+}
+
+assert_policy_slot_available() {
+  local descriptor configured configured_real requested_real status phase
+  [[ "$policy_mode" == production ]] || return 0
+  descriptor="$(configured_policy_descriptor)"
+  [[ -f "$descriptor" ]] || return 0
+  IFS= read -r configured <"$descriptor"
+  [[ -n "$configured" && "$configured" == /* \
+    && "$(wc -l <"$descriptor")" -eq 1 ]] \
+    || fail "configured control policy descriptor is malformed"
+  configured_real="$(readlink -f "$configured" 2>/dev/null || true)"
+  requested_real="$(readlink -f "$policy_path" 2>/dev/null || true)"
+  [[ -n "$configured_real" ]] \
+    || fail "configured control policy cannot be resolved"
+  [[ "$configured_real" != "$requested_real" ]] || return 0
+  status="$("$script_root/control-window.sh" status --policy "$configured_real")" \
+    || fail "could not reconcile the configured production control"
+  phase="$(jq -r .phase <<<"$status")"
+  [[ "$phase" == closed ]] \
+    || fail "configured production control is still $phase; close it before preparing another"
 }
 
 results_remote_url() {
@@ -356,10 +432,19 @@ clone_results_repository() {
     || fail "could not create publisher checkout"
   git clone -q "$(results_remote_url)" "$checkout_root/repository" \
     || fail "could not clone results repository"
-  git -C "$checkout_root/repository" config user.name \
-    "${CONTROL_WINDOW_GIT_NAME:-Control Window Publisher}"
-  git -C "$checkout_root/repository" config user.email \
-    "${CONTROL_WINDOW_GIT_EMAIL:-control-window@invalid.local}"
+  git -C "$checkout_root/repository" config user.name "$publisher_name"
+  git -C "$checkout_root/repository" config user.email "$publisher_email"
+}
+
+commit_evidence() {
+  local message="$1"
+  GIT_AUTHOR_NAME="$publisher_name" \
+  GIT_AUTHOR_EMAIL="$publisher_email" \
+  GIT_COMMITTER_NAME="$publisher_name" \
+  GIT_COMMITTER_EMAIL="$publisher_email" \
+    git -c user.name="$publisher_name" -c user.email="$publisher_email" \
+      -c commit.gpgsign=false -C "$checkout_root/repository" \
+      commit -qm "$message"
 }
 
 fetch_results_refs() {
@@ -389,6 +474,7 @@ fetch_results_refs() {
 validate_linear_history() {
   local base_ref="refs/remotes/origin/control-base"
   local result_ref="refs/remotes/origin/control-results" line commit fields status path
+  local transition_file kind expected_message
   git -C "$checkout_root/repository" merge-base --is-ancestor "$base_ref" "$result_ref" \
     || fail "results branch no longer descends from its prepared base"
   while IFS= read -r line; do
@@ -396,14 +482,37 @@ validate_linear_history() {
     fields="$(wc -w <<<"$line")"
     [[ "$fields" -eq 2 ]] || fail "results branch contains non-linear history"
     commit="${line%% *}"
+    [[ "$(git -C "$checkout_root/repository" show -s --format=%an "$commit")" \
+        == "$publisher_name" \
+      && "$(git -C "$checkout_root/repository" show -s --format=%ae "$commit")" \
+        == "$publisher_email" \
+      && "$(git -C "$checkout_root/repository" show -s --format=%cn "$commit")" \
+        == "$publisher_name" \
+      && "$(git -C "$checkout_root/repository" show -s --format=%ce "$commit")" \
+        == "$publisher_email" ]] \
+      || fail "results history contains unbounded publisher identity metadata"
+    transition_file=""
     while IFS=$'\t' read -r status path; do
       [[ "$status" == A ]] || fail "results history rewrites a published artifact"
       case "$path" in
-        "$(control_root_path)/policy.json"|"$(control_root_path)/transitions/"*.json) ;;
+        "$(control_root_path)/policy.json") ;;
+        "$(control_root_path)/transitions/"*.json) transition_file="$path" ;;
         *) fail "results history contains unexpected content: $path" ;;
       esac
     done < <(git -C "$checkout_root/repository" diff-tree --no-commit-id \
       --name-status -r "$commit")
+    [[ -n "$transition_file" ]] || fail "results commit contains no transition artifact"
+    kind="$(git -C "$checkout_root/repository" show "$commit:$transition_file" \
+      | jq -r '.kind // ""')"
+    if [[ "$kind" == control-prepared ]]; then
+      expected_message="Prepare control results: $control_id"
+    else
+      expected_message="Append $kind: $control_id"
+    fi
+    [[ "$(git -C "$checkout_root/repository" show -s --format=%s "$commit")" \
+        == "$expected_message" \
+      && -z "$(git -C "$checkout_root/repository" show -s --format=%b "$commit")" ]] \
+      || fail "results history contains unbounded commit message metadata"
   done < <(git -C "$checkout_root/repository" rev-list --reverse --parents \
     "$base_ref..$result_ref")
 }
@@ -441,13 +550,14 @@ validate_remote_transition_set() {
           --format=%H "$ref" -- "$file")"
         ;;
       control-activated)
-        jq -e 'keys == ["control_id","idempotency_key","kind","policy_digest","prepared_transition","schema","transition_id"]' \
+        jq -e 'keys == ["control_id","idempotency_key","kind","policy_digest","prepared_pr_number","prepared_transition","schema","transition_id"]
+          and (.prepared_pr_number | type == "number" and floor == . and . > 0)' \
           <<<"$content" >/dev/null || fail "activation transition has unbounded fields"
         activated_count=$(( activated_count + 1 ))
         activated_commit="$(git -C "$checkout_root/repository" log -1 \
           --format=%H "$ref" -- "$file")"
         ;;
-      run-registered|run-finalized|run-failed|run-unreproducible|control-closing|control-closed)
+      run-registered|run-finalized|run-failed|run-unreproducible|run-evidence-lost|control-closing|control-closed)
         case "$kind" in
           run-registered)
             jq -e 'keys == ["control_id","idempotency_key","issue","kind","repository","run_id","run_identity","schema","telemetry_schema","transition_id"]
@@ -489,6 +599,14 @@ validate_remote_transition_set() {
               and (.failure_code | IN("SINK_MISSING","REPOSITORY_MISSING","SUMMARY_FAILED"))' \
               <<<"$content" >/dev/null || fail "unreproducible transition has unbounded fields"
             ;;
+          run-evidence-lost)
+            jq -e 'keys == ["control_id","failure_code","finalization","idempotency_key","issue","kind","lifecycle","outcome","predecessor_transition","repository","run_id","run_identity","schema","transition_id"]
+              and .finalization == "unreproducible"
+              and (.run_identity | test("^[0-9a-f]{64}$"))
+              and (.predecessor_transition | test("^[0-9a-f]{64}$"))
+              and (.failure_code | IN("SINK_MISSING","REPOSITORY_MISSING","SUMMARY_FAILED"))' \
+              <<<"$content" >/dev/null || fail "evidence-loss transition has unbounded fields"
+            ;;
           control-closing|control-closed)
             jq -e 'keys == ["control_id","idempotency_key","kind","predecessor_transition","schema","transition_id"]
               and (.predecessor_transition | test("^[0-9a-f]{64}$"))' \
@@ -523,6 +641,7 @@ validate_remote_state_machine() {
   local open_count=0
   declare -A registered=()
   declare -A terminal=()
+  declare -A evidence_lost=()
   while IFS= read -r commit; do
     [[ -n "$commit" ]] || continue
     transition_count=0
@@ -558,7 +677,8 @@ validate_remote_state_machine() {
         phase=active
         ;;
       run-registered)
-        [[ "$phase" == active && -z "${registered[$identity]:-}" ]] \
+        [[ "$phase" == active && -z "${registered[$identity]:-}" \
+          && "$open_count" -lt "$(jq -r .lease.maximum_active_runs <<<"$policy_json")" ]] \
           || fail "run registration has an incompatible predecessor"
         registered[$identity]=true
         open_count=$((open_count + 1))
@@ -566,16 +686,23 @@ validate_remote_state_machine() {
       run-finalized|run-unreproducible)
         [[ -n "${registered[$identity]:-}" && -z "${terminal[$identity]:-}" ]] \
           || fail "run terminal state has an incompatible predecessor"
-        terminal[$identity]=true
+        terminal[$identity]="$(jq -r .transition_id <<<"$transition")"
         open_count=$((open_count - 1))
         ;;
       run-failed)
         [[ -n "${registered[$identity]:-}" && -z "${terminal[$identity]:-}" ]] \
           || fail "failed run state has an incompatible predecessor"
         if [[ "$(jq -r 'has("generic_transition")' <<<"$transition")" == true ]]; then
-          terminal[$identity]=true
+          terminal[$identity]="$(jq -r .transition_id <<<"$transition")"
           open_count=$((open_count - 1))
         fi
+        ;;
+      run-evidence-lost)
+        [[ -n "${terminal[$identity]:-}" && -z "${evidence_lost[$identity]:-}" \
+          && "$(jq -r .predecessor_transition <<<"$transition")" \
+            == "${terminal[$identity]}" ]] \
+          || fail "run evidence-loss correction has an incompatible predecessor"
+        evidence_lost[$identity]="$(jq -r .transition_id <<<"$transition")"
         ;;
       control-closing)
         [[ "$phase" == active && "$open_count" -eq 0 ]] \
@@ -593,6 +720,7 @@ validate_remote_state_machine() {
 
 assert_transition_allowed() {
   local transition="$1" kind run_identity registered terminal activated closing closed
+  local remote open_runs
   kind="$(jq -r .kind <<<"$transition")"
   activated=0
   closing=0
@@ -619,6 +747,9 @@ assert_transition_allowed() {
       terminal="$(remote_run_terminal_count "$run_identity")"
       [[ "$registered" -eq 0 && "$terminal" -eq 0 ]] \
         || fail "run already has a registration or terminal transition"
+      [[ "$(remote_open_run_count)" \
+          -lt "$(jq -r .lease.maximum_active_runs <<<"$policy_json")" ]] \
+        || fail "control has reached its remote active-run bound"
       ;;
     run-finalized|run-failed|run-unreproducible)
       run_identity="$(jq -r .run_identity <<<"$transition")"
@@ -626,6 +757,16 @@ assert_transition_allowed() {
       terminal="$(remote_run_terminal_count "$run_identity")"
       [[ "$registered" -eq 1 && "$terminal" -eq 0 ]] \
         || fail "run terminal transition has an incompatible predecessor"
+      ;;
+    run-evidence-lost)
+      run_identity="$(jq -r .run_identity <<<"$transition")"
+      registered="$(remote_run_transition_count "$run_identity" run-registered)"
+      terminal="$(remote_run_terminal_count "$run_identity")"
+      [[ "$registered" -eq 1 && "$terminal" -eq 1 \
+        && "$(remote_run_transition_count "$run_identity" run-evidence-lost)" -eq 0 \
+        && "$(jq -r .predecessor_transition <<<"$transition")" \
+          == "$(remote_run_terminal_transition_id "$run_identity")" ]] \
+        || fail "run evidence-loss correction has an incompatible predecessor"
       ;;
     control-closing)
       [[ "$activated" -eq 1 && "$closing" -eq 0 && "$closed" -eq 0 ]] \
@@ -687,6 +828,31 @@ remote_run_terminal_count() {
   done < <(git -C "$checkout_root/repository" ls-tree -r --name-only \
     refs/remotes/origin/control-results "$(control_root_path)/transitions")
   printf '%s\n' "$count"
+}
+
+remote_run_terminal_transition_id() {
+  local run_identity="$1" file remote kind
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    remote="$(git -C "$checkout_root/repository" show \
+      "refs/remotes/origin/control-results:$file")"
+    [[ "$(jq -r '.run_identity // ""' <<<"$remote")" == "$run_identity" ]] || continue
+    kind="$(jq -r .kind <<<"$remote")"
+    case "$kind" in
+      run-finalized|run-unreproducible)
+        jq -r .transition_id <<<"$remote"
+        return 0
+        ;;
+      run-failed)
+        if [[ "$(jq -r 'has("generic_transition")' <<<"$remote")" == true ]]; then
+          jq -r .transition_id <<<"$remote"
+          return 0
+        fi
+        ;;
+    esac
+  done < <(git -C "$checkout_root/repository" ls-tree -r --name-only \
+    refs/remotes/origin/control-results "$(control_root_path)/transitions")
+  return 1
 }
 
 verify_prepared_branch() {
@@ -769,8 +935,7 @@ append_transition() {
     mkdir -p "$(dirname "$checkout_root/repository/$path")"
     jq -S . <<<"$transition" >"$checkout_root/repository/$path"
     git -C "$checkout_root/repository" add -- "$path"
-    git -C "$checkout_root/repository" commit -qm \
-      "Append $(jq -r .kind <<<"$transition"): $control_id"
+    commit_evidence "Append $(jq -r .kind <<<"$transition"): $control_id"
     if git -C "$checkout_root/repository" push -q origin \
       "HEAD:refs/heads/$branch"; then
       refresh_results_ref
@@ -819,38 +984,150 @@ remote_transition_for_idempotency() {
   return 1
 }
 
-activate_control() {
-  local state transition
-  state="$(read_state)" || fail "control is not prepared"
-  [[ "$(jq -r .phase <<<"$state")" == prepared ]] \
-    || fail "control is not in prepared state"
+remote_transition_count_for_kind() {
+  local wanted="$1" count=0 file remote
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    remote="$(git -C "$checkout_root/repository" show \
+      "refs/remotes/origin/control-results:$file")"
+    [[ "$(jq -r .kind <<<"$remote")" == "$wanted" ]] && count=$((count + 1))
+  done < <(git -C "$checkout_root/repository" ls-tree -r --name-only \
+    refs/remotes/origin/control-results "$(control_root_path)/transitions")
+  printf '%s\n' "$count"
+}
+
+require_exact_remote_transition() {
+  local transition="$1" path remote
+  path="$(transition_path "$transition")"
+  git -C "$checkout_root/repository" cat-file -e \
+    "refs/remotes/origin/control-results:$path" 2>/dev/null \
+    || fail "remote control phase transition has unexpected identity"
+  remote="$(git -C "$checkout_root/repository" show \
+    "refs/remotes/origin/control-results:$path" | jq -cS .)"
+  [[ "$remote" == "$transition" ]] \
+    || fail "remote control phase transition has unexpected content"
+}
+
+derive_remote_control_phase() {
+  local activation closing closed
+  remote_phase=prepared
+  remote_activation_transition=""
+  remote_closing_transition=""
+  remote_closed_transition=""
+  if [[ "$(remote_transition_count_for_kind control-activated)" -eq 1 ]]; then
+    activation="$(activation_transition)"
+    require_exact_remote_transition "$activation"
+    remote_phase=active
+    remote_activation_transition="$(jq -r .transition_id <<<"$activation")"
+  fi
+  if [[ "$(remote_transition_count_for_kind control-closing)" -eq 1 ]]; then
+    [[ -n "$remote_activation_transition" ]] \
+      || fail "remote closing transition has no activation predecessor"
+    closing="$(control_transition control-closing "$remote_activation_transition")"
+    require_exact_remote_transition "$closing"
+    remote_phase=closing
+    remote_closing_transition="$(jq -r .transition_id <<<"$closing")"
+  fi
+  if [[ "$(remote_transition_count_for_kind control-closed)" -eq 1 ]]; then
+    [[ -n "$remote_closing_transition" ]] \
+      || fail "remote closed transition has no closing predecessor"
+    closed="$(control_transition control-closed "$remote_closing_transition")"
+    require_exact_remote_transition "$closed"
+    remote_phase=closed
+    remote_closed_transition="$(jq -r .transition_id <<<"$closed")"
+  fi
+}
+
+reconcile_state_in_checkout() {
+  local prior_state="${1:-}" head base transition
+  verify_prepared_branch
+  [[ -z "$prior_state" ]] || verify_state_against_remote "$prior_state"
+  ensure_prepared_pr false
+  if [[ -n "$prior_state" ]]; then
+    [[ "$(jq -r .pr_number <<<"$prior_state")" == \
+        "$(jq -r .number <<<"$prepared_pr_json")" \
+      && "$(jq -r .pr_url <<<"$prior_state")" == \
+        "$(jq -r .url <<<"$prepared_pr_json")" ]] \
+      || fail "prepared results PR identity changed after preparation"
+  fi
+  derive_remote_control_phase
+  head="$(git -C "$checkout_root/repository" rev-parse \
+    refs/remotes/origin/control-results)"
+  base="$(git -C "$checkout_root/repository" rev-parse \
+    refs/remotes/origin/control-base)"
+  transition="$(prepared_transition)"
+  reconciled_state="$(jq -cn \
+    --arg control "$control_id" --arg policy_path "$policy_path" \
+    --arg policy_digest "$(policy_digest)" \
+    --arg manifest_sha256 "$(manifest_digest)" \
+    --arg base "$base" --arg head "$head" --arg phase "$remote_phase" \
+    --arg prepared "$(jq -r .transition_id <<<"$transition")" \
+    --arg activation "$remote_activation_transition" \
+    --arg closing "$remote_closing_transition" --arg closed "$remote_closed_transition" \
+    --argjson pr_number "$(jq -r .number <<<"$prepared_pr_json")" \
+    --arg pr_url "$(jq -r .url <<<"$prepared_pr_json")" '
+    def maybe: if . == "" then null else . end;
+    {schema:1,control_id:$control,policy_path:$policy_path,
+     policy_digest:$policy_digest,manifest_sha256:$manifest_sha256,
+     base_sha:$base,last_verified_head:$head,phase:$phase,
+     prepared_transition:$prepared,activation_transition:($activation|maybe),
+     closing_transition:($closing|maybe),closed_transition:($closed|maybe),
+     pr_number:$pr_number,pr_url:$pr_url}')"
+  write_state "$reconciled_state"
+}
+
+reconcile_control_state() {
+  local prior_state="${1:-}"
   clone_results_repository
   fetch_results_refs || fail "prepared results branch is missing"
-  verify_prepared_branch
-  verify_state_against_remote "$state"
-  ensure_prepared_pr false
-  [[ "$(jq -r .number <<<"$prepared_pr_json")" == "$(jq -r .pr_number <<<"$state")" \
-    && "$(jq -r .url <<<"$prepared_pr_json")" == "$(jq -r .pr_url <<<"$state")" ]] \
-    || fail "prepared results PR identity changed after preparation"
+  reconcile_state_in_checkout "$prior_state"
+}
+
+activate_control() {
+  local state transition
+  lock_control_admission
+  assert_policy_slot_available
+  state="$(read_state 2>/dev/null || true)"
+  reconcile_control_state "$state"
+  state="$reconciled_state"
   verify_observer_configuration
+  if [[ "$(jq -r .phase <<<"$state")" == active ]]; then
+    unlock_control_admission
+    jq -r .activation_transition <<<"$state"
+    return 0
+  fi
+  [[ "$(jq -r .phase <<<"$state")" == prepared ]] \
+    || fail "control is not in prepared state"
   transition="$(activation_transition)"
   append_transition "$transition" "$state"
-  write_state "$(jq -c --arg head "$appended_head" \
-    --arg activation "$(jq -r .transition_id <<<"$transition")" '
-    .last_verified_head = $head | .phase = "active"
-    | .activation_transition = $activation' <<<"$state")"
+  refresh_results_ref
+  reconcile_state_in_checkout "$state"
+  unlock_control_admission
   jq -r .transition_id <<<"$transition"
 }
 
 register_run() {
-  local handle="$1" registry_output record selected state transition
-  registry_output="$("$registry_script" register --run "$handle")" \
-    || return $?
+  local handle="$1" registry_output record selected state transition summary
   selected="$(resolve_policy_path)" || {
-    printf '%s\n' "$registry_output"
-    return 0
+    "$registry_script" register --run "$handle"
+    return $?
   }
   load_policy "$selected"
+  summary="$("$telemetry_script" summary --run "$handle" 2>/dev/null)" \
+    || fail "could not read the run identity before control admission"
+  if ! policy_matches "$(jq -r .repository <<<"$summary")" \
+      "$(jq -r .issue <<<"$summary")"; then
+    "$registry_script" register --run "$handle"
+    return $?
+  fi
+  lock_control_admission
+  state="$(read_state 2>/dev/null || true)"
+  reconcile_control_state "$state"
+  state="$reconciled_state"
+  [[ "$(jq -r .phase <<<"$state")" == active ]] \
+    || fail "matching control is not open for registration"
+  registry_output="$("$registry_script" register --run "$handle")" \
+    || return $?
   record="$("$registry_script" status --run "$handle")" \
     || fail "could not read back the registered run"
   [[ -n "$record" ]] || {
@@ -861,9 +1138,6 @@ register_run() {
     printf '%s\n' "$registry_output"
     return 0
   }
-  state="$(read_state)" || fail "matching control has no prepared local state"
-  [[ "$(jq -r .phase <<<"$state")" == active ]] \
-    || fail "matching control is not active"
   [[ "$(jq -r .finalization <<<"$record")" == pending ]] \
     || fail "newly registered run is not pending"
   clone_results_repository
@@ -872,16 +1146,19 @@ register_run() {
   append_transition "$transition" "$state"
   write_state "$(jq -c --arg head "$appended_head" \
     '.last_verified_head = $head' <<<"$state")"
+  unlock_control_admission
   printf 'registered %s\n' "${handle%@*}"
 }
 
-load_active_policy_and_state() {
+load_governed_policy_and_state() {
   local selected state
   selected="$(resolve_policy_path)" || fail "no control policy is configured"
   load_policy "$selected"
-  state="$(read_state)" || fail "control has no local state"
-  [[ "$(jq -r .phase <<<"$state")" == active ]] \
-    || fail "control is not active"
+  state="$(read_state 2>/dev/null || true)"
+  reconcile_control_state "$state"
+  state="$reconciled_state"
+  [[ "$(jq -r .phase <<<"$state")" =~ ^(active|closing|closed)$ ]] \
+    || fail "control has not opened"
   active_state="$state"
 }
 
@@ -908,7 +1185,7 @@ observer_finalize() {
     || fail "observer finalize requires an absolute registry record"
   [[ "$generic_transition" =~ ^[0-9a-f]{64}$ ]] \
     || fail "observer transition identity is malformed"
-  load_active_policy_and_state
+  load_governed_policy_and_state
   record="$(jq -c . "$record_path" 2>/dev/null)" \
     || fail "observer record is not valid JSON"
   validate_observer_record "$record" "$generic_transition"
@@ -921,7 +1198,7 @@ observer_finalize() {
 }
 
 publish_failed_registry_state() {
-  local handle="$1" record kind transition
+  local handle="$1" record kind transition run_identity predecessor
   record="$("$registry_script" status --run "$handle" 2>/dev/null || true)"
   [[ -n "$record" ]] || return 0
   case "$(jq -r .finalization <<<"$record")" in
@@ -934,11 +1211,19 @@ publish_failed_registry_state() {
     *) return 0 ;;
   esac
   [[ -n "$(jq -r '.control_id // ""' <<<"$record")" ]] || return 0
-  load_active_policy_and_state
+  load_governed_policy_and_state
   [[ "$(jq -r '.control_id // ""' <<<"$record")" == "$control_id" ]] || return 0
-  transition="$(failure_transition "$record" "$kind")"
-  clone_results_repository
-  fetch_results_refs || fail "active results branch is missing"
+  if [[ "$kind" == run-unreproducible ]]; then
+    run_identity="$(run_identity_for_handle "$handle")"
+    predecessor="$(remote_run_terminal_transition_id "$run_identity" || true)"
+    if [[ -n "$predecessor" ]]; then
+      transition="$(evidence_loss_transition "$record" "$predecessor")"
+    else
+      transition="$(failure_transition "$record" "$kind")"
+    fi
+  else
+    transition="$(failure_transition "$record" "$kind")"
+  fi
   append_transition "$transition" "$active_state"
   write_state "$(jq -c --arg head "$appended_head" \
     '.last_verified_head = $head' <<<"$active_state")"
@@ -959,9 +1244,17 @@ drive_registry_finalization() {
 }
 
 close_control() {
-  local complete="$1" state transition predecessor next_phase pending
-  state="$(read_state)" || fail "control has no local state"
+  local complete="$1" state transition predecessor pending
+  lock_control_admission
+  state="$(read_state 2>/dev/null || true)"
+  reconcile_control_state "$state"
+  state="$reconciled_state"
   if [[ "$complete" == false ]]; then
+    if [[ "$(jq -r .phase <<<"$state")" == closing ]]; then
+      unlock_control_admission
+      jq -r .closing_transition <<<"$state"
+      return 0
+    fi
     [[ "$(jq -r .phase <<<"$state")" == active ]] \
       || fail "only an active control can begin closing"
     pending="$("$registry_script" status --pending 2>/dev/null | jq -s \
@@ -969,29 +1262,23 @@ close_control() {
     [[ "$pending" -eq 0 ]] || fail "control has pending run obligations"
     predecessor="$(jq -r .activation_transition <<<"$state")"
     transition="$(control_transition control-closing "$predecessor")"
-    next_phase=closing
   else
+    if [[ "$(jq -r .phase <<<"$state")" == closed ]]; then
+      unlock_control_admission
+      jq -r .closed_transition <<<"$state"
+      return 0
+    fi
     [[ "$(jq -r .phase <<<"$state")" == closing ]] \
       || fail "control must be closing before it can close"
     predecessor="$(jq -r .closing_transition <<<"$state")"
     transition="$(control_transition control-closed "$predecessor")"
-    next_phase=closed
   fi
   clone_results_repository
   fetch_results_refs || fail "results branch is missing"
   append_transition "$transition" "$state"
-  if [[ "$next_phase" == closing ]]; then
-    state="$(jq -c --arg head "$appended_head" \
-      --arg identity "$(jq -r .transition_id <<<"$transition")" '
-      .last_verified_head = $head | .phase = "closing"
-      | .closing_transition = $identity' <<<"$state")"
-  else
-    state="$(jq -c --arg head "$appended_head" \
-      --arg identity "$(jq -r .transition_id <<<"$transition")" '
-      .last_verified_head = $head | .phase = "closed"
-      | .closed_transition = $identity' <<<"$state")"
-  fi
-  write_state "$state"
+  refresh_results_ref
+  reconcile_state_in_checkout "$state"
+  unlock_control_admission
   jq -r .transition_id <<<"$transition"
 }
 
@@ -1009,8 +1296,7 @@ prepare_remote_branch() {
   jq -S . <<<"$transition" >"$transition_file"
   git -C "$checkout_root/repository" add -- \
     "$(control_root_path)/policy.json" "$(transition_path "$transition")"
-  git -C "$checkout_root/repository" commit -qm \
-    "Prepare control results: $control_id"
+  commit_evidence "Prepare control results: $control_id"
   git -C "$checkout_root/repository" push -q origin \
     "HEAD:refs/heads/$branch" || fail "could not publish prepared results branch"
   git -C "$checkout_root/repository" fetch -q origin \
@@ -1111,23 +1397,27 @@ case "$subcommand" in
     [[ "${1:-}" == --policy && "$#" -eq 2 ]] || usage
     load_policy "$2"
     command -v gh >/dev/null 2>&1 || fail "prepare requires gh"
+    [[ "$policy_mode" == demo ]] || lock_control_admission
+    assert_policy_slot_available
     prior_state="$(read_state 2>/dev/null || true)"
-    if [[ -n "$prior_state" ]]; then
-      [[ "$(jq -r .phase <<<"$prior_state")" == prepared ]] \
-        || fail "preparation cannot replace a control that already left prepared state"
-    fi
     clone_results_repository
     if fetch_results_refs; then
       verify_prepared_branch
-      [[ -z "$prior_state" ]] || verify_state_against_remote "$prior_state"
+      if [[ "$(remote_transition_count_for_kind control-activated)" -eq 0 ]]; then
+        ensure_prepared_pr true
+      else
+        ensure_prepared_pr false
+      fi
+      reconcile_state_in_checkout "$prior_state"
     else
       [[ -z "$prior_state" ]] \
         || fail "prepared results branch disappeared after local preparation"
       prepare_remote_branch
+      ensure_prepared_pr true
+      store_prepared_state
     fi
-    ensure_prepared_pr true
-    store_prepared_state
     [[ "$policy_mode" == demo ]] || install_observer_configuration
+    [[ "$policy_mode" == demo ]] || unlock_control_admission
     jq -r .url <<<"$prepared_pr_json"
     ;;
   register)
@@ -1194,7 +1484,9 @@ case "$subcommand" in
     if [[ "${1:-}" == --policy ]]; then
       [[ "$#" -eq 2 ]] || usage
       load_policy "$2"
-      read_state || fail "control has no local state"
+      state="$(read_state 2>/dev/null || true)"
+      reconcile_control_state "$state"
+      printf '%s\n' "$reconciled_state"
     else
       "$registry_script" status "$@"
     fi
@@ -1229,10 +1521,12 @@ case "$subcommand" in
       || fail "applies requires a normalized repository and positive issue"
     selected="$(resolve_policy_path)" || exit "$observer_not_applicable"
     load_policy "$selected"
-    state="$(read_state)" || exit "$observer_not_applicable"
-    [[ "$(jq -r '.phase' <<<"$state")" == active ]] \
-      || exit "$observer_not_applicable"
     policy_matches "$repository" "$issue" || exit "$observer_not_applicable"
+    state="$(read_state 2>/dev/null || true)"
+    reconcile_control_state "$state"
+    state="$reconciled_state"
+    [[ "$(jq -r '.phase' <<<"$state")" =~ ^(active|closing|closed)$ ]] \
+      || exit "$observer_not_applicable"
     printf 'observer=%s\ncontrol=%s\n' \
       "$(jq -r .observer_id <<<"$policy_json")" "$control_id"
     ;;
