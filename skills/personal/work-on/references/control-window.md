@@ -104,11 +104,15 @@ preparation remains descriptor-free.
 
 Every production mutation verifies the controller binding before adopting or
 reconstructing phase state. That boundary covers preparation, activation,
-matching registration, finalization, recovery, status reconciliation, and
-closing. A configured domain with a missing or mismatching binding fails closed;
-matching registration fails before #72 can create a row. Loss of mutable phase
-state is recoverable from exact remote history while the binding remains, but
-loss of the binding is not controller failover.
+matching registration, observer finalization, control publication, status
+reconciliation, and closing. A configured domain with a missing or mismatching
+binding fails closed; matching registration fails before #72 can create a row.
+Loss of mutable phase state is recoverable from exact remote history while the
+binding remains, but loss of the binding is not controller failover. Hand-back
+by run handle is not itself gated on the binding: a run nothing observes hands
+back and recovers through #72 unchanged even while a production policy is
+configured, and a governed row stays fail-closed through #72's stored
+observer/control re-check and the binding-verified publication paths.
 
 For a production policy, preparation also configures the adapter at the generic
 #72 observer seam and installs one absolute policy descriptor. That is safe in
@@ -170,6 +174,15 @@ If #72 later reconciles a previously finalized row to `unreproducible` because
 its canonical repository or sink disappeared, the adapter preserves the
 historical terminal record and appends one `run-evidence-lost` successor naming
 that terminal transition. Repeated recovery adopts the same successor.
+
+Failure and unreproducible publication is selected by the row's own stored
+`control_id`, not by whichever policy is configured now. The adapter loads that
+control's owner-only state and policy path from the same controller domain,
+checks the state/control/policy relationship and the controller binding,
+reconciles that control's remote history — including a closed one — and appends
+the transition to its own results branch. A historical control whose state or
+policy is missing, malformed, mismatched, or unreadable fails visibly; the
+command never reports success while omitting a required transition.
 
 ## Append-only publication
 

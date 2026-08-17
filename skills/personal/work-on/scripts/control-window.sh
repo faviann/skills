@@ -1249,8 +1249,40 @@ observer_finalize() {
     '.last_verified_head = $head' <<<"$active_state")"
 }
 
+# The obligation belongs to the control the row registered with, which is not
+# always the control configured now. Publication therefore selects that
+# historical control's own owner-only state and policy in this controller
+# domain; a missing, malformed, or disowned one fails visibly rather than
+# dropping a required transition. This is historical publication for one
+# controller domain, not a second active policy.
+load_historical_policy_and_state() {
+  local control="$1" file state selected
+  [[ "$control" =~ $token_pattern ]] \
+    || fail "registry row names a malformed control"
+  file="$(printf '%s/%s.json' "$(state_home)" "$control")"
+  [[ -f "$file" && ! -L "$file" ]] \
+    || fail "control $control has no local state in this controller domain"
+  state="$(jq -c . "$file" 2>/dev/null)" \
+    || fail "control $control has malformed local state"
+  selected="$(jq -r '.policy_path // ""' <<<"$state")"
+  [[ "$selected" == /* ]] \
+    || fail "control $control records no absolute policy path"
+  load_policy "$selected"
+  [[ "$control_id" == "$control" ]] \
+    || fail "control $control does not own the policy recorded for it"
+  [[ "$(jq -r '.policy_digest // ""' <<<"$state")" == "$(policy_digest)" \
+    && "$(jq -r '.manifest_sha256 // ""' <<<"$state")" == "$(manifest_digest)" ]] \
+    || fail "control $control no longer matches the policy recorded for it"
+  verify_controller_binding
+  reconcile_control_state "$state"
+  state="$reconciled_state"
+  [[ "$(jq -r .phase <<<"$state")" =~ ^(active|closing|closed)$ ]] \
+    || fail "control $control has not opened"
+  active_state="$state"
+}
+
 publish_failed_registry_state() {
-  local handle="$1" record kind transition run_identity predecessor
+  local handle="$1" record kind transition run_identity predecessor row_control
   record="$("$registry_script" status --run "$handle" 2>/dev/null || true)"
   [[ -n "$record" ]] || return 0
   case "$(jq -r .finalization <<<"$record")" in
@@ -1262,9 +1294,9 @@ publish_failed_registry_state() {
       ;;
     *) return 0 ;;
   esac
-  [[ -n "$(jq -r '.control_id // ""' <<<"$record")" ]] || return 0
-  load_governed_policy_and_state
-  [[ "$(jq -r '.control_id // ""' <<<"$record")" == "$control_id" ]] || return 0
+  row_control="$(jq -r '.control_id // ""' <<<"$record")"
+  [[ -n "$row_control" ]] || return 0
+  load_historical_policy_and_state "$row_control"
   if [[ "$kind" == run-unreproducible ]]; then
     run_identity="$(run_identity_for_handle "$handle")"
     predecessor="$(remote_run_terminal_transition_id "$run_identity" || true)"
@@ -1281,14 +1313,16 @@ publish_failed_registry_state() {
     '.last_verified_head = $head' <<<"$active_state")"
 }
 
+# Hand-back by run handle is #72's operation, and a run nothing observes owes
+# this adapter nothing. Requiring the configured control's binding here would
+# make an unrelated ordinary run unable to hand back or recover whenever a
+# production policy happens to be configured, so the binding is verified where a
+# governed obligation is actually discharged instead: #72 re-checks the stored
+# observer/control pair through `applies`, and both the observer callback and
+# the failure publication above verify the binding themselves.
 drive_registry_finalization() {
-  local operation="$1" handle="$2" outcome="$3" status=0 output selected
+  local operation="$1" handle="$2" outcome="$3" status=0 output
   local -a args
-  selected="$(resolve_policy_path 2>/dev/null || true)"
-  if [[ -n "$selected" ]]; then
-    load_policy "$selected"
-    verify_controller_binding
-  fi
   args=("$operation" --run "$handle")
   [[ -z "$outcome" ]] || args+=(--outcome "$outcome")
   output="$("$registry_script" "${args[@]}" 2>&1)" || status=$?

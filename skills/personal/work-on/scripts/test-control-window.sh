@@ -112,14 +112,22 @@ case "${2:-}" in
         *) exit 2 ;;
       esac
     done
-    jq -cn --argjson number 101 --arg url 'https://example.invalid/pull/101' \
+    # Several controls coexist, each keeping its own prepared PR, so the fake
+    # holds a stream of pull requests rather than one.
+    if [[ -f "$state" ]]; then
+      number="$(( 101 + $(jq -s 'length' "$state") ))"
+    else
+      number=101
+    fi
+    jq -cn --argjson number "$number" \
+      --arg url "https://example.invalid/pull/$number" \
       --arg base "$base" --arg head "$head" --arg title "$title" \
       --arg body "$(cat "$body_file")" \
-      '{number:$number,url:$url,isDraft:true,baseRefName:$base,headRefName:$head,title:$title,body:$body,state:"OPEN"}' >"$state"
-    printf 'https://example.invalid/pull/101\n'
+      '{number:$number,url:$url,isDraft:true,baseRefName:$base,headRefName:$head,title:$title,body:$body,state:"OPEN"}' >>"$state"
+    printf 'https://example.invalid/pull/%s\n' "$number"
     ;;
   view)
-    cat "$state"
+    jq -e -cs --arg url "${3:-}" '[.[] | select(.url == $url)][0] // empty' "$state"
     ;;
   *) exit 2 ;;
 esac
@@ -137,7 +145,8 @@ for ((index = 0; index < ${#arguments[@]}; index++)); do
   fi
 done
 for marker in "${CONTROL_WINDOW_KILL_AFTER_ACTIVATION_MARKER:-}" \
-  "${CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER:-}"; do
+  "${CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER:-}" \
+  "${CONTROL_WINDOW_KILL_AFTER_CLOSED_MARKER:-}"; do
   [[ -n "$marker" && -e "$marker" ]] || continue
   for argument in "$@"; do
     if [[ "$argument" == fetch ]]; then
@@ -169,6 +178,17 @@ if [[ -n "${CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER:-}" ]]; then
         == Append\ control-closing:* ]]; then
       "$CONTROL_WINDOW_REAL_GIT" "$@"
       : >"$CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER"
+      exit 1
+    fi
+  done
+fi
+if [[ -n "${CONTROL_WINDOW_KILL_AFTER_CLOSED_MARKER:-}" ]]; then
+  for argument in "$@"; do
+    if [[ "$argument" == push && -n "$repository" \
+      && "$("$CONTROL_WINDOW_REAL_GIT" -C "$repository" log -1 --format=%s)" \
+        == Append\ control-closed:* ]]; then
+      "$CONTROL_WINDOW_REAL_GIT" "$@"
+      : >"$CONTROL_WINDOW_KILL_AFTER_CLOSED_MARKER"
       exit 1
     fi
   done
@@ -513,14 +533,28 @@ for command in prepare activate status close; do
   grep -Fq 'controller binding is missing' "$test_root/foreign-$command.out" \
     || fail "foreign $command refusal did not identify controller ownership"
 done
+# A configured non-owner domain has the observer seam and descriptor and lacks
+# only the binding. Hand-back by run handle stays a #72 operation, so a matching
+# run's refusal comes from the composed mechanism: the foreign observer cannot
+# answer for a population it matches, and #72 refuses to decide.
+mkdir -p "$foreign_config/work-on"
+chmod 700 "$foreign_config/work-on"
+ln -sfn "$adapter" "$foreign_config/work-on/observer"
+printf '%s\n' "$production_policy" >"$foreign_config/work-on/control-policy"
+chmod 600 "$foreign_config/work-on/control-policy"
 for command in finalize recover; do
   ! (cd "$target" && env XDG_STATE_HOME="$foreign_state" \
     XDG_CONFIG_HOME="$foreign_config" WORK_ON_CONTROL_POLICY="$production_policy" \
     "$adapter" "$command" --run "$foreign_handle") \
     >"$test_root/foreign-$command.out" 2>&1 \
     || fail "foreign domain unexpectedly completed $command"
-  grep -Fq 'controller binding is missing' "$test_root/foreign-$command.out" \
+  grep -Eq 'controller binding is missing|could not decide whether this run is governed' \
+    "$test_root/foreign-$command.out" \
     || fail "foreign $command refusal did not identify controller ownership"
+  [[ -z "$(cd "$target" && env XDG_STATE_HOME="$foreign_state" \
+    XDG_CONFIG_HOME="$foreign_config" \
+    "$script_root/run-registry.sh" status --run "$foreign_handle")" ]] \
+    || fail "foreign $command created a #72 row"
 done
 foreign_state_only="$test_root/foreign-state-only"
 ! (cd "$target" && env XDG_STATE_HOME="$foreign_state_only" \
@@ -755,6 +789,66 @@ unreproducible_head="$(git --git-dir="$remote" rev-parse refs/heads/experiment/f
 git --git-dir="$remote" grep -q '"kind": "run-unreproducible"' "$unreproducible_head" \
   || fail "unreproducible lifecycle state disappeared from published history"
 
+scenario ordinary-hand-back-survives-a-configured-policy-without-its-binding
+outside="$test_root/outside-population"
+mkdir -p "$outside"
+git -C "$outside" init -q
+git -C "$outside" config user.name tester
+git -C "$outside" config user.email tester@example.invalid
+git -C "$outside" remote add origin git@github.com:example/outside-population.git
+printf 'outside\n' >"$outside/README.md"
+git -C "$outside" add README.md
+git -C "$outside" commit -qm base
+governed_binding_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
+(cd "$target" && "$adapter" register --run "$governed_binding_handle") >/dev/null
+outside_handle="$(cd "$outside" && "$script_root/run-telemetry.sh" start --issue 7)"
+[[ "$(cd "$outside" && "$adapter" register --run "$outside_handle")" \
+  == "registered ${outside_handle%@*} observer=none control=none" ]] \
+  || fail "an out-of-population run was not registered generically"
+outside_row="$(cd "$outside" && "$script_root/run-registry.sh" status --run "$outside_handle")"
+[[ "$(jq -r '.observer' <<<"$outside_row")" == null \
+  && "$(jq -r '.control_id' <<<"$outside_row")" == null ]] \
+  || fail "an out-of-population run acquired an observer or control"
+binding_file="$XDG_CONFIG_HOME/work-on/controller-binding"
+mv "$binding_file" "$test_root/controller-binding.parked"
+ordinary_head_before="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)"
+[[ "$(cd "$outside" && "$adapter" finalize --run "$outside_handle" \
+  --outcome preflight-aborted)" == "finalized ${outside_handle%@*}" ]] \
+  || fail "an ungoverned row could not hand back without the controller binding"
+[[ "$(cd "$outside" && "$script_root/run-registry.sh" status --run "$outside_handle" \
+  | jq -r .lifecycle)" == sealed ]] \
+  || fail "ungoverned hand-back did not seal its canonical sink"
+unregistered_handle="$(cd "$outside" && "$script_root/run-telemetry.sh" start --issue 8)"
+[[ "$(cd "$outside" && "$adapter" finalize --run "$unregistered_handle" \
+  --outcome abandoned)" == "finalized ${unregistered_handle%@*} unregistered" ]] \
+  || fail "the hardened unregistered fallback required the controller binding"
+recovered_ordinary="$(cd "$outside" && "$script_root/run-telemetry.sh" start --issue 9)"
+(cd "$outside" && "$adapter" register --run "$recovered_ordinary") >/dev/null
+[[ "$(cd "$outside" && "$adapter" recover --run "$recovered_ordinary" \
+  --outcome abandoned)" == "finalized ${recovered_ordinary%@*}" ]] \
+  || fail "ordinary recovery required the controller binding"
+[[ "$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)" == "$ordinary_head_before" ]] \
+  || fail "ordinary hand-back published a control transition"
+! (cd "$target" && "$adapter" finalize --run "$governed_binding_handle" \
+  --outcome abandoned) >"$test_root/governed-without-binding.out" 2>&1 \
+  || fail "a governed run finalized from a domain without the controller binding"
+[[ "$(cd "$target" && "$script_root/run-registry.sh" status \
+  --run "$governed_binding_handle" | jq -r .finalization)" != finalized ]] \
+  || fail "a governed obligation was discharged without the controller binding"
+[[ "$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)" == "$ordinary_head_before" ]] \
+  || fail "a binding-less governed hand-back published a transition"
+! (cd "$target" && "$adapter" recover --run "$governed_binding_handle") \
+  >"$test_root/governed-recover-without-binding.out" 2>&1 \
+  || fail "a governed run recovered from a domain without the controller binding"
+mv "$test_root/controller-binding.parked" "$binding_file"
+(cd "$target" && "$adapter" recover --run "$governed_binding_handle") >/dev/null
+[[ "$(cd "$target" && "$script_root/run-registry.sh" status \
+  --run "$governed_binding_handle" | jq -r .finalization)" == finalized ]] \
+  || fail "the owner domain could not discharge the governed obligation"
+
 scenario same-controller-concurrent-start-admits-at-most-one-run
 candidate_a="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
 candidate_b="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
@@ -848,6 +942,112 @@ after_ambiguous="$(git --git-dir="$remote" rev-list --count main..experiment/fix
 (cd "$target" && "$adapter" recover --run "$winner") >/dev/null
 [[ "$(git --git-dir="$remote" rev-list --count main..experiment/fixture-b2-activation-test)" \
   -eq "$after_ambiguous" ]] || fail "ambiguous-success retry duplicated publication"
+
+scenario ambiguous-registration-success-mints-one-row-and-one-transition
+ambiguous_registration="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
+export CONTROL_WINDOW_AMBIGUOUS_PUSH_MARKER="$test_root/ambiguous-register-push"
+before_ambiguous_registration="$(git --git-dir="$remote" rev-list --count \
+  main..experiment/fixture-b2-activation-test)"
+[[ "$(cd "$target" && "$adapter" register --run "$ambiguous_registration")" \
+  == "registered ${ambiguous_registration%@*}" ]] \
+  || fail "an ambiguously published registration was not adopted"
+unset CONTROL_WINDOW_AMBIGUOUS_PUSH_MARKER
+[[ -e "$test_root/ambiguous-register-push" ]] \
+  || fail "the ambiguous registration boundary was not exercised"
+after_ambiguous_registration="$(git --git-dir="$remote" rev-list --count \
+  main..experiment/fixture-b2-activation-test)"
+[[ "$after_ambiguous_registration" -eq $(( before_ambiguous_registration + 1 )) ]] \
+  || fail "ambiguous registration produced more than one remote commit"
+registration_transitions_for() {
+  local run_id="$1" head="$2" kind="$3"
+  git --git-dir="$remote" ls-tree -r --name-only "$head" \
+    | while read -r candidate; do
+        [[ "$candidate" == */transitions/*.json ]] || continue
+        candidate_transition="$(git --git-dir="$remote" show "$head:$candidate")"
+        [[ "$(jq -r .kind <<<"$candidate_transition")" == "$kind" \
+          && "$(jq -r .run_id <<<"$candidate_transition")" == "$run_id" ]] \
+          && printf '%s\n' "$candidate"
+      done || true
+}
+ambiguous_registration_head="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)"
+ambiguous_registration_files="$(registration_transitions_for \
+  "${ambiguous_registration%@*}" "$ambiguous_registration_head" run-registered)"
+[[ "$(awk 'NF { count++ } END { print count + 0 }' \
+  <<<"$ambiguous_registration_files")" -eq 1 ]] \
+  || fail "ambiguous registration published more than one transition"
+published_ambiguous_registration="$(git --git-dir="$remote" show \
+  "$ambiguous_registration_head:$ambiguous_registration_files")"
+[[ "$(jq -r .idempotency_key <<<"$published_ambiguous_registration")" \
+    == "register:$(jq -r .run_identity <<<"$published_ambiguous_registration")" \
+  && "$ambiguous_registration_files" \
+    == "control-window/fixture-b2-comparison/transitions/$(jq -cS 'del(.transition_id)' \
+      <<<"$published_ambiguous_registration" | sha256sum | cut -d' ' -f1).json" ]] \
+  || fail "the adopted registration does not carry its idempotency identity"
+ambiguous_registration_bytes="$(jq -cS . <<<"$published_ambiguous_registration")"
+[[ "$(cd "$target" && "$adapter" register --run "$ambiguous_registration")" \
+  == "registered ${ambiguous_registration%@*}" ]] \
+  || fail "the adoption retry did not return the same registration"
+[[ "$(git --git-dir="$remote" rev-list --count \
+  main..experiment/fixture-b2-activation-test)" \
+  -eq "$after_ambiguous_registration" ]] \
+  || fail "the adoption retry minted a second registration transition"
+[[ "$(cd "$target" && "$script_root/run-registry.sh" status --pending \
+  | jq -s --arg control fixture-b2-comparison \
+    '[.[] | select(.control_id == $control)] | length')" -eq 1 ]] \
+  || fail "the adoption retry minted a second registry row"
+[[ "$(git --git-dir="$remote" show \
+  "$(git --git-dir="$remote" rev-parse \
+    refs/heads/experiment/fixture-b2-activation-test):$ambiguous_registration_files" \
+  | jq -cS .)" == "$ambiguous_registration_bytes" ]] \
+  || fail "the adopted registration's exact bytes changed on retry"
+
+scenario ambiguous-evidence-loss-success-preserves-one-successor
+(cd "$target" && "$script_root/run-telemetry.sh" launch \
+  --run "$ambiguous_registration" --role implementation --phase implementation --round 1)
+(cd "$target" && "$adapter" finalize --run "$ambiguous_registration" \
+  --outcome Progresses) >/dev/null
+ambiguous_terminal_head="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)"
+ambiguous_terminal_file="$(registration_transitions_for \
+  "${ambiguous_registration%@*}" "$ambiguous_terminal_head" run-finalized)"
+ambiguous_terminal_id="$(git --git-dir="$remote" show \
+  "$ambiguous_terminal_head:$ambiguous_terminal_file" | jq -r .transition_id)"
+[[ "$ambiguous_terminal_id" =~ ^[0-9a-f]{64}$ ]] \
+  || fail "the ambiguously registered run published no terminal transition"
+rm -f "$(cd "$target" && "$script_root/run-registry.sh" status \
+  --run "$ambiguous_registration" | jq -r .sink)"
+before_ambiguous_loss="$(git --git-dir="$remote" rev-list --count \
+  main..experiment/fixture-b2-activation-test)"
+export CONTROL_WINDOW_AMBIGUOUS_PUSH_MARKER="$test_root/ambiguous-evidence-push"
+(cd "$target" && "$adapter" recover --run "$ambiguous_registration") >/dev/null
+unset CONTROL_WINDOW_AMBIGUOUS_PUSH_MARKER
+[[ -e "$test_root/ambiguous-evidence-push" ]] \
+  || fail "the ambiguous evidence-loss boundary was not exercised"
+after_ambiguous_loss="$(git --git-dir="$remote" rev-list --count \
+  main..experiment/fixture-b2-activation-test)"
+[[ "$after_ambiguous_loss" -eq $(( before_ambiguous_loss + 1 )) ]] \
+  || fail "ambiguous evidence loss produced more than one remote commit"
+ambiguous_loss_head="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)"
+ambiguous_loss_files="$(registration_transitions_for \
+  "${ambiguous_registration%@*}" "$ambiguous_loss_head" run-evidence-lost)"
+[[ "$(awk 'NF { count++ } END { print count + 0 }' <<<"$ambiguous_loss_files")" -eq 1 ]] \
+  || fail "ambiguous evidence loss published more than one successor"
+published_ambiguous_loss="$(git --git-dir="$remote" show \
+  "$ambiguous_loss_head:$ambiguous_loss_files")"
+[[ "$(jq -r .predecessor_transition <<<"$published_ambiguous_loss")" \
+    == "$ambiguous_terminal_id" \
+  && "$(jq -r .finalization <<<"$published_ambiguous_loss")" == unreproducible ]] \
+  || fail "the adopted successor does not name its exact terminal predecessor"
+(cd "$target" && "$adapter" recover --run "$ambiguous_registration") >/dev/null
+[[ "$(git --git-dir="$remote" rev-list --count \
+  main..experiment/fixture-b2-activation-test)" -eq "$after_ambiguous_loss" ]] \
+  || fail "the evidence-loss adoption retry duplicated its successor"
+[[ "$(git --git-dir="$remote" show \
+  "$ambiguous_loss_head:$ambiguous_loss_files" | jq -cS .)" \
+  == "$(jq -cS . <<<"$published_ambiguous_loss")" ]] \
+  || fail "the adopted successor's exact bytes changed on retry"
 
 scenario conflicting-remote-content-is-rejected
 good_head="$(git --git-dir="$remote" rev-parse refs/heads/experiment/fixture-b2-activation-test)"
@@ -979,6 +1179,22 @@ second_state_file="$XDG_STATE_HOME/work-on/control-windows/fixture-second-contro
   && "$(jq -r .phase "$second_state_file")" == prepared ]] \
   || fail "a durably closed control did not release the production policy slot"
 "$adapter" activate --policy "$second_policy" >/dev/null
+prior_control_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
+(cd "$target" && "$adapter" register --run "$prior_control_handle") >/dev/null
+(cd "$target" && "$script_root/run-telemetry.sh" launch --run "$prior_control_handle" \
+  --role implementation --phase implementation --round 1)
+(cd "$target" && "$adapter" finalize --run "$prior_control_handle" \
+  --outcome Progresses) >/dev/null
+prior_control_sink="$(cd "$target" && "$script_root/run-registry.sh" status \
+  --run "$prior_control_handle" | jq -r .sink)"
+prior_control_head="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-second-control)"
+prior_control_terminal="$(registration_transitions_for \
+  "${prior_control_handle%@*}" "$prior_control_head" run-finalized)"
+prior_control_terminal_id="$(git --git-dir="$remote" show \
+  "$prior_control_head:$prior_control_terminal" | jq -r .transition_id)"
+[[ "$prior_control_terminal_id" =~ ^[0-9a-f]{64}$ ]] \
+  || fail "the prior control's run published no terminal transition"
 
 scenario same-controller-register-and-close-leave-no-stranded-row
 race_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
@@ -986,8 +1202,12 @@ export CONTROL_WINDOW_CLOSING_BARRIER="$test_root/closing-barrier"
 "$adapter" close --policy "$second_policy" \
   >"$test_root/race-close.out" 2>"$test_root/race-close.err" &
 race_close_pid=$!
-for _ in $(seq 1 200); do
+# Reaching the publication boundary means a clone, a fetch, a full history
+# replay, and the results-PR read-back, so the budget is generous and gives up
+# early if the closing process has already exited.
+for _ in $(seq 1 3000); do
   [[ -e "$CONTROL_WINDOW_CLOSING_BARRIER/entered" ]] && break
+  kill -0 "$race_close_pid" 2>/dev/null || break
   sleep 0.02
 done
 [[ -e "$CONTROL_WINDOW_CLOSING_BARRIER/entered" ]] \
@@ -1008,7 +1228,105 @@ unset CONTROL_WINDOW_CLOSING_BARRIER
   || fail "the synchronized register/close race did not close without admission"
 [[ -z "$(cd "$target" && "$script_root/run-registry.sh" status --run "$race_handle")" ]] \
   || fail "the losing registration left a generic obligation"
-"$adapter" close --policy "$second_policy" --complete >/dev/null
+scenario ambiguous-remote-closed-reconciles-one-terminal-transition
+second_state_file="$XDG_STATE_HOME/work-on/control-windows/fixture-second-control.json"
+export CONTROL_WINDOW_KILL_AFTER_CLOSED_MARKER="$test_root/closed-killed"
+! "$adapter" close --policy "$second_policy" --complete >/dev/null 2>&1 \
+  || fail "the completing caller survived the injected post-push loss"
+unset CONTROL_WINDOW_KILL_AFTER_CLOSED_MARKER
+[[ -e "$test_root/closed-killed" ]] \
+  || fail "the closed crash did not occur after the remote write"
+[[ "$(jq -r .phase "$second_state_file")" == closing ]] \
+  || fail "the closed crash fixture did not leave stale closing local state"
+closed_count_before_retry="$(git --git-dir="$remote" grep -l \
+  '"kind": "control-closed"' experiment/fixture-second-control | wc -l)"
+closed_head_before_retry="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-second-control)"
+second_closed_id="$("$adapter" close --policy "$second_policy" --complete)"
+closed_count_after_retry="$(git --git-dir="$remote" grep -l \
+  '"kind": "control-closed"' experiment/fixture-second-control | wc -l)"
+[[ "$second_closed_id" =~ ^[0-9a-f]{64}$ \
+  && "$closed_count_before_retry" -eq 1 && "$closed_count_after_retry" -eq 1 \
+  && "$(git --git-dir="$remote" rev-parse \
+    refs/heads/experiment/fixture-second-control)" == "$closed_head_before_retry" \
+  && "$(jq -r .phase "$second_state_file")" == closed \
+  && "$(jq -r .closed_transition "$second_state_file")" == "$second_closed_id" ]] \
+  || fail "the ambiguous closed transition did not reconcile to exactly one record"
+
+scenario prior-control-evidence-loss-publishes-to-its-own-branch
+third_policy="$test_root/third-production-policy.json"
+jq --arg control fixture-third-control \
+  --arg branch experiment/fixture-third-control \
+  --arg arm third-fixture \
+  '.control_id = $control | .results.branch = $branch | .arm.id = $arm' \
+  "$fixtures/b2-like-policy.json" >"$third_policy"
+"$adapter" prepare --policy "$third_policy" >/dev/null
+"$adapter" activate --policy "$third_policy" >/dev/null
+[[ "$(cat "$XDG_CONFIG_HOME/work-on/control-policy")" == "$third_policy" ]] \
+  || fail "the replacement production policy was not configured"
+third_head_before="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-third-control)"
+prior_head_before="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-second-control)"
+rm -f "$prior_control_sink"
+(cd "$target" && "$adapter" recover --run "$prior_control_handle") >/dev/null
+[[ "$(cd "$target" && "$script_root/run-registry.sh" status \
+  --run "$prior_control_handle" | jq -r .finalization)" == unreproducible ]] \
+  || fail "#72 did not reconcile the prior control's row to unreproducible"
+prior_loss_head="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-second-control)"
+prior_loss_files="$(registration_transitions_for "${prior_control_handle%@*}" \
+  "$prior_loss_head" run-evidence-lost)"
+[[ "$(awk 'NF { count++ } END { print count + 0 }' <<<"$prior_loss_files")" -eq 1 ]] \
+  || fail "the closed control did not receive exactly one evidence-loss successor"
+prior_loss="$(git --git-dir="$remote" show "$prior_loss_head:$prior_loss_files")"
+[[ "$(jq -r .control_id <<<"$prior_loss")" == fixture-second-control \
+  && "$(jq -r .predecessor_transition <<<"$prior_loss")" \
+    == "$prior_control_terminal_id" \
+  && "$(jq -r .failure_code <<<"$prior_loss")" == SINK_MISSING ]] \
+  || fail "the successor does not name the prior control's terminal predecessor"
+[[ "$(git --git-dir="$remote" rev-list --count \
+  "$prior_head_before..$prior_loss_head")" -eq 1 ]] \
+  || fail "prior-control publication appended more than one commit"
+[[ "$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-third-control)" == "$third_head_before" ]] \
+  || fail "the configured control received the prior control's transition"
+! git --git-dir="$remote" grep -q "${prior_control_handle%@*}" \
+  experiment/fixture-third-control \
+  || fail "the configured control's branch names the prior control's run"
+(cd "$target" && "$adapter" recover --run "$prior_control_handle") >/dev/null
+[[ "$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-second-control)" == "$prior_loss_head" ]] \
+  || fail "repeated prior-control recovery duplicated its successor"
+[[ "$(git --git-dir="$remote" show "$prior_loss_head:$prior_loss_files" | jq -cS .)" \
+  == "$(jq -cS . <<<"$prior_loss")" ]] \
+  || fail "repeated prior-control recovery changed the successor's bytes"
+
+scenario prior-control-state-or-policy-loss-fails-visibly
+mv "$second_state_file" "$test_root/second-state.saved"
+! (cd "$target" && "$adapter" recover --run "$prior_control_handle") \
+  >"$test_root/prior-state-loss.out" 2>&1 \
+  || fail "a missing historical control state silently dropped publication"
+grep -Fq 'has no local state in this controller domain' \
+  "$test_root/prior-state-loss.out" \
+  || fail "historical state loss lacked its fail-closed diagnostic"
+cp "$test_root/second-state.saved" "$second_state_file"
+cp "$second_policy" "$test_root/second-policy.saved"
+jq '.arm.configuration.mutated = true' "$test_root/second-policy.saved" \
+  >"$second_policy"
+! (cd "$target" && "$adapter" recover --run "$prior_control_handle") \
+  >"$test_root/prior-policy-mutation.out" 2>&1 \
+  || fail "a mutated historical policy silently dropped publication"
+grep -Fq 'no longer matches the policy recorded for it' \
+  "$test_root/prior-policy-mutation.out" \
+  || fail "historical policy mutation lacked its fail-closed diagnostic"
+cp "$test_root/second-policy.saved" "$second_policy"
+(cd "$target" && "$adapter" recover --run "$prior_control_handle") >/dev/null
+[[ "$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-second-control)" == "$prior_loss_head" ]] \
+  || fail "restored historical evidence republished a successor"
+"$adapter" close --policy "$third_policy" >/dev/null
+"$adapter" close --policy "$third_policy" --complete >/dev/null
 
 scenario unexpected-demo-branch-content-fails-closed
 demo_attack="$test_root/demo-attack"
@@ -1024,6 +1342,47 @@ git -C "$demo_attack" push -q origin HEAD:refs/heads/demo/control-window-prepare
   || fail "unexpected results-branch content was accepted"
 grep -Fq 'unexpected content' "$test_root/unexpected.out" \
   || fail "unexpected branch content lacked its fail-closed diagnostic"
+
+scenario ambiguous-prepared-success-is-adopted-without-a-second-transition
+ambiguous_prepare_policy="$test_root/ambiguous-prepare-policy.json"
+jq --arg control demo-ambiguous-prepare \
+  --arg branch 'demo/control-window-ambiguous-prepare' \
+  '.control_id = $control | .results.branch = $branch' \
+  "$fixtures/demo-policy.json" >"$ambiguous_prepare_policy"
+export CONTROL_WINDOW_AMBIGUOUS_PUSH_MARKER="$test_root/ambiguous-prepare-push"
+! "$adapter" prepare --policy "$ambiguous_prepare_policy" \
+  >"$test_root/ambiguous-prepare.out" 2>&1 \
+  || fail "the preparing caller survived the injected publication loss"
+unset CONTROL_WINDOW_AMBIGUOUS_PUSH_MARKER
+[[ -e "$test_root/ambiguous-prepare-push" ]] \
+  || fail "the ambiguous preparation boundary was not exercised"
+ambiguous_prepare_head="$(git --git-dir="$remote" rev-parse \
+  refs/heads/demo/control-window-ambiguous-prepare)" \
+  || fail "the ambiguous preparation left no remote branch"
+[[ "$(git --git-dir="$remote" rev-list --count \
+  "main..demo/control-window-ambiguous-prepare")" -eq 1 ]] \
+  || fail "the ambiguous preparation published more than one commit"
+ambiguous_prepare_state="$XDG_STATE_HOME/work-on/control-windows/demo-ambiguous-prepare.json"
+[[ ! -e "$ambiguous_prepare_state" ]] \
+  || fail "the lost preparation result stored local state anyway"
+ambiguous_prepare_url="$("$adapter" prepare --policy "$ambiguous_prepare_policy")"
+[[ "$ambiguous_prepare_url" == https://example.invalid/pull/* ]] \
+  || fail "the preparation retry did not adopt a draft results PR"
+[[ "$(git --git-dir="$remote" rev-parse \
+  refs/heads/demo/control-window-ambiguous-prepare)" == "$ambiguous_prepare_head" ]] \
+  || fail "the preparation retry appended a second prepared commit"
+[[ "$(git --git-dir="$remote" ls-tree -r --name-only "$ambiguous_prepare_head" \
+  'control-window/demo-ambiguous-prepare/transitions' | wc -l)" -eq 1 ]] \
+  || fail "the preparation retry minted a second prepared transition"
+[[ "$(jq -r .phase "$ambiguous_prepare_state")" == prepared \
+  && "$(jq -r .pr_url "$ambiguous_prepare_state")" == "$ambiguous_prepare_url" ]] \
+  || fail "the preparation retry did not reconcile honest local state"
+[[ "$("$adapter" prepare --policy "$ambiguous_prepare_policy")" \
+  == "$ambiguous_prepare_url" ]] \
+  || fail "a further preparation retry did not adopt the same PR"
+[[ "$(git --git-dir="$remote" rev-parse \
+  refs/heads/demo/control-window-ambiguous-prepare)" == "$ambiguous_prepare_head" ]] \
+  || fail "a further preparation retry appended another commit"
 
 ! rg -n 'git .*push.*(--force|-f)|push .*\+' "$adapter" >/dev/null \
   || fail "the publisher contains a force-push recovery path"
