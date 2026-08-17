@@ -304,7 +304,7 @@ finish a run, and the sink holds everything else.
 ## Where this fits
 
 The registry and observer seam are the generic mechanism owned by
-[#9](https://github.com/faviann/skills/issues/9). A policy adapter that decides
-what a control means, and what to publish when one finalizes, is
-[#73](https://github.com/faviann/skills/issues/73)'s and is not part of this
-mechanism.
+[#9](https://github.com/faviann/skills/issues/9). The policy adapter in
+[`control-window.md`](./control-window.md) decides what a control means and what
+to publish; it composes this public interface without moving policy into the
+registry.

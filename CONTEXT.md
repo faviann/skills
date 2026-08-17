@@ -62,6 +62,10 @@ _Avoid_: run database, telemetry registry, analytics store
 The optional external program the **Run registry** asks whether a run carries a finalization obligation, and notifies when one is discharged. It answers with two bounded tokens — an observer id and a control id — and owns all policy; the registry knows nothing about what any observer measures. Discharge notifications carry one stable transition identity, delivered at least once, which the observer deduplicates into one logical transition.
 _Avoid_: experiment hook, control policy, publisher
 
+**Control policy manifest**:
+The versioned, experiment-owned JSON input that tells the control-window adapter which repository/issue population matches, which bounded classification hooks apply, and where its append-only results branch and draft pull request live. A prepared manifest is non-observing; only its separately published and read-back activation transition can make the adapter active. Distinct from the **Control observer**, which is the generic seam the adapter satisfies.
+_Avoid_: active-control descriptor, experiment registry
+
 **Closability gate**:
 The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available in this run. It runs on the contract alone and produces no artifact; failing it aborts the run before any code exists. Distinct from the **closure gate**, which inspects a finished candidate's evidence at closeout — the closability gate asks whether `tested` evidence is *reachable*, the closure gate asks whether it was *produced*.
 _Avoid_: closure gate (for this), readiness gate, closability report
@@ -82,6 +86,7 @@ _Avoid_: model kind, model family
 - A **Risk shape** helps locate **Correctness contracts** but does not determine how many a slice contains
 - A `work-on` run has one **Run telemetry sink** and one **Workflow provenance** value
 - A `work-on` run has at most one **Run registry** record, which names at most one **Control observer**; the record is registered before implementation and finalized on hand-back
+- A **Control policy manifest** configures one control-window adapter, which satisfies the **Control observer** seam without moving experiment policy into the **Run registry**
 - A `work-on` run passes one **Closability gate** before it delegates implementation; a run that fails it resolves as `preflight-aborted`, seals, and never reaches the closure gate
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**

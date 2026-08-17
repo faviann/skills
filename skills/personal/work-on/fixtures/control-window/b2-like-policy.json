@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "control_id": "fixture-b2-comparison",
+  "mode": "production",
+  "observer_id": "control-window-publisher",
+  "target": {
+    "repository": "faviann/skills",
+    "issue": 64
+  },
+  "population": {
+    "repositories": ["example/comparison-repository"],
+    "issues": [101]
+  },
+  "hooks": {
+    "match": "repository-issue-set-v1",
+    "classify": "registry-lifecycle-v1"
+  },
+  "results": {
+    "repository": "faviann/skills",
+    "base_branch": "main",
+    "branch": "experiment/fixture-b2-comparison",
+    "pull_request": {
+      "draft": true
+    }
+  },
+  "lease": {
+    "authority": "run-registry-v1",
+    "scope": "control",
+    "maximum_active_runs": 1
+  },
+  "arm": {
+    "id": "comparison-fixture",
+    "configuration": {
+      "placeholder": true
+    }
+  }
+}

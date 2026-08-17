@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "control_id": "demo-control-window-73",
+  "mode": "demo",
+  "observer_id": "control-window-publisher",
+  "target": {
+    "repository": "faviann/skills",
+    "issue": 73
+  },
+  "population": {
+    "repositories": [],
+    "issues": []
+  },
+  "hooks": {
+    "match": "never-v1",
+    "classify": "registry-lifecycle-v1"
+  },
+  "results": {
+    "repository": "faviann/skills",
+    "base_branch": "main",
+    "branch": "demo/control-window-73",
+    "pull_request": {
+      "draft": true
+    }
+  },
+  "lease": {
+    "authority": "run-registry-v1",
+    "scope": "control",
+    "maximum_active_runs": 1
+  },
+  "arm": {
+    "id": "demo",
+    "configuration": {}
+  }
+}

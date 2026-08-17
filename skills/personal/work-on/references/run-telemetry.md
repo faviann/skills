@@ -223,5 +223,6 @@ unchanged.
 This is the attributable schema owned by
 [#9](https://github.com/faviann/skills/issues/9). The run registry in
 [`run-registry.md`](./run-registry.md) observes these sealed runs from outside
-the repository, and #73 may consume them for the #64 experiment; neither
-mechanism is part of this sink or its integrity result.
+the repository, and the #64 adapter in
+[`control-window.md`](./control-window.md) may publish their bounded projection;
+neither mechanism is part of this sink or its integrity result.

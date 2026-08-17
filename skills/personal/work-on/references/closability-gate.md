@@ -105,7 +105,7 @@ Launch no implementation delegate, make no implementation edit, and create no
 implementation commit or pull request. Then:
 
 1. finalize the run this hand-back ends, with
-   `scripts/run-registry.sh finalize --run "$RUN_HANDLE" --outcome preflight-aborted`,
+   `scripts/control-window.sh finalize --run "$RUN_HANDLE" --outcome preflight-aborted`,
    which resolves that outcome in the sink this run already opened, seals it,
    and discharges the run's registered lifecycle in one step;
 2. name the exact criterion, prerequisite, command, or contract conflict that

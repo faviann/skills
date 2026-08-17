@@ -1,0 +1,169 @@
+# Control-window policy and results publication
+
+`scripts/control-window.sh` adapts the generic run registry to one versioned
+experiment policy and one append-only GitHub results pull request. It owns the
+experiment decision and publication rules. The run telemetry sink remains the
+canonical run evidence, and the run registry remains the only run lease and
+lifecycle authority.
+
+`work-on` calls this adapter's `register`, `finalize`, and `recover` wrappers.
+With no configured policy they preserve the generic registry behavior. With an
+active matching policy they make GitHub publication part of the command's
+success condition.
+
+## Policy manifest
+
+The manifest is JSON schema **1** with this closed top-level shape:
+
+```json
+{
+  "schema": 1,
+  "control_id": "bounded-token",
+  "mode": "demo or production",
+  "observer_id": "bounded-token",
+  "target": { "repository": "owner/repository", "issue": 123 },
+  "population": {
+    "repositories": ["owner/repository"],
+    "issues": [456]
+  },
+  "hooks": {
+    "match": "never-v1 or repository-issue-set-v1",
+    "classify": "registry-lifecycle-v1"
+  },
+  "results": {
+    "repository": "owner/repository",
+    "base_branch": "main",
+    "branch": "experiment/results-branch",
+    "pull_request": {
+      "draft": true
+    }
+  },
+  "lease": {
+    "authority": "run-registry-v1",
+    "scope": "control",
+    "maximum_active_runs": 1
+  },
+  "arm": { "id": "bounded-token", "configuration": {} }
+}
+```
+
+Policy data owns the control and observer identifiers, target issue, population,
+matching and classification hooks, results repository/branch/PR, lease policy,
+and arm configuration. The adapter supplies the reusable mechanics. Generic
+telemetry and registry code contain none of those experiment values.
+
+Only the allowlisted public projection is committed. `arm.configuration`
+cannot enter a transition artifact. The
+committed projection retains the identifiers, target, population, selected hook
+versions, results location, lease rule, and arm id.
+The full canonical manifest digest stays only in owner-readable local state, so
+a local policy edit cannot silently reuse the prepared public surface.
+
+This repository ships two non-operative fixtures:
+
+- `fixtures/control-window/demo-policy.json` is demo-only and matches nothing;
+- `fixtures/control-window/b2-like-policy.json` proves the same schema can
+  represent a later comparison arm, but defines no actual B2 policy.
+
+No A3-attempt-2 manifest is shipped here.
+
+## Prepare, activate, and close
+
+```sh
+control-window.sh validate --policy /absolute/policy.json
+control-window.sh prepare --policy /absolute/policy.json
+control-window.sh activate --policy /absolute/policy.json
+control-window.sh close --policy /absolute/policy.json
+control-window.sh close --policy /absolute/policy.json --complete
+control-window.sh status --policy /absolute/policy.json
+```
+
+`prepare` creates the results branch from the configured base, commits the
+bounded policy projection and one `control-prepared` transition, creates or
+adopts the draft PR, and verifies its exact branch, base, title, body, draft
+state, generated title/body, number, and URL. The PR title and body are generated
+only from bounded identifiers, mode, and target, and the body begins
+`PREPARED / NON-OBSERVING`.
+Preparation stores phase `prepared`; it never makes `applies` match.
+
+For a production policy, preparation also configures the adapter at the generic
+#72 observer seam and installs one absolute policy descriptor. That is safe in
+prepared state because the observer reports not-applicable until activation.
+Existing different observer configuration is refused.
+
+`activate` is a separate operation. It accepts only a production policy, proves
+the prepared branch/PR and local descriptor still agree, appends and reads back
+the exact `control-activated` transition, and only then changes local phase to
+`active`. The transition id it prints is the opening identity. A demo policy is
+mechanically non-activatable: its id must start `demo-`, its branch must start
+`demo/`, its match hook must be `never-v1`, and preparation installs no observer
+or control descriptor.
+
+Closing is likewise two transitions. `control-closing` requires no outstanding
+registry obligations and immediately makes the observer non-matching;
+`control-closed` can follow only that exact predecessor.
+
+## Registration and finalization
+
+The wrapper uses #72 in this order:
+
+1. `run-registry.sh register --run HANDLE` acquires the matching control lease;
+2. `run-registry.sh status --run HANDLE` supplies the bounded registered row;
+3. the adapter publishes and reads back `run-registered`; and
+4. only then does `control-window.sh register` return success to `work-on`.
+
+A publication failure leaves #72's row pending, so implementation does not
+begin and the existing next-run guard blocks another matching run. Retrying the
+same wrapper reuses the same registry row and deterministic transition.
+
+At hand-back, #72 calls the adapter's observer form:
+
+```sh
+control-window.sh finalize --record /absolute/registry-record \
+  --transition GENERIC_FINALIZATION_ID
+```
+
+The adapter validates the bounded record, publishes `run-finalized` or
+`run-failed` from its lifecycle/outcome/hash projection, and returns success
+only after exact read-back. A publication failure is `OBSERVER_FAILED`, distinct
+from the run's workflow outcome; #72 preserves the registry row and raw sink and
+keeps the next-run guard engaged. `control-window.sh recover` drives the same
+generic run identity. Missing repository/sink evidence becomes one bounded
+`run-unreproducible` transition rather than disappearing.
+
+## Append-only publication
+
+Every transition is one new JSON file and one ordinary fast-forward commit:
+
+```text
+control-window/<control-id>/transitions/<transition-id>.json
+```
+
+The transition id is the SHA-256 of its canonical allowlisted content without
+the id field. A retry adopts an existing file only when path, identity, and
+bytes match exactly. A successful remote push followed by a lost client
+response is therefore recoverable without another logical transition.
+
+Every fetch pins ancestry to the preparation merge-base, so a normal advance of
+the configured base branch is harmless while a rewritten results branch is not.
+It validates the last verified head, linear history, add-only commits, closed
+paths and serializers, content and idempotency identities, and compatible state
+predecessors. Any mismatch fails closed. The publisher has no
+amend, rebase, squash, force-push, reorder, or automatic history-repair path.
+
+## Privacy boundary
+
+Publication serializers construct new JSON objects from a closed allowlist.
+They cannot copy caller fields. GitHub receives bounded identifiers, repository
+and issue attribution, enumerated lifecycle/outcome/integrity values, and
+summary/transition hashes only. It never receives the sink or worktree path,
+raw JSONL, prompts, diffs or source content, commands, output, credentials, raw
+diagnostics, or reviewer prose. Per-run issue comments are not used.
+
+## Where this fits
+
+The telemetry schema and run registry are generic mechanisms owned by #9. This
+policy adapter is the #64 experiment layer added by #73. A later policy may
+select the B2 arm without changing these mechanics. Population, sample size,
+eligibility, attrition, stopping, success, and observation-boundary decisions
+for A3 attempt 2 remain for a separate documentation-only pre-registration.

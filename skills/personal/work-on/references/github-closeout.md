@@ -227,7 +227,7 @@ supply them; see `references/run-telemetry.md`. Individual launches, reviews,
 and validation executions stay in the sink. Record the run's outcome with
 `scripts/run-telemetry.sh resolve --run "$RUN_HANDLE" --outcome "$OUTCOME"` as
 soon as the gate resolves it. Record legitimate closeout evidence, then run
-`scripts/run-registry.sh finalize --run "$RUN_HANDLE"` before rendering: it
+`scripts/control-window.sh finalize --run "$RUN_HANDLE"` before rendering: it
 seals the run and discharges its registered lifecycle from the sink's own
 sealed summary, and refuses to report success unless that summary is valid. A
 run the registry deliberately left unregistered is sealed the same way and
