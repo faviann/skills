@@ -63,8 +63,12 @@ The optional external program the **Run registry** asks whether a run carries a 
 _Avoid_: experiment hook, control policy, publisher
 
 **Control policy manifest**:
-The versioned, experiment-owned JSON input that tells the control-window adapter which repository/issue population matches, which bounded classification hooks apply, and where its append-only results branch and draft pull request live. A prepared manifest is non-observing; only its separately published and read-back activation transition can make the adapter active. Distinct from the **Control observer**, which is the generic seam the adapter satisfies.
+The versioned, experiment-owned JSON input that tells the control-window adapter which repository/issue population matches, which bounded classification hooks apply, which **Controller binding** owns it, and where its append-only results branch and draft pull request live. A prepared manifest is non-observing; only its separately published and read-back activation transition can make the adapter active. Distinct from the **Control observer**, which is the generic seam the adapter satisfies.
 _Avoid_: active-control descriptor, experiment registry
+
+**Controller binding**:
+The owner-only opaque value that designates the one XDG configuration and run-registry domain allowed to operate a production **Control policy manifest**. Its SHA-256 digest is public policy evidence; the binding itself stays local and cannot be reconstructed, replaced, or transferred from remote history.
+_Avoid_: controller lease, host identity, failover token
 
 **Closability gate**:
 The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available in this run. It runs on the contract alone and produces no artifact; failing it aborts the run before any code exists. Distinct from the **closure gate**, which inspects a finished candidate's evidence at closeout — the closability gate asks whether `tested` evidence is *reachable*, the closure gate asks whether it was *produced*.
@@ -87,6 +91,7 @@ _Avoid_: model kind, model family
 - A `work-on` run has one **Run telemetry sink** and one **Workflow provenance** value
 - A `work-on` run has at most one **Run registry** record, which names at most one **Control observer**; the record is registered before implementation and finalized on hand-back
 - A **Control policy manifest** configures one control-window adapter, which satisfies the **Control observer** seam without moving experiment policy into the **Run registry**
+- A production **Control policy manifest** names one **Controller binding** and admits top-level matching runs sequentially through that binding's XDG domain
 - A `work-on` run passes one **Closability gate** before it delegates implementation; a run that fails it resolves as `preflight-aborted`, seals, and never reaches the closure gate
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**

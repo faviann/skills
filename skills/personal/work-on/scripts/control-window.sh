@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Adapt the generic work-on run registry to a versioned experiment policy and
 # publish bounded, immutable control/run transitions to one GitHub results PR.
-# The run registry remains the sole lease and run-lifecycle authority.
+# The run registry remains the sole admission and run-lifecycle authority.
 
 readonly policy_schema=1
 readonly observer_not_applicable=3
@@ -69,7 +69,7 @@ load_policy() {
     def repo: type == "string" and length <= 160 and test($repository);
     def issue: type == "number" and floor == . and . > 0;
     type == "object"
-    and (keys == ["arm","control_id","hooks","lease","mode","observer_id","population","results","schema","target"])
+    and (keys == ["arm","control_id","controller","hooks","mode","observer_id","population","results","schema","target"])
     and .schema == $schema
     and (.control_id | token) and (.observer_id | token)
     and (.mode | IN("demo","production"))
@@ -90,7 +90,11 @@ load_policy() {
       and (.branch | type == "string" and test($branch))
       and .base_branch != .branch
       and .pull_request == {draft:true})
-    and (.lease == {authority:"run-registry-v1",scope:"control",maximum_active_runs:1})
+    and (.controller | type == "object"
+      and keys == ["binding_sha256","scope","top_level_runs"]
+      and .scope == "single-xdg-domain"
+      and .top_level_runs == "sequential"
+      and (.binding_sha256 | type == "string" and test("^[0-9a-f]{64}$")))
     and (.arm | type == "object" and keys == ["configuration","id"]
       and (.id | token) and (.configuration | type == "object"))
     and (if .hooks.match == "never-v1"
@@ -189,10 +193,49 @@ sha256_of_stdin() {
   fi
 }
 
+controller_binding_file() {
+  printf '%s/controller-binding\n' "$(configuration_root)"
+}
+
+controller_binding_state_marker() {
+  local root="${XDG_STATE_HOME:-${HOME:-}/.local/state}"
+  [[ "$root" == /* ]] || fail "XDG_STATE_HOME or HOME must resolve to an absolute path"
+  printf '%s/work-on/controller-binding.sha256\n' "$root"
+}
+
+verify_controller_binding() {
+  local file marker binding expected actual mode owner marker_mode marker_owner
+  [[ "$policy_mode" == production ]] || return 0
+  file="$(controller_binding_file)"
+  [[ -f "$file" && ! -L "$file" ]] \
+    || fail "controller binding is missing from the designated XDG domain"
+  mode="$(stat -c '%a' "$file" 2>/dev/null || true)"
+  owner="$(stat -c '%u' "$file" 2>/dev/null || true)"
+  [[ "$mode" == 600 && "$owner" == "$(id -u)" ]] \
+    || fail "controller binding is not owner-only"
+  IFS= read -r binding <"$file" || true
+  [[ "$binding" =~ ^[0-9a-f]{64}$ && "$(wc -l <"$file")" -eq 1 \
+    && "$(wc -c <"$file")" -eq 65 ]] \
+    || fail "controller binding is malformed"
+  expected="$(jq -r .controller.binding_sha256 <<<"$policy_json")"
+  actual="$(printf '%s' "$binding" | sha256_of_stdin)"
+  [[ "$actual" == "$expected" ]] \
+    || fail "controller binding does not own this control"
+  marker="$(controller_binding_state_marker)"
+  [[ -f "$marker" && ! -L "$marker" ]] \
+    || fail "controller binding does not designate this XDG state domain"
+  marker_mode="$(stat -c '%a' "$marker" 2>/dev/null || true)"
+  marker_owner="$(stat -c '%u' "$marker" 2>/dev/null || true)"
+  [[ "$marker_mode" == 600 && "$marker_owner" == "$(id -u)" \
+    && "$(cat "$marker")" == "$expected" \
+    && "$(wc -l <"$marker")" -eq 1 && "$(wc -c <"$marker")" -eq 65 ]] \
+    || fail "controller binding does not designate this XDG state domain"
+}
+
 public_policy() {
   jq -cS '{schema,control_id,mode,observer_id,target,population,hooks,
     results:{repository:.results.repository,base_branch:.results.base_branch,
-      branch:.results.branch},lease,arm:{id:.arm.id}}' <<<"$policy_json"
+      branch:.results.branch},controller,arm:{id:.arm.id}}' <<<"$policy_json"
 }
 
 policy_digest() {
@@ -683,9 +726,10 @@ validate_remote_state_machine() {
         phase=active
         ;;
       run-registered)
-        [[ "$phase" == active && -z "${registered[$identity]:-}" \
-          && "$open_count" -lt "$(jq -r .lease.maximum_active_runs <<<"$policy_json")" ]] \
+        [[ "$phase" == active && -z "${registered[$identity]:-}" ]] \
           || fail "run registration has an incompatible predecessor"
+        [[ "$open_count" -eq 0 ]] \
+          || fail "remote history contains two unresolved run registrations"
         registered[$identity]=true
         open_count=$((open_count + 1))
         ;;
@@ -753,9 +797,8 @@ assert_transition_allowed() {
       terminal="$(remote_run_terminal_count "$run_identity")"
       [[ "$registered" -eq 0 && "$terminal" -eq 0 ]] \
         || fail "run already has a registration or terminal transition"
-      [[ "$(remote_open_run_count)" \
-          -lt "$(jq -r .lease.maximum_active_runs <<<"$policy_json")" ]] \
-        || fail "control has reached its remote active-run bound"
+      [[ "$(remote_open_run_count)" -eq 0 ]] \
+        || fail "remote history already contains an unresolved run registration"
       ;;
     run-finalized|run-failed|run-unreproducible)
       run_identity="$(jq -r .run_identity <<<"$transition")"
@@ -1091,6 +1134,7 @@ reconcile_control_state() {
 
 activate_control() {
   local state transition
+  verify_controller_binding
   lock_control_admission
   assert_policy_slot_available
   state="$(read_state 2>/dev/null || true)"
@@ -1126,6 +1170,7 @@ register_run() {
     "$registry_script" register --run "$handle"
     return $?
   fi
+  verify_controller_binding
   lock_control_admission
   state="$(read_state 2>/dev/null || true)"
   reconcile_control_state "$state"
@@ -1160,6 +1205,7 @@ load_governed_policy_and_state() {
   local selected state
   selected="$(resolve_policy_path)" || fail "no control policy is configured"
   load_policy "$selected"
+  verify_controller_binding
   state="$(read_state 2>/dev/null || true)"
   reconcile_control_state "$state"
   state="$reconciled_state"
@@ -1236,8 +1282,13 @@ publish_failed_registry_state() {
 }
 
 drive_registry_finalization() {
-  local operation="$1" handle="$2" outcome="$3" status=0 output
+  local operation="$1" handle="$2" outcome="$3" status=0 output selected
   local -a args
+  selected="$(resolve_policy_path 2>/dev/null || true)"
+  if [[ -n "$selected" ]]; then
+    load_policy "$selected"
+    verify_controller_binding
+  fi
   args=("$operation" --run "$handle")
   [[ -z "$outcome" ]] || args+=(--outcome "$outcome")
   output="$("$registry_script" "${args[@]}" 2>&1)" || status=$?
@@ -1251,6 +1302,7 @@ drive_registry_finalization() {
 
 close_control() {
   local complete="$1" state transition predecessor pending
+  verify_controller_binding
   lock_control_admission
   state="$(read_state 2>/dev/null || true)"
   reconcile_control_state "$state"
@@ -1402,6 +1454,7 @@ case "$subcommand" in
   prepare)
     [[ "${1:-}" == --policy && "$#" -eq 2 ]] || usage
     load_policy "$2"
+    verify_controller_binding
     command -v gh >/dev/null 2>&1 || fail "prepare requires gh"
     [[ "$policy_mode" == demo ]] || lock_control_admission
     assert_policy_slot_available
@@ -1490,6 +1543,7 @@ case "$subcommand" in
     if [[ "${1:-}" == --policy ]]; then
       [[ "$#" -eq 2 ]] || usage
       load_policy "$2"
+      verify_controller_binding
       state="$(read_state 2>/dev/null || true)"
       reconcile_control_state "$state"
       printf '%s\n' "$reconciled_state"
@@ -1528,6 +1582,7 @@ case "$subcommand" in
     selected="$(resolve_policy_path)" || exit "$observer_not_applicable"
     load_policy "$selected"
     policy_matches "$repository" "$issue" || exit "$observer_not_applicable"
+    verify_controller_binding
     state="$(read_state 2>/dev/null || true)"
     reconcile_control_state "$state"
     state="$reconciled_state"

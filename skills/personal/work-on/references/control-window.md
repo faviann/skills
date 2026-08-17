@@ -3,8 +3,8 @@
 `scripts/control-window.sh` adapts the generic run registry to one versioned
 experiment policy and one append-only GitHub results pull request. It owns the
 experiment decision and publication rules. The run telemetry sink remains the
-canonical run evidence, and the run registry remains the only run lease and
-lifecycle authority.
+canonical run evidence, and the run registry remains the only local admission
+and lifecycle authority.
 
 `work-on` calls this adapter's `register`, `finalize`, and `recover` wrappers.
 With no configured policy they preserve the generic registry behavior. With an
@@ -38,26 +38,38 @@ The manifest is JSON schema **1** with this closed top-level shape:
       "draft": true
     }
   },
-  "lease": {
-    "authority": "run-registry-v1",
-    "scope": "control",
-    "maximum_active_runs": 1
+  "controller": {
+    "scope": "single-xdg-domain",
+    "top_level_runs": "sequential",
+    "binding_sha256": "64-lowercase-hex-characters"
   },
   "arm": { "id": "bounded-token", "configuration": {} }
 }
 ```
 
 Policy data owns the control and observer identifiers, target issue, population,
-matching and classification hooks, results repository/branch/PR, lease policy,
-and arm configuration. The adapter supplies the reusable mechanics. Generic
+matching and classification hooks, results repository/branch/PR, the fixed
+single-domain/sequential controller model, and arm configuration. The adapter
+supplies the reusable mechanics. Generic
 telemetry and registry code contain none of those experiment values.
 
 Only the allowlisted public projection is committed. `arm.configuration`
 cannot enter a transition artifact. The
 committed projection retains the identifiers, target, population, selected hook
-versions, results location, lease rule, and arm id.
+versions, results location, controller declaration and binding digest, and arm
+id. The raw controller binding never enters the projection.
 The full canonical manifest digest stays only in owner-readable local state, so
 a local policy edit cannot silently reuse the prepared public surface.
+
+A production operator provisions one opaque 64-hex binding at
+`$XDG_CONFIG_HOME/work-on/controller-binding`, mode `0600`, before preparing the
+control, plus that token's digest at
+`$XDG_STATE_HOME/work-on/controller-binding.sha256`, also mode `0600`. The
+manifest records the same SHA-256 of the token bytes (without its line ending).
+The adapter checks both files' ownership, mode, shape, and digest, binding one
+configuration root to one state/run-registry root. It never mints either file
+from remote evidence or replaces one after loss. The same binding designates
+the XDG domain used for the later A3 and B2 controls.
 
 This repository ships two non-operative fixtures:
 
@@ -85,10 +97,18 @@ state, generated title/body, number, and URL. The PR title and body are generate
 only from bounded identifiers, mode, and target, and the body begins
 `PREPARED / NON-OBSERVING`.
 Preparation stores phase `prepared`; it never makes `applies` match. One
-observer domain has one production-policy slot: preparing another production
+controller domain has one production-policy slot: preparing another production
 policy is refused while the configured control is prepared, active, or closing.
 Only a remotely reconciled `control-closed` transition releases the slot. Demo
 preparation remains descriptor-free.
+
+Every production mutation verifies the controller binding before adopting or
+reconstructing phase state. That boundary covers preparation, activation,
+matching registration, finalization, recovery, status reconciliation, and
+closing. A configured domain with a missing or mismatching binding fails closed;
+matching registration fails before #72 can create a row. Loss of mutable phase
+state is recoverable from exact remote history while the binding remains, but
+loss of the binding is not controller failover.
 
 For a production policy, preparation also configures the adapter at the generic
 #72 observer seam and installs one absolute policy descriptor. That is safe in
@@ -123,7 +143,7 @@ The wrapper uses #72 in this order:
 
 1. the adapter reconciles the remote control while holding the control admission
    lock shared by public registration and closing;
-2. `run-registry.sh register --run HANDLE` acquires the matching control lease;
+2. `run-registry.sh register --run HANDLE` acquires the matching local admission;
 3. `run-registry.sh status --run HANDLE` supplies the bounded registered row;
 4. the adapter publishes and reads back `run-registered`; and
 5. only then does `control-window.sh register` return success to `work-on`.
@@ -171,17 +191,17 @@ paths and serializers, content and idempotency identities, and compatible state
 predecessors. Any mismatch fails closed. The publisher has no
 amend, rebase, squash, force-push, reorder, or automatic history-repair path.
 
-The remote compare-and-append predicate enforces the manifest's
-`maximum_active_runs` across independent local registry domains. #72 remains the
-lease authority inside each domain; the remote bound decides which fully
-registered transition can become implementation-eligible globally. A losing
-domain retains its #72 obligation and can retry the same registration after
-remote capacity reopens.
+Top-level matching runs are sequential in the designated controller domain.
+#72's next-run guard and registry are the sole admission authority; parallel
+subagents inside the admitted run are unchanged. The remote replay invariant
+also rejects any history containing two unresolved `run-registered`
+transitions, but that is corruption/evidence validation rather than a lease or
+cross-domain admission protocol.
 
 Public registration and closing additionally hold one local control admission
 lock across the #72 admission/pending check and exact remote publication.
 Closing therefore cannot pass its empty-obligation check while a matching
-registration in that observer domain is between generic admission and durable
+registration in that controller domain is between generic admission and durable
 publication. Remote closing is reconciled before a later registration may call
 #72.
 
@@ -192,7 +212,8 @@ They cannot copy caller fields. GitHub receives bounded identifiers, repository
 and issue attribution, enumerated lifecycle/outcome/integrity values, and
 summary/transition hashes only. It never receives the sink or worktree path,
 raw JSONL, prompts, diffs or source content, commands, output, credentials, raw
-diagnostics, or reviewer prose. Per-run issue comments are not used.
+diagnostics, reviewer prose, or the raw controller binding. Only the binding's
+SHA-256 digest appears in `policy.json`. Per-run issue comments are not used.
 Every evidence commit also forces the fixed author and committer identity
 `Control Window Publisher <control-window@invalid.local>` and a generated
 bounded message. Ambient Git identity/configuration and `CONTROL_WINDOW_GIT_*`
@@ -202,7 +223,9 @@ different identity or message.
 ## Where this fits
 
 The telemetry schema and run registry are generic mechanisms owned by #9. This
-policy adapter is the #64 experiment layer added by #73. A later policy may
-select the B2 arm without changing these mechanics. Population, sample size,
+policy adapter is the #64 experiment layer added by #73. GitHub is append-only
+evidence and reconciliation authority, not a distributed lease service. A later
+policy may select the B2 arm without changing these mechanics. Population,
+sample size,
 eligibility, attrition, stopping, success, and observation-boundary decisions
 for A3 attempt 2 remain for a separate documentation-only pre-registration.

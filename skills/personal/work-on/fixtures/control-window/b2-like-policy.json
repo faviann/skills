@@ -23,10 +23,10 @@
       "draft": true
     }
   },
-  "lease": {
-    "authority": "run-registry-v1",
-    "scope": "control",
-    "maximum_active_runs": 1
+  "controller": {
+    "scope": "single-xdg-domain",
+    "top_level_runs": "sequential",
+    "binding_sha256": "a8ae6e6ee929abea3afcfc5258c8ccd6f85273e0d4626d26c7279f3250f77c8e"
   },
   "arm": {
     "id": "comparison-fixture",

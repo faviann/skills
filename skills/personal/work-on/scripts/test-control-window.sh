@@ -19,6 +19,21 @@ scenario() {
 export XDG_STATE_HOME="$test_root/state"
 export XDG_CONFIG_HOME="$test_root/config"
 
+controller_binding='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+provision_controller_binding() {
+  local state_home="$1" config_home="$2" binding="${3:-$controller_binding}" digest
+  mkdir -p "$config_home/work-on"
+  chmod 700 "$config_home/work-on"
+  printf '%s\n' "$binding" >"$config_home/work-on/controller-binding"
+  chmod 600 "$config_home/work-on/controller-binding"
+  digest="$(printf '%s' "$binding" | sha256sum | cut -d' ' -f1)"
+  mkdir -p "$state_home/work-on"
+  chmod 700 "$state_home/work-on"
+  printf '%s\n' "$digest" >"$state_home/work-on/controller-binding.sha256"
+  chmod 600 "$state_home/work-on/controller-binding.sha256"
+}
+provision_controller_binding "$XDG_STATE_HOME" "$XDG_CONFIG_HOME"
+
 scenario policy-manifests-are-versioned-and-reusable
 "$adapter" validate --policy "$fixtures/demo-policy.json" >/dev/null
 "$adapter" validate --policy "$fixtures/b2-like-policy.json" >/dev/null
@@ -121,6 +136,21 @@ for ((index = 0; index < ${#arguments[@]}; index++)); do
     break
   fi
 done
+for marker in "${CONTROL_WINDOW_KILL_AFTER_ACTIVATION_MARKER:-}" \
+  "${CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER:-}"; do
+  [[ -n "$marker" && -e "$marker" ]] || continue
+  for argument in "$@"; do
+    if [[ "$argument" == fetch ]]; then
+      fetch_count="$(cat "$marker")"
+      if [[ "${fetch_count:-0}" -eq 0 ]]; then
+        printf '1\n' >"$marker"
+      else
+        exit 1
+      fi
+      break
+    fi
+  done
+done
 if [[ -n "${CONTROL_WINDOW_KILL_AFTER_ACTIVATION_MARKER:-}" ]]; then
   for argument in "$@"; do
     if [[ "$argument" == push && -n "$repository" \
@@ -128,7 +158,6 @@ if [[ -n "${CONTROL_WINDOW_KILL_AFTER_ACTIVATION_MARKER:-}" ]]; then
         == "Append control-activated: fixture-b2-comparison" ]]; then
       "$CONTROL_WINDOW_REAL_GIT" "$@"
       : >"$CONTROL_WINDOW_KILL_AFTER_ACTIVATION_MARKER"
-      kill -KILL "$PPID"
       exit 1
     fi
   done
@@ -140,7 +169,6 @@ if [[ -n "${CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER:-}" ]]; then
         == Append\ control-closing:* ]]; then
       "$CONTROL_WINDOW_REAL_GIT" "$@"
       : >"$CONTROL_WINDOW_KILL_AFTER_CLOSING_MARKER"
-      kill -KILL "$PPID"
       exit 1
     fi
   done
@@ -243,6 +271,7 @@ export GIT_COMMITTER_NAME='COMMITTER DIAGNOSTIC SENTINEL'
 export GIT_COMMITTER_EMAIL='committer-credential@example.invalid'
 export CONTROL_WINDOW_CAPTURE_COMMITS="$test_root/privacy-local-commits"
 rm -f "$CONTROL_WINDOW_FAKE_GH_STATE"
+provision_controller_binding "$test_root/privacy-state" "$test_root/privacy-config"
 env XDG_STATE_HOME="$test_root/privacy-state" \
   XDG_CONFIG_HOME="$test_root/privacy-config" \
   WORK_ON_CONTROL_POLICY="$privacy_policy" \
@@ -290,8 +319,15 @@ export WORK_ON_CONTROL_POLICY="$production_policy"
 published_policy="$(git --git-dir="$remote" show \
   experiment/fixture-b2-activation-test:control-window/fixture-b2-comparison/policy.json)"
 [[ "$(jq -r '.arm | has("configuration")' <<<"$published_policy")" == false \
-  && "$(jq -r '.results | has("pull_request")' <<<"$published_policy")" == false ]] \
+  && "$(jq -r '.results | has("pull_request")' <<<"$published_policy")" == false \
+  && "$(jq -r 'has("lease")' <<<"$published_policy")" == false \
+  && "$(jq -r .controller.scope <<<"$published_policy")" == single-xdg-domain \
+  && "$(jq -r .controller.top_level_runs <<<"$published_policy")" == sequential \
+  && "$(jq -r .controller.binding_sha256 <<<"$published_policy")" \
+    == a8ae6e6ee929abea3afcfc5258c8ccd6f85273e0d4626d26c7279f3250f77c8e ]] \
   || fail "the public policy serializer copied local free-form configuration"
+! grep -Fq "$controller_binding" <<<"$published_policy" \
+  || fail "the public policy projection exposed the raw controller binding"
 # An ordinary advance of the configured base is not a results-branch rewrite;
 # later verification remains pinned to the preparation merge-base.
 printf 'base advanced\n' >>"$seed/README.md"
@@ -308,7 +344,21 @@ rm -f "$CONTROL_WINDOW_FAKE_GH_STATE"
 ! "$adapter" activate --policy "$production_policy" >/dev/null 2>&1 \
   || fail "activation proceeded without the prepared results PR"
 "$adapter" prepare --policy "$production_policy" >/dev/null
-scenario remote-activation-is-authoritative-after-local-state-loss
+
+scenario foreign-domain-cannot-adopt-prepared-control
+foreign_state="$test_root/foreign-state"
+foreign_config="$test_root/foreign-config"
+! env XDG_STATE_HOME="$foreign_state" XDG_CONFIG_HOME="$foreign_config" \
+  WORK_ON_CONTROL_POLICY="$production_policy" \
+  "$adapter" prepare --policy "$production_policy" \
+  >"$test_root/foreign-prepared.out" 2>&1 \
+  || fail "a foreign domain adopted the prepared control"
+grep -Fq 'controller binding is missing' "$test_root/foreign-prepared.out" \
+  || fail "prepared-control refusal did not identify the controller binding"
+[[ ! -e "$foreign_config/work-on/controller-binding" ]] \
+  || fail "remote preparation minted a foreign controller binding"
+
+scenario controller-binding-survives-phase-state-loss
 activation_crash_target="$test_root/activation-crash-target"
 mkdir -p "$activation_crash_target"
 git -C "$activation_crash_target" init -q
@@ -358,12 +408,16 @@ rm -f "$state_file"
 "$adapter" prepare --policy "$production_policy" >/dev/null
 [[ "$(jq -r .phase "$state_file")" == active ]] \
   || fail "prepare hid an already-active remote control behind prepared state"
+[[ "$(cat "$XDG_CONFIG_HOME/work-on/controller-binding")" == "$controller_binding" ]] \
+  || fail "phase-state recovery replaced the controller binding"
 rm -f "$state_file"
 [[ "$($adapter applies --repository example/comparison-repository --issue 101)" \
   == $'observer=control-window-publisher\ncontrol=fixture-b2-comparison' ]] \
   || fail "missing local state hid an already-active remote control"
 [[ "$(jq -r .phase "$state_file")" == active ]] \
   || fail "remote activation did not reconstruct missing local state"
+[[ "$(cat "$XDG_CONFIG_HOME/work-on/controller-binding")" == "$controller_binding" ]] \
+  || fail "remote phase reconstruction did not preserve controller ownership"
 "$adapter" finalize --run "$activation_crash_handle" --outcome abandoned >/dev/null
 git --git-dir="$remote" log --format=fuller --stat -p \
   main..experiment/fixture-b2-activation-test >"$test_root/append-privacy-surface"
@@ -420,6 +474,108 @@ git -C "$target" remote add origin git@github.com:example/comparison-repository.
 printf 'target\n' >"$target/README.md"
 git -C "$target" add README.md
 git -C "$target" commit -qm base
+
+scenario foreign-domain-register-refuses-before-run-registry-row
+foreign_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
+foreign_head_before="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)"
+! (cd "$target" && env XDG_STATE_HOME="$foreign_state" \
+  XDG_CONFIG_HOME="$foreign_config" WORK_ON_CONTROL_POLICY="$production_policy" \
+  "$adapter" register --run "$foreign_handle") \
+  >"$test_root/foreign-register.out" 2>&1 \
+  || fail "a foreign domain registered matching work"
+grep -Fq 'controller binding is missing' "$test_root/foreign-register.out" \
+  || fail "foreign registration refusal did not identify controller ownership"
+[[ -z "$(cd "$target" && env XDG_STATE_HOME="$foreign_state" \
+  XDG_CONFIG_HOME="$foreign_config" \
+  "$script_root/run-registry.sh" status --run "$foreign_handle")" ]] \
+  || fail "foreign registration refusal created a #72 row"
+[[ ! -e "$foreign_config/work-on/controller-binding" ]] \
+  || fail "foreign registration minted a controller binding"
+
+scenario foreign-domain-control-mutations-refuse
+for command in prepare activate status close; do
+  case "$command" in
+    prepare|activate)
+      args=("$command" --policy "$production_policy")
+      ;;
+    status)
+      args=(status --policy "$production_policy")
+      ;;
+    close)
+      args=(close --policy "$production_policy")
+      ;;
+  esac
+  ! env XDG_STATE_HOME="$foreign_state" XDG_CONFIG_HOME="$foreign_config" \
+    WORK_ON_CONTROL_POLICY="$production_policy" "$adapter" "${args[@]}" \
+    >"$test_root/foreign-$command.out" 2>&1 \
+    || fail "foreign domain unexpectedly completed $command"
+  grep -Fq 'controller binding is missing' "$test_root/foreign-$command.out" \
+    || fail "foreign $command refusal did not identify controller ownership"
+done
+for command in finalize recover; do
+  ! (cd "$target" && env XDG_STATE_HOME="$foreign_state" \
+    XDG_CONFIG_HOME="$foreign_config" WORK_ON_CONTROL_POLICY="$production_policy" \
+    "$adapter" "$command" --run "$foreign_handle") \
+    >"$test_root/foreign-$command.out" 2>&1 \
+    || fail "foreign domain unexpectedly completed $command"
+  grep -Fq 'controller binding is missing' "$test_root/foreign-$command.out" \
+    || fail "foreign $command refusal did not identify controller ownership"
+done
+foreign_state_only="$test_root/foreign-state-only"
+! (cd "$target" && env XDG_STATE_HOME="$foreign_state_only" \
+  XDG_CONFIG_HOME="$XDG_CONFIG_HOME" WORK_ON_CONTROL_POLICY="$production_policy" \
+  "$adapter" register --run "$foreign_handle") \
+  >"$test_root/foreign-state-domain.out" 2>&1 \
+  || fail "the controller config was paired with a foreign registry domain"
+grep -Fq 'does not designate this XDG state domain' \
+  "$test_root/foreign-state-domain.out" \
+  || fail "foreign state-domain refusal did not identify the binding boundary"
+[[ -z "$(cd "$target" && env XDG_STATE_HOME="$foreign_state_only" \
+  XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
+  "$script_root/run-registry.sh" status --run "$foreign_handle")" ]] \
+  || fail "foreign state-domain refusal created a #72 row"
+provision_controller_binding "$foreign_state" "$foreign_config"
+chmod 644 "$foreign_config/work-on/controller-binding"
+! env XDG_STATE_HOME="$foreign_state" XDG_CONFIG_HOME="$foreign_config" \
+  WORK_ON_CONTROL_POLICY="$production_policy" \
+  "$adapter" status --policy "$production_policy" \
+  >"$test_root/foreign-binding-mode.out" 2>&1 \
+  || fail "a non-owner-only controller binding was accepted"
+grep -Fq 'controller binding is not owner-only' \
+  "$test_root/foreign-binding-mode.out" \
+  || fail "binding-mode refusal did not identify the ownership boundary"
+wrong_binding='ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+provision_controller_binding "$foreign_state" "$foreign_config" "$wrong_binding"
+! env XDG_STATE_HOME="$foreign_state" XDG_CONFIG_HOME="$foreign_config" \
+  WORK_ON_CONTROL_POLICY="$production_policy" \
+  "$adapter" status --policy "$production_policy" \
+  >"$test_root/foreign-wrong-binding.out" 2>&1 \
+  || fail "a mismatching controller binding adopted the active control"
+grep -Fq 'does not own this control' "$test_root/foreign-wrong-binding.out" \
+  || fail "mismatching controller refusal did not identify ownership"
+[[ "$(cat "$foreign_config/work-on/controller-binding")" == "$wrong_binding" ]] \
+  || fail "the adapter replaced a mismatching controller binding"
+[[ "$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)" == "$foreign_head_before" ]] \
+  || fail "foreign control mutations changed remote history"
+
+scenario controller-binding-loss-fails-closed-without-replacement
+binding_file="$XDG_CONFIG_HOME/work-on/controller-binding"
+mv "$binding_file" "$test_root/controller-binding.saved"
+! "$adapter" status --policy "$production_policy" \
+  >"$test_root/missing-owner-binding.out" 2>&1 \
+  || fail "controller binding loss was treated as recoverable phase-state loss"
+! (cd "$target" && "$adapter" register --run "$foreign_handle") \
+  >"$test_root/missing-owner-register.out" 2>&1 \
+  || fail "matching registration proceeded after controller binding loss"
+[[ ! -e "$binding_file" ]] \
+  || fail "remote history minted a replacement controller binding"
+[[ -z "$(cd "$target" && "$script_root/run-registry.sh" status \
+  --run "$foreign_handle")" ]] \
+  || fail "controller binding loss created a #72 row"
+mv "$test_root/controller-binding.saved" "$binding_file"
+
 handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
 registration="$(cd "$target" && "$adapter" register --run "$handle")"
 [[ "$registration" == "registered ${handle%@*}" ]] \
@@ -599,7 +755,7 @@ unreproducible_head="$(git --git-dir="$remote" rev-parse refs/heads/experiment/f
 git --git-dir="$remote" grep -q '"kind": "run-unreproducible"' "$unreproducible_head" \
   || fail "unreproducible lifecycle state disappeared from published history"
 
-scenario concurrent-matching-agents-share-the-run-registry-lease
+scenario same-controller-concurrent-start-admits-at-most-one-run
 candidate_a="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
 candidate_b="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
 (cd "$target" && "$adapter" register --run "$candidate_a") \
@@ -611,12 +767,72 @@ pid_b=$!
 status_a=0; wait "$pid_a" || status_a=$?
 status_b=0; wait "$pid_b" || status_b=$?
 [[ "$(( (status_a == 0) + (status_b == 0) ))" -eq 1 ]] \
-  || fail "concurrent matching registrations did not produce exactly one lease"
-if [[ "$status_a" -eq 0 ]]; then winner="$candidate_a"; else winner="$candidate_b"; fi
+  || fail "concurrent matching registrations did not admit exactly one run"
+if [[ "$status_a" -eq 0 ]]; then
+  winner="$candidate_a"
+  blocked_candidate="$candidate_b"
+  blocked_output="$test_root/concurrent-b.err"
+else
+  winner="$candidate_b"
+  blocked_candidate="$candidate_a"
+  blocked_output="$test_root/concurrent-a.err"
+fi
 [[ "$(cd "$target" && "$script_root/run-registry.sh" status --pending \
   | jq -s --arg control fixture-b2-comparison \
     '[.[] | select(.control_id == $control)] | length')" -eq 1 ]] \
   || fail "concurrent registration produced conflicting pending records"
+[[ -z "$(cd "$target" && "$script_root/run-registry.sh" status \
+  --run "$blocked_candidate")" ]] \
+  || fail "the blocked same-controller run retained a registry row"
+grep -Fq 'unfinished obligation' "$blocked_output" \
+  || fail "the second same-controller run did not fail through #72 admission"
+
+scenario remote-history-with-two-open-runs-is-rejected-as-corrupt
+uncorrupted_head="$(git --git-dir="$remote" rev-parse \
+  refs/heads/experiment/fixture-b2-activation-test)"
+corrupt_checkout="$test_root/two-open-runs"
+git clone -q "$remote" "$corrupt_checkout"
+git -C "$corrupt_checkout" config user.name 'Control Window Publisher'
+git -C "$corrupt_checkout" config user.email control-window@invalid.local
+git -C "$corrupt_checkout" switch -q experiment/fixture-b2-activation-test
+first_registration="$(git -C "$corrupt_checkout" ls-tree -r --name-only HEAD \
+  | while read -r candidate; do
+      [[ "$candidate" == */transitions/*.json ]] || continue
+      candidate_transition="$(git -C "$corrupt_checkout" show "HEAD:$candidate")"
+      [[ "$(jq -r .kind <<<"$candidate_transition")" == run-registered \
+        && "$(jq -r .run_id <<<"$candidate_transition")" == "${winner%@*}" ]] \
+        && printf '%s\n' "$candidate" && break
+    done)"
+corrupt_body="$(git -C "$corrupt_checkout" show "HEAD:$first_registration" \
+  | jq -cS '.run_id = "20990101T000000Z-deadbeef"
+    | .run_identity = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    | .idempotency_key = ("register:" + .run_identity)
+    | del(.transition_id)')"
+corrupt_identity="$(printf '%s\n' "$corrupt_body" | jq -cS . | sha256sum | cut -d' ' -f1)"
+corrupt_transition="$(jq -cS --arg identity "$corrupt_identity" \
+  '.transition_id = $identity' <<<"$corrupt_body")"
+corrupt_path="control-window/fixture-b2-comparison/transitions/$corrupt_identity.json"
+mkdir -p "$(dirname "$corrupt_checkout/$corrupt_path")"
+jq -S . <<<"$corrupt_transition" >"$corrupt_checkout/$corrupt_path"
+git -C "$corrupt_checkout" add -- "$corrupt_path"
+empty_hooks="$test_root/corrupt-empty-hooks"
+mkdir -p "$empty_hooks"
+GIT_AUTHOR_NAME='Control Window Publisher' \
+GIT_AUTHOR_EMAIL='control-window@invalid.local' \
+GIT_COMMITTER_NAME='Control Window Publisher' \
+GIT_COMMITTER_EMAIL='control-window@invalid.local' \
+  git -c commit.gpgsign=false -c core.hooksPath="$empty_hooks" \
+    -C "$corrupt_checkout" commit -qm \
+    'Append run-registered: fixture-b2-comparison'
+git -C "$corrupt_checkout" push -q origin \
+  HEAD:refs/heads/experiment/fixture-b2-activation-test
+! "$adapter" status --policy "$production_policy" \
+  >"$test_root/two-open-runs.out" 2>&1 \
+  || fail "remote history with two unresolved registrations was accepted"
+grep -Fq 'two unresolved run registrations' "$test_root/two-open-runs.out" \
+  || fail "corrupt remote history lacked the sequential-evidence diagnostic"
+git --git-dir="$remote" update-ref \
+  refs/heads/experiment/fixture-b2-activation-test "$uncorrupted_head"
 
 scenario ambiguous-success-is-adopted-with-one-logical-transition
 (cd "$target" && "$script_root/run-telemetry.sh" launch --run "$winner" \
@@ -676,60 +892,6 @@ grep -Fq 'rewritten behind the last verified head' "$test_root/rewrite.out" \
 git --git-dir="$remote" update-ref refs/heads/experiment/fixture-b2-activation-test "$rewrite_good_head"
 (cd "$target" && "$adapter" register --run "$rewrite_run") >/dev/null
 (cd "$target" && "$adapter" finalize --run "$rewrite_run" --outcome abandoned) >/dev/null
-
-scenario independent-registry-domains-share-the-remote-active-run-bound
-domain_a_state="$test_root/domain-a-state"
-domain_a_config="$test_root/domain-a-config"
-domain_b_state="$test_root/domain-b-state"
-domain_b_config="$test_root/domain-b-config"
-env XDG_STATE_HOME="$domain_a_state" XDG_CONFIG_HOME="$domain_a_config" \
-  WORK_ON_CONTROL_POLICY="$production_policy" "$adapter" prepare \
-  --policy "$production_policy" >/dev/null
-env XDG_STATE_HOME="$domain_b_state" XDG_CONFIG_HOME="$domain_b_config" \
-  WORK_ON_CONTROL_POLICY="$production_policy" "$adapter" prepare \
-  --policy "$production_policy" >/dev/null
-domain_a_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
-domain_b_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
-(cd "$target" && env XDG_STATE_HOME="$domain_a_state" \
-  XDG_CONFIG_HOME="$domain_a_config" WORK_ON_CONTROL_POLICY="$production_policy" \
-  "$adapter" register --run "$domain_a_handle") \
-  >"$test_root/domain-a.out" 2>"$test_root/domain-a.err" &
-domain_a_pid=$!
-(cd "$target" && env XDG_STATE_HOME="$domain_b_state" \
-  XDG_CONFIG_HOME="$domain_b_config" WORK_ON_CONTROL_POLICY="$production_policy" \
-  "$adapter" register --run "$domain_b_handle") \
-  >"$test_root/domain-b.out" 2>"$test_root/domain-b.err" &
-domain_b_pid=$!
-domain_a_status=0; wait "$domain_a_pid" || domain_a_status=$?
-domain_b_status=0; wait "$domain_b_pid" || domain_b_status=$?
-[[ "$(( (domain_a_status == 0) + (domain_b_status == 0) ))" -eq 1 ]] \
-  || fail "independent registry domains produced more than one eligible run"
-if [[ "$domain_a_status" -eq 0 ]]; then
-  domain_winner_handle="$domain_a_handle"
-  domain_winner_state="$domain_a_state"
-  domain_winner_config="$domain_a_config"
-  domain_loser_handle="$domain_b_handle"
-  domain_loser_state="$domain_b_state"
-  domain_loser_config="$domain_b_config"
-else
-  domain_winner_handle="$domain_b_handle"
-  domain_winner_state="$domain_b_state"
-  domain_winner_config="$domain_b_config"
-  domain_loser_handle="$domain_a_handle"
-  domain_loser_state="$domain_a_state"
-  domain_loser_config="$domain_a_config"
-fi
-(cd "$target" && env XDG_STATE_HOME="$domain_winner_state" \
-  XDG_CONFIG_HOME="$domain_winner_config" WORK_ON_CONTROL_POLICY="$production_policy" \
-  "$adapter" finalize --run "$domain_winner_handle" --outcome abandoned) >/dev/null
-[[ "$(cd "$target" && env XDG_STATE_HOME="$domain_loser_state" \
-  XDG_CONFIG_HOME="$domain_loser_config" WORK_ON_CONTROL_POLICY="$production_policy" \
-  "$adapter" register --run "$domain_loser_handle")" \
-  == "registered ${domain_loser_handle%@*}" ]] \
-  || fail "the losing registry domain could not retry after remote capacity reopened"
-(cd "$target" && env XDG_STATE_HOME="$domain_loser_state" \
-  XDG_CONFIG_HOME="$domain_loser_config" WORK_ON_CONTROL_POLICY="$production_policy" \
-  "$adapter" finalize --run "$domain_loser_handle" --outcome abandoned) >/dev/null
 
 post_close_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
 (cd "$target" && "$adapter" register --run "$post_close_handle") >/dev/null
@@ -818,7 +980,7 @@ second_state_file="$XDG_STATE_HOME/work-on/control-windows/fixture-second-contro
   || fail "a durably closed control did not release the production policy slot"
 "$adapter" activate --policy "$second_policy" >/dev/null
 
-scenario public-registration-and-closing-share-one-admission-boundary
+scenario same-controller-register-and-close-leave-no-stranded-row
 race_handle="$(cd "$target" && "$script_root/run-telemetry.sh" start --issue 101)"
 export CONTROL_WINDOW_CLOSING_BARRIER="$test_root/closing-barrier"
 "$adapter" close --policy "$second_policy" \
