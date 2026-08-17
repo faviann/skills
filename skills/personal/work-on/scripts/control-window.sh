@@ -437,13 +437,19 @@ clone_results_repository() {
 }
 
 commit_evidence() {
-  local message="$1"
+  local message="$1" hooks_directory
+  hooks_directory="$(mktemp -d "$checkout_root/empty-hooks.XXXXXX")" \
+    || fail "could not create empty publisher hooks directory"
+  hooks_directory="$(cd "$hooks_directory" && pwd -P)"
+  chmod 700 "$hooks_directory" \
+    || fail "could not secure empty publisher hooks directory"
   GIT_AUTHOR_NAME="$publisher_name" \
   GIT_AUTHOR_EMAIL="$publisher_email" \
   GIT_COMMITTER_NAME="$publisher_name" \
   GIT_COMMITTER_EMAIL="$publisher_email" \
     git -c user.name="$publisher_name" -c user.email="$publisher_email" \
-      -c commit.gpgsign=false -C "$checkout_root/repository" \
+      -c commit.gpgsign=false -c core.hooksPath="$hooks_directory" \
+      -C "$checkout_root/repository" \
       commit -qm "$message"
 }
 

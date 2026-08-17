@@ -168,6 +168,17 @@ if [[ -n "${CONTROL_WINDOW_AMBIGUOUS_PUSH_MARKER:-}" ]]; then
     fi
   done
 fi
+if [[ -n "${CONTROL_WINDOW_CAPTURE_COMMITS:-}" ]]; then
+  for argument in "$@"; do
+    if [[ "$argument" == commit && -n "$repository" ]]; then
+      "$CONTROL_WINDOW_REAL_GIT" "$@"
+      "$CONTROL_WINDOW_REAL_GIT" -C "$repository" show -s \
+        --format='%an|%ae|%cn|%ce|%s' HEAD \
+        >>"$CONTROL_WINDOW_CAPTURE_COMMITS"
+      exit 0
+    fi
+  done
+fi
 exec "$CONTROL_WINDOW_REAL_GIT" "$@"
 GIT
 chmod +x "$fake_bin/git"
@@ -206,14 +217,23 @@ after_count="$(git --git-dir="$remote" rev-list --count main..demo/control-windo
   || fail "demo preparation installed a real observer/control descriptor"
 
 scenario publisher-commit-metadata-is-closed-and-bounded
-privacy_policy="$test_root/privacy-demo-policy.json"
-jq --arg control demo-control-window-privacy \
-  --arg branch demo/control-window-privacy \
+privacy_policy="$test_root/privacy-production-policy.json"
+jq --arg control fixture-control-window-privacy \
+  --arg branch experiment/control-window-privacy \
   '.control_id = $control | .results.branch = $branch' \
-  "$fixtures/demo-policy.json" >"$privacy_policy"
+  "$fixtures/b2-like-policy.json" >"$privacy_policy"
+privacy_hooks="$test_root/privacy-hooks"
+privacy_hook_marker="$test_root/privacy-hook-ran"
+mkdir -p "$privacy_hooks"
+cat >"$privacy_hooks/commit-msg" <<HOOK
+#!/usr/bin/env bash
+printf '\nSECRET REVIEWER MATERIAL\n' >>"\$1"
+: >"$privacy_hook_marker"
+HOOK
+chmod +x "$privacy_hooks/commit-msg"
 privacy_git_config="$test_root/privacy-gitconfig"
-printf '[user]\n\tname = AMBIENT PROMPT SENTINEL\n\temail = ambient-credential@example.invalid\n' \
-  >"$privacy_git_config"
+printf '[user]\n\tname = AMBIENT PROMPT SENTINEL\n\temail = ambient-credential@example.invalid\n[core]\n\thooksPath = %s\n' \
+  "$privacy_hooks" >"$privacy_git_config"
 export GIT_CONFIG_GLOBAL="$privacy_git_config"
 export CONTROL_WINDOW_GIT_NAME='CONTROL REVIEWER PROSE SENTINEL'
 export CONTROL_WINDOW_GIT_EMAIL='control-credential@example.invalid'
@@ -221,36 +241,44 @@ export GIT_AUTHOR_NAME='AUTHOR PROMPT SENTINEL'
 export GIT_AUTHOR_EMAIL='author-credential@example.invalid'
 export GIT_COMMITTER_NAME='COMMITTER DIAGNOSTIC SENTINEL'
 export GIT_COMMITTER_EMAIL='committer-credential@example.invalid'
+export CONTROL_WINDOW_CAPTURE_COMMITS="$test_root/privacy-local-commits"
 rm -f "$CONTROL_WINDOW_FAKE_GH_STATE"
-"$adapter" prepare --policy "$privacy_policy" >/dev/null
+env XDG_STATE_HOME="$test_root/privacy-state" \
+  XDG_CONFIG_HOME="$test_root/privacy-config" \
+  WORK_ON_CONTROL_POLICY="$privacy_policy" \
+  "$adapter" prepare --policy "$privacy_policy" >/dev/null
+env XDG_STATE_HOME="$test_root/privacy-state" \
+  XDG_CONFIG_HOME="$test_root/privacy-config" \
+  WORK_ON_CONTROL_POLICY="$privacy_policy" \
+  "$adapter" activate --policy "$privacy_policy" >/dev/null
 privacy_surface="$test_root/privacy-surface"
 {
   git --git-dir="$remote" log --format=fuller --stat -p \
-    main..demo/control-window-privacy
+    main..experiment/control-window-privacy
   cat "$CONTROL_WINDOW_FAKE_GH_STATE"
 } >"$privacy_surface"
 for sentinel in \
+  'SECRET REVIEWER MATERIAL' \
   'AMBIENT PROMPT SENTINEL' 'ambient-credential@example.invalid' \
   'CONTROL REVIEWER PROSE SENTINEL' 'control-credential@example.invalid' \
   'AUTHOR PROMPT SENTINEL' 'author-credential@example.invalid' \
   'COMMITTER DIAGNOSTIC SENTINEL' 'committer-credential@example.invalid'; do
   ! grep -Fq "$sentinel" "$privacy_surface" \
     || fail "publisher retained prohibited Git metadata: $sentinel"
+  ! grep -Fq "$sentinel" "$CONTROL_WINDOW_CAPTURE_COMMITS" \
+    || fail "local evidence commit retained prohibited Git metadata: $sentinel"
 done
-privacy_head="$(git --git-dir="$remote" rev-parse demo/control-window-privacy)"
-[[ "$(git --git-dir="$remote" show -s --format=%an "$privacy_head")" \
-    == 'Control Window Publisher' \
-  && "$(git --git-dir="$remote" show -s --format=%ae "$privacy_head")" \
-    == 'control-window@invalid.local' \
-  && "$(git --git-dir="$remote" show -s --format=%cn "$privacy_head")" \
-    == 'Control Window Publisher' \
-  && "$(git --git-dir="$remote" show -s --format=%ce "$privacy_head")" \
-    == 'control-window@invalid.local' \
-  && "$(git --git-dir="$remote" show -s --format=%s "$privacy_head")" \
-    == 'Prepare control results: demo-control-window-privacy' ]] \
+[[ ! -e "$privacy_hook_marker" ]] \
+  || fail "ambient commit-msg hook executed during evidence creation"
+privacy_metadata="$(git --git-dir="$remote" log --reverse \
+  --format='%an|%ae|%cn|%ce|%s' main..experiment/control-window-privacy)"
+expected_privacy_metadata=$'Control Window Publisher|control-window@invalid.local|Control Window Publisher|control-window@invalid.local|Prepare control results: fixture-control-window-privacy\nControl Window Publisher|control-window@invalid.local|Control Window Publisher|control-window@invalid.local|Append control-activated: fixture-control-window-privacy'
+[[ "$privacy_metadata" == "$expected_privacy_metadata" \
+  && "$(cat "$CONTROL_WINDOW_CAPTURE_COMMITS")" == "$expected_privacy_metadata" ]] \
   || fail "publisher did not force its bounded commit identity and message"
 unset GIT_CONFIG_GLOBAL CONTROL_WINDOW_GIT_NAME CONTROL_WINDOW_GIT_EMAIL \
-  GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
+  GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL \
+  CONTROL_WINDOW_CAPTURE_COMMITS
 
 scenario activation-readback-precedes-matching
 rm -f "$CONTROL_WINDOW_FAKE_GH_STATE"
