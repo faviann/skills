@@ -220,8 +220,10 @@ Use observed values only; never estimate. The outcome must match the issue
 mapping. A mechanical count of zero is a plain `0`, not a flag.
 
 The renderer aggregates every sink-derived row itself, appends the mechanically
-owned source note naming which rows are primary-reported, and rejects facts that
-try to supply a sink-owned aggregate; see `references/run-telemetry.md`. The
+owned source note naming which rows are primary-reported, and rejects facts
+whose `telemetry` object holds anything beyond the four fields shown above —
+under any name, not a fixed list of forbidden ones; see
+`references/run-telemetry.md`. The
 table describes the latest run alone, so a later run may legitimately report
 smaller counts than the previous body did. Individual launches, reviews,
 and validation executions stay in the sink. Record the run's outcome with

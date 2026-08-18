@@ -244,8 +244,9 @@ aggregate renders `unknown` with a bounded warning, never a clamped or
 estimated value. Unavailability of one aggregate is not a telemetry-integrity
 failure and does not block hand-back.
 
-None of these rows is supplied through the facts file; the renderer refuses
-facts that try. Model configuration, blocking findings resolved, and findings
+None of these rows is supplied through the facts file; the renderer permits
+only the primary-reported fields in the facts `telemetry` object and refuses
+every other key, so a new aggregate here needs no matching change there. Model configuration, blocking findings resolved, and findings
 rejected at adjudication remain primary-reported, and a source note below the
 table says so. The workflow-provenance runs are unchanged.
 

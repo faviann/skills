@@ -51,16 +51,22 @@ jq -e '
     or has("runs") or has("phases")) | not
 ' "$facts" >/dev/null \
   || fail "workflow provenance comes from the run ledger and previous PR body"
-jq -e '
+# Only the three primary-reported observations and the outcome consistency
+# assertion are supplied here; every other row is derived from the run's sink
+# below. This is the one list, and it is an allowlist: a name the renderer does
+# not read is refused rather than silently ignored, so the sink can grow an
+# aggregate without a second list somewhere else falling out of step with it.
+telemetry_fields=(
+  model_configuration
+  blocking_findings_resolved
+  findings_rejected_at_adjudication
+  final_workflow_outcome
+)
+jq -e --argjson allowed "$(printf '%s\n' "${telemetry_fields[@]}" \
+    | jq -Rsc 'split("\n") | map(select(length > 0))')" '
   (has("run_telemetry") or has("telemetry_summary")
     or ((.telemetry // {} | if type == "object" then . else {} end)
-      | has("telemetry_run") or has("subagent_launches") or has("reviews")
-        or has("validation_outcomes") or has("phase_elapsed")
-        or has("wall_clock_elapsed") or has("start_to_seal_elapsed")
-        or has("implementation_rounds") or has("independent_review_rounds")
-        or has("remediation_rounds") or has("validation_executions")
-        or has("reviewed_artifact_bytes")
-        or has("recorded_validation_duration"))) | not
+      | (keys - $allowed) | length > 0)) | not
 ' "$facts" >/dev/null \
   || fail "run telemetry comes from the run-scoped telemetry sink"
 
@@ -154,14 +160,6 @@ missing_acceptance_criterion="$(
 
 jq -e '.telemetry | type == "object"' "$facts" >/dev/null \
   || fail "telemetry must be an object"
-# Only the three primary-reported observations and the outcome consistency
-# assertion are still supplied here; every other row is sink-derived below.
-telemetry_fields=(
-  model_configuration
-  blocking_findings_resolved
-  findings_rejected_at_adjudication
-  final_workflow_outcome
-)
 for field in "${telemetry_fields[@]}"; do
   jq -e --arg field "$field" \
     '.telemetry[$field] |

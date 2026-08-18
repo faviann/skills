@@ -365,11 +365,17 @@ for supplied in run_telemetry telemetry_summary; do
   grep -Fqx 'closeout invalid: run telemetry comes from the run-scoped telemetry sink' \
     "$fixture/sink-$supplied.err"
 done
+# The permitted facts keys are an allowlist, so a sink-owned aggregate is
+# refused under the renderer's own row names, under the summary JSON's names,
+# and under a name nobody has invented yet. A denylist would cover only the
+# first group, and only until the sink grew a field.
 for supplied in telemetry_run subagent_launches reviews validation_outcomes \
     phase_elapsed wall_clock_elapsed start_to_seal_elapsed \
     implementation_rounds independent_review_rounds remediation_rounds \
     validation_executions reviewed_artifact_bytes \
-    recorded_validation_duration; do
+    recorded_validation_duration \
+    start_to_seal_ms rounds validations phase_elapsed_ms \
+    review_delegations integrity unrecognized_bookkeeping; do
   jq --arg key "$supplied" '.telemetry[$key] = "supplied by facts"' \
     "$fixture/facts.json" >"$fixture/sink-field-$supplied.json"
   if run_new "$fixture/sink-field-$supplied.json" "$fixture/narrative.md" \
