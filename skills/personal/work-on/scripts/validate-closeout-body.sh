@@ -35,21 +35,6 @@ fail() {
   exit 1
 }
 
-decimal_is_less_than() {
-  local left="$1" right="$2" LC_ALL=C
-  while [[ "${#left}" -gt 1 && "${left:0:1}" == 0 ]]; do
-    left="${left:1}"
-  done
-  while [[ "${#right}" -gt 1 && "${right:0:1}" == 0 ]]; do
-    right="${right:1}"
-  done
-  if [[ "${#left}" -ne "${#right}" ]]; then
-    [[ "${#left}" -lt "${#right}" ]]
-  else
-    [[ "$left" < "$right" ]]
-  fi
-}
-
 [[ "$issue_number" =~ ^[1-9][0-9]*$ ]] \
   || fail "issue number must be a positive integer"
 
@@ -149,7 +134,7 @@ readonly telemetry_separator='|---|---|'
 
 telemetry_fields=(
   "Model configuration"
-  "Wall-clock elapsed"
+  "Start-to-seal elapsed"
   "Implementation rounds"
   "Independent-review rounds"
   "Remediation rounds"
@@ -160,20 +145,27 @@ telemetry_fields=(
   "Telemetry run"
   "Subagent launches"
   "Reviews recorded"
+  "Reviewed artifact bytes"
   "Validation executions recorded"
+  "Recorded validation duration"
   "Measured phase elapsed"
   "Workflow provenance"
 )
-# The sink-derived rows follow the facts-supplied counts, so the count-field
-# offset into telemetry_fields is unchanged.
+readonly telemetry_row_count="${#telemetry_fields[@]}"
+readonly telemetry_source_note='> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.'
 readonly telemetry_run_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8} \(schema (1, integrity legacy-unverifiable|2, integrity valid)\)$'
+readonly elapsed_ms_pattern='^(unknown|[0-9]+ ms)$'
+readonly artifact_bytes_pattern='^(unknown|[0-9]+ bytes)$'
 readonly subagent_launches_pattern='^(0|[1-9][0-9]* \([a-z-]+=[1-9][0-9]*(, [a-z-]+=[1-9][0-9]*)*\))$'
 readonly reviews_pattern='^[0-9]+ \(readiness=[0-9]+, full=[0-9]+, delta=[0-9]+\)$'
 readonly validations_pattern='^[0-9]+ \(passed=[0-9]+, failed=[0-9]+(, interrupted=[1-9][0-9]*)?(, incomplete=[1-9][0-9]*)?\)$'
 readonly phase_elapsed_pattern='^(unknown|[a-z-]+=[0-9]+s(, [a-z-]+=[0-9]+s)*)$'
-telemetry_count_values=()
-[[ "${#telemetry_lines[@]}" -ge 17 ]] \
-  || fail "workflow telemetry must contain fifteen canonical rows"
+# Only this format is accepted. A body written under the earlier telemetry
+# format stays in place as a historical record and is not migrated, so
+# revalidating one — as a `/work-on` update of that pull request does — refuses
+# here rather than rendering a second supported shape.
+[[ "${#telemetry_lines[@]}" -ge $((telemetry_row_count + 3)) ]] \
+  || fail "workflow telemetry must contain seventeen canonical rows"
 
 for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
   row="${telemetry_lines[$((index + 2))]}"
@@ -197,7 +189,14 @@ for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
     "Implementation rounds"|"Independent-review rounds"|"Remediation rounds"|"Validation executions"|"Blocking findings resolved"|"Findings rejected at adjudication")
       [[ "$value" == unknown || "$value" =~ ^[0-9]+$ ]] \
         || fail "workflow telemetry $field must be a nonnegative integer or unknown"
-      telemetry_count_values+=("$value")
+      ;;
+    "Start-to-seal elapsed"|"Recorded validation duration")
+      [[ "$value" =~ $elapsed_ms_pattern ]] \
+        || fail "workflow telemetry $field is malformed"
+      ;;
+    "Reviewed artifact bytes")
+      [[ "$value" =~ $artifact_bytes_pattern ]] \
+        || fail "workflow telemetry $field is malformed"
       ;;
     "Telemetry run")
       [[ "$value" =~ $telemetry_run_pattern ]] \
@@ -228,6 +227,12 @@ for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
   fi
 done
 
+# The source note names which rows a human reported and which the sink derived.
+# It is mechanically owned, exact, and sits directly below the table, so a body
+# can never present a primary-reported value as a measured one.
+[[ "${telemetry_lines[$((telemetry_row_count + 2))]}" == "$telemetry_source_note" ]] \
+  || fail "workflow telemetry is missing the canonical source note"
+
 [[ "$telemetry_outcome" == Closes || "$telemetry_outcome" == Progresses ]] \
   || fail "workflow telemetry outcome must be Closes or Progresses"
 [[ "$telemetry_outcome" == "$issue_outcome" ]] \
@@ -244,12 +249,12 @@ else
   [[ "$provenance_value" == "$run_count runs" ]] \
     || fail "workflow provenance is malformed"
 fi
-[[ "${#telemetry_lines[@]}" -eq $((17 + run_count)) ]] \
+[[ "${#telemetry_lines[@]}" -eq $((telemetry_row_count + 3 + run_count)) ]] \
   || fail "workflow provenance run count does not match run lines"
 
 provenance_runs=()
 for ((index = 1; index <= run_count; index++)); do
-  run_line="${telemetry_lines[$((16 + index))]}"
+  run_line="${telemetry_lines[$((telemetry_row_count + 2 + index))]}"
   run_prefix="Run $index: "
   [[ "$run_line" == "$run_prefix"* ]] \
     || fail "workflow provenance run $index is malformed or out of order"
@@ -283,33 +288,4 @@ if [[ -n "$previous_source" ]]; then
   # cannot have come from a single run's ledger.
   [[ "${#provenance_runs[@]}" -eq $((${#previous_runs[@]} + 1)) ]] \
     || fail "workflow provenance must append exactly one run"
-
-  mapfile -t previous_count_values < <(awk -F'|' '
-    function trim(value) {
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      return value
-    }
-    $0 == "## Workflow telemetry" { in_telemetry = 1; next }
-    in_telemetry && /^## / { exit }
-    in_telemetry {
-      field = trim($2)
-      if (field ~ /^(Implementation rounds|Independent-review rounds|Remediation rounds|Validation executions|Blocking findings resolved|Findings rejected at adjudication)$/) {
-        print trim($3)
-      }
-    }
-  ' "$previous_body")
-  for ((index = 0; index < ${#telemetry_count_values[@]}; index++)); do
-    previous_count="${previous_count_values[$index]}"
-    current_count="${telemetry_count_values[$index]}"
-    # `unknown` is a permitted starting state, but a count that was once known
-    # is a lower bound the pull request established; replacing it with
-    # `unknown` discards that bound as surely as decreasing it would.
-    if [[ "$previous_count" =~ ^[0-9]+$ && "$current_count" == unknown ]]; then
-      fail "workflow telemetry ${telemetry_fields[$((index + 2))]} became unknown after $previous_count"
-    fi
-    if [[ "$previous_count" =~ ^[0-9]+$ && "$current_count" =~ ^[0-9]+$ ]] \
-        && decimal_is_less_than "$current_count" "$previous_count"; then
-      fail "workflow telemetry ${telemetry_fields[$((index + 2))]} decreased from $previous_count to $current_count"
-    fi
-  done
 fi

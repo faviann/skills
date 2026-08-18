@@ -115,11 +115,6 @@ Put the closeout facts in an untracked JSON file with this shape:
   ],
   "telemetry": {
     "model_configuration": "observed value or unknown",
-    "wall_clock_elapsed": "measured seconds or unknown",
-    "implementation_rounds": 1,
-    "independent_review_rounds": 1,
-    "remediation_rounds": 0,
-    "validation_executions": 3,
     "blocking_findings_resolved": 0,
     "findings_rejected_at_adjudication": 0,
     "final_workflow_outcome": "Closes"
@@ -193,8 +188,9 @@ Include `## Finding adjudications` in the narrative with the ledger's rationale
 lines and the sweep's trace table; omit it when no blocking findings were
 adjudicated.
 
-Supply these observed telemetry fields through the facts file; the last five
-rows come from the run's telemetry sink instead:
+Three observations are primary-reported through the facts file — model
+configuration, blocking findings resolved, and findings rejected at
+adjudication. Every other row is derived from the run's telemetry sink:
 
 ```md
 ## Workflow telemetry
@@ -202,28 +198,32 @@ rows come from the run's telemetry sink instead:
 | Field | Observed value |
 |---|---|
 | Model configuration | <observed value or unknown> |
-| Wall-clock elapsed | <measured seconds or unknown> |
-| Implementation rounds | <count or unknown> |
-| Independent-review rounds | <count or unknown> |
-| Remediation rounds | <count or unknown> |
-| Validation executions | <count or unknown> |
+| Start-to-seal elapsed | <milliseconds> ms, or unknown |
+| Implementation rounds | <count> |
+| Independent-review rounds | <count> |
+| Remediation rounds | <count> |
+| Validation executions | <count> |
 | Blocking findings resolved | <count or unknown> |
 | Findings rejected at adjudication | <count or unknown> |
 | Final workflow outcome | Closes or Progresses |
-| Telemetry run | <run id> (schema <version>, integrity <state>) |
+| Telemetry run | <bare run id> (schema <version>, integrity <state>) |
 | Subagent launches | <total and by-role breakdown> |
 | Reviews recorded | <total and readiness/full/delta breakdown> |
+| Reviewed artifact bytes | <bytes> bytes, or unknown |
 | Validation executions recorded | <total and outcome breakdown> |
+| Recorded validation duration | <milliseconds> ms, or unknown |
 | Measured phase elapsed | <per-phase seconds, or unknown> |
+| Workflow provenance | <N> run or runs |
 ```
 
-Use observed values only; never estimate. Count each agent-launched top-level
-validation command once (not its child processes), including delegate and
-reviewer runs; reconcile handoffs or report `unknown`. For sharded suites,
-report every shard and the sum. The outcome must match the issue mapping.
+Use observed values only; never estimate. The outcome must match the issue
+mapping. A mechanical count of zero is a plain `0`, not a flag.
 
-The renderer aggregates those five rows itself and rejects facts that try to
-supply them; see `references/run-telemetry.md`. Individual launches, reviews,
+The renderer aggregates every sink-derived row itself, appends the mechanically
+owned source note naming which rows are primary-reported, and rejects facts that
+try to supply a sink-owned aggregate; see `references/run-telemetry.md`. The
+table describes the latest run alone, so a later run may legitimately report
+smaller counts than the previous body did. Individual launches, reviews,
 and validation executions stay in the sink. Record the run's outcome with
 `scripts/run-telemetry.sh resolve --run "$RUN_HANDLE" --outcome "$OUTCOME"` as
 soon as the gate resolves it. Record legitimate closeout evidence, then run
@@ -246,7 +246,24 @@ gh pr view <pr-number> --json body --jq .body \
 ```
 
 For an updated pull request, also pass `--previous <old-body.md>` so validation
-proves that its prior provenance runs were preserved as an exact prefix.
+proves that its prior provenance runs were preserved as an exact prefix. Only
+the current table format is accepted. A pull request whose body was written
+under the earlier format is not migrated: revalidating it refuses and blocks
+hand-back on that pull request. Those pull requests are finished; leave the
+historical body in place.
+
+Once the body has been read back and validated, make the observation findable:
+
+```sh
+~/.agents/skills/work-on/scripts/ensure-work-on-label.sh \
+  --repository <owner/repository> --pr <pr-number>
+```
+
+It applies the repository-local `work-on` label, creating it with fixed bounded
+metadata when absent and leaving an existing label's color and description
+alone. The label is a discovery aid, not evidence authority: a lookup, creation,
+or application failure prints one bounded warning and hand-back continues. Name
+the repository and pull request explicitly; neither is inferred.
 
 The canonical issue mapping, acceptance rows and statuses, and telemetry
 outcome must survive read-back. Generic validation accepts canonical `Closes`

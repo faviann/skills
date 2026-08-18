@@ -55,7 +55,12 @@ jq -e '
   (has("run_telemetry") or has("telemetry_summary")
     or ((.telemetry // {} | if type == "object" then . else {} end)
       | has("telemetry_run") or has("subagent_launches") or has("reviews")
-        or has("validation_outcomes") or has("phase_elapsed"))) | not
+        or has("validation_outcomes") or has("phase_elapsed")
+        or has("wall_clock_elapsed") or has("start_to_seal_elapsed")
+        or has("implementation_rounds") or has("independent_review_rounds")
+        or has("remediation_rounds") or has("validation_executions")
+        or has("reviewed_artifact_bytes")
+        or has("recorded_validation_duration"))) | not
 ' "$facts" >/dev/null \
   || fail "run telemetry comes from the run-scoped telemetry sink"
 
@@ -149,13 +154,10 @@ missing_acceptance_criterion="$(
 
 jq -e '.telemetry | type == "object"' "$facts" >/dev/null \
   || fail "telemetry must be an object"
+# Only the three primary-reported observations and the outcome consistency
+# assertion are still supplied here; every other row is sink-derived below.
 telemetry_fields=(
   model_configuration
-  wall_clock_elapsed
-  implementation_rounds
-  independent_review_rounds
-  remediation_rounds
-  validation_executions
   blocking_findings_resolved
   findings_rejected_at_adjudication
   final_workflow_outcome
@@ -169,10 +171,6 @@ for field in "${telemetry_fields[@]}"; do
 done
 
 telemetry_count_fields=(
-  implementation_rounds
-  independent_review_rounds
-  remediation_rounds
-  validation_executions
   blocking_findings_resolved
   findings_rejected_at_adjudication
 )
@@ -278,6 +276,40 @@ phase_elapsed_value="$(summary_value '
     | join(", ")) as $measured
   | if $measured == "" then "unknown" else $measured end')"
 
+# A mechanical aggregate the sink cannot supply renders `unknown` and warns.
+# Unavailability of one aggregate is not a telemetry-integrity failure and
+# never blocks hand-back; only a fabricated value would be a defect.
+bare_run="$(jq -r '.run' <<<"$telemetry_summary")"
+derived_value() {
+  local label="$1" filter="$2" unit="${3:-}" value
+  value="$(jq -r "
+    ($filter)
+    | select(type == \"number\" and floor == . and . >= 0)
+    | tostring" <<<"$telemetry_summary")"
+  if [[ -z "$value" ]]; then
+    printf 'warning: %s unavailable for run %s; rendered as unknown\n' \
+      "$label" "$bare_run" >&2
+    printf 'unknown'
+  else
+    printf '%s%s' "$value" "$unit"
+  fi
+}
+
+start_to_seal_value="$(derived_value 'start-to-seal elapsed' \
+  '.start_to_seal_ms' ' ms')"
+implementation_rounds_value="$(derived_value 'implementation rounds' \
+  '.rounds.implementation')"
+independent_review_rounds_value="$(derived_value 'independent-review rounds' \
+  '.rounds.independent_review')"
+remediation_rounds_value="$(derived_value 'remediation rounds' \
+  '.rounds.remediation')"
+validation_executions_value="$(derived_value 'validation executions' \
+  '.validations.total')"
+reviewed_artifact_bytes_value="$(derived_value 'reviewed artifact bytes' \
+  '(.review_delegations // .reviews).input_bytes' ' bytes')"
+validation_duration_value="$(derived_value 'recorded validation duration' \
+  '.validations.duration_ms' ' ms')"
+
 runs=()
 if [[ "$closeout_mode" == previous ]]; then
   mapfile -t runs < <(sed 's/\r$//' "$previous_body" | awk '
@@ -319,6 +351,11 @@ telemetry_value() {
   jq -r --arg field "$1" '.telemetry[$field] | tostring | gsub("\\|"; "&#124;") | gsub("\\r?\\n"; "<br>")' "$facts"
 }
 
+# The source note is mechanically owned and exact. validate-closeout-body.sh
+# holds the same literal and rejects any body whose note differs, so the two
+# cannot drift silently: every render validates its own candidate below.
+readonly source_note='> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.'
+
 candidate="$fixture/candidate.md"
 {
   printf '## Issues\n\n%s #%s\n' "$outcome" "$issue_number"
@@ -341,24 +378,38 @@ candidate="$fixture/candidate.md"
   printf '| Field | Observed value |\n'
   printf '|---|---|\n'
   printf '| Model configuration | %s |\n' "$(telemetry_value model_configuration)"
-  printf '| Wall-clock elapsed | %s |\n' "$(telemetry_value wall_clock_elapsed)"
-  printf '| Implementation rounds | %s |\n' "$(telemetry_value implementation_rounds)"
-  printf '| Independent-review rounds | %s |\n' "$(telemetry_value independent_review_rounds)"
-  printf '| Remediation rounds | %s |\n' "$(telemetry_value remediation_rounds)"
-  printf '| Validation executions | %s |\n' "$(telemetry_value validation_executions)"
+  printf '| Start-to-seal elapsed | %s |\n' "$start_to_seal_value"
+  printf '| Implementation rounds | %s |\n' "$implementation_rounds_value"
+  printf '| Independent-review rounds | %s |\n' "$independent_review_rounds_value"
+  printf '| Remediation rounds | %s |\n' "$remediation_rounds_value"
+  printf '| Validation executions | %s |\n' "$validation_executions_value"
   printf '| Blocking findings resolved | %s |\n' "$(telemetry_value blocking_findings_resolved)"
   printf '| Findings rejected at adjudication | %s |\n' "$(telemetry_value findings_rejected_at_adjudication)"
   printf '| Final workflow outcome | %s |\n' "$telemetry_outcome"
   printf '| Telemetry run | %s |\n' "$telemetry_run_value"
   printf '| Subagent launches | %s |\n' "$subagent_launches_value"
   printf '| Reviews recorded | %s |\n' "$reviews_value"
+  printf '| Reviewed artifact bytes | %s |\n' "$reviewed_artifact_bytes_value"
   printf '| Validation executions recorded | %s |\n' "$validations_value"
+  printf '| Recorded validation duration | %s |\n' "$validation_duration_value"
   printf '| Measured phase elapsed | %s |\n' "$phase_elapsed_value"
   printf '| Workflow provenance | %s |\n\n' "$provenance_value"
+  printf '%s\n\n' "$source_note"
   for ((index = 0; index < ${#runs[@]}; index++)); do
     printf 'Run %s: %s\n' "$((index + 1))" "${runs[$index]}"
   done
 } >"$candidate"
+
+# Published identity is the repository context, the issue, and the bare run ID.
+# The owner-only repository binding is a local authority value: it selects the
+# sink and proves the handle belongs here, and it is never published. This
+# checks the rendered artifact rather than the intent of the rows above.
+if [[ "$run_id" == *@* ]]; then
+  binding="${run_id##*@}"
+  if [[ -n "$binding" ]] && grep -Fq -- "$binding" "$candidate"; then
+    fail "the rendered body contains the local repository binding"
+  fi
+fi
 
 if [[ "$closeout_mode" == previous ]]; then
   "$script_root/validate-closeout-body.sh" \
