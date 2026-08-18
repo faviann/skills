@@ -304,7 +304,8 @@ finish a run, and the sink holds everything else.
 ## Where this fits
 
 The registry and observer seam are the generic mechanism owned by
-[#9](https://github.com/faviann/skills/issues/9). A policy adapter that decides
-what a control means, and what to publish when one finalizes, is
-[#73](https://github.com/faviann/skills/issues/73)'s and is not part of this
-mechanism.
+[#9](https://github.com/faviann/skills/issues/9). No policy adapter consumes
+them: the formal control window they were intended to serve was retired in
+[ADR 0006](../../../../.agents/adr/0006-retire-the-formal-control-window-for-pr-local-observation.md),
+and observation is now PR-local. Leaving the seam in place is not an
+endorsement; removing it is a separate maintenance decision.

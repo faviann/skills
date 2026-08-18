@@ -74,10 +74,12 @@ Procedure:
 8. Follow it without broadening the issue. When code changes are ready for a
    pull request, read and follow `references/github-closeout.md`. Build the
    closeout through `scripts/render-closeout.sh`; never hand-compose its Issues,
-   Closure gate, or Workflow telemetry sections. Done when the workflow's
-   completion criteria are met and, on the PR path, the final PR body has been
-   read back and checked with `scripts/validate-closeout-body.sh` as closeout
-   requires.
+   Closure gate, or Workflow telemetry sections. After that body is read back
+   and validated, apply the `work-on` label with
+   `scripts/ensure-work-on-label.sh`; its failures warn and never block
+   hand-back. Done when the workflow's completion criteria are met and, on the
+   PR path, the final PR body has been read back and checked with
+   `scripts/validate-closeout-body.sh` as closeout requires.
 
 Abort on any conflict among the issue, snapshot, referenced docs, workflow,
 required skills, authority invariants, or repository state.

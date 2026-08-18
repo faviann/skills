@@ -207,21 +207,53 @@ its stdout, stderr, and exit status pass straight through.
 
 `run-telemetry.sh summary --run "$RUN_HANDLE"` aggregates one run's sink into a
 deterministic JSON document: the same sink always produces the same summary.
-`render-closeout.sh --run "$RUN_HANDLE" ...` calls it and renders five bounded rows
-into the mechanically owned
-`## Workflow telemetry` section — telemetry run, schema and integrity;
-implementation launches; reviewer delegations by kind; validation executions;
-and measured elapsed time per phase that recorded events. Per-launch and
-per-command events stay in the sink.
+`render-closeout.sh --run "$RUN_HANDLE" ...` calls it and renders the bounded
+rows of the mechanically owned `## Workflow telemetry` section — telemetry run,
+schema and integrity; implementation launches; reviewer delegations by kind;
+validation executions; and measured elapsed time per phase that recorded events.
+Per-launch and per-command events stay in the sink.
 
-Those rows are never supplied through the facts file; the renderer refuses facts
-that try. The existing observed-value rows and the workflow-provenance runs are
-unchanged.
+The same summary derives seven mechanical aggregates, from the recorded events
+alone and with no change to the event schema:
+
+| Row | Derivation |
+|---|---|
+| Start-to-seal elapsed | `run_sealed.epoch_ms - run_start.epoch_ms` |
+| Implementation rounds | distinct `round` over `subagent_launch` with `role=implementation`, `phase=implementation` |
+| Independent-review rounds | distinct `round` over `review_delegation` with `kind=full`, `phase=gate` |
+| Remediation rounds | distinct `round` over `subagent_launch` with `role=implementation`, `phase=remediation` |
+| Validation executions | recorded `validation_start` count |
+| Reviewed artifact bytes | sum of valid `review_delegation.input_bytes` |
+| Recorded validation duration | sum of valid `validation_end.duration_ms` |
+
+A round is a distinct observed round number, not an event count: Standards,
+Spec, and a gate-phase closure sweep sharing one round are one
+independent-review round. The `phase=gate` filter admits a gate closure sweep
+and excludes the closeout-phase one, readiness, and delta remediation review.
+Round counts are counts of observed events, so a wholly omitted instrumentation
+call stays undetectable — the same limit the integrity result documents.
+
+Two of the names are deliberately narrow. `Reviewed artifact bytes` is the
+deterministic diff or worktree bundle measured once per delegation, not prompt
+bytes, model input, or tokens; `Recorded validation duration` covers
+instrumented top-level wrappers only.
+
+A seal stamped before its own start describes no interval, and a schema-1 sink
+has neither a seal nor an attributable review delegation. Either way the
+aggregate renders `unknown` with a bounded warning, never a clamped or
+estimated value. Unavailability of one aggregate is not a telemetry-integrity
+failure and does not block hand-back.
+
+None of these rows is supplied through the facts file; the renderer permits
+only the primary-reported fields in the facts `telemetry` object and refuses
+every other key, so a new aggregate here needs no matching change there. Model configuration, blocking findings resolved, and findings
+rejected at adjudication remain primary-reported, and a source note below the
+table says so. The workflow-provenance runs are unchanged.
 
 ## Where this fits
 
 This is the attributable schema owned by
 [#9](https://github.com/faviann/skills/issues/9). The run registry in
 [`run-registry.md`](./run-registry.md) observes these sealed runs from outside
-the repository, and #73 may consume them for the #64 experiment; neither
-mechanism is part of this sink or its integrity result.
+the repository; that mechanism is not part of this sink or its integrity
+result.

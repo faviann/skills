@@ -62,6 +62,10 @@ _Avoid_: run database, telemetry registry, analytics store
 The optional external program the **Run registry** asks whether a run carries a finalization obligation, and notifies when one is discharged. It answers with two bounded tokens — an observer id and a control id — and owns all policy; the registry knows nothing about what any observer measures. Discharge notifications carry one stable transition identity, delivered at least once, which the observer deduplicates into one logical transition.
 _Avoid_: experiment hook, control policy, publisher
 
+**PR-local observation**:
+The bounded `## Workflow telemetry` table one `work-on` closeout writes into a pull-request body, describing the latest run only, plus the repository-local `work-on` label that makes such pull requests findable. Three rows are *primary-reported* — model configuration, blocking findings resolved, findings rejected at adjudication — and the rest are *sink-derived* from the **Run telemetry sink**; a source note below the table says which is which. It supports a manual, reversible reading of whether `work-on` is getting cheaper: it is a directional convenience sample of runs that reached a readable closeout, never a certified population, a causal proof, or evidence that no defect escaped. The label is a discovery aid, not evidence authority. See [ADR 0006](./.agents/adr/0006-retire-the-formal-control-window-for-pr-local-observation.md).
+_Avoid_: control window, experiment sample, results branch, wall-clock elapsed (the row is **Start-to-seal elapsed**)
+
 **Closability gate**:
 The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available in this run. It runs on the contract alone and produces no artifact; failing it aborts the run before any code exists. Distinct from the **closure gate**, which inspects a finished candidate's evidence at closeout — the closability gate asks whether `tested` evidence is *reachable*, the closure gate asks whether it was *produced*.
 _Avoid_: closure gate (for this), readiness gate, closability report
@@ -82,6 +86,7 @@ _Avoid_: model kind, model family
 - A **Risk shape** helps locate **Correctness contracts** but does not determine how many a slice contains
 - A `work-on` run has one **Run telemetry sink** and one **Workflow provenance** value
 - A `work-on` run has at most one **Run registry** record, which names at most one **Control observer**; the record is registered before implementation and finalized on hand-back
+- A successful `work-on` PR closeout writes one **PR-local observation**, whose latest-run values are not a lower bound on any later run's
 - A `work-on` run passes one **Closability gate** before it delegates implementation; a run that fails it resolves as `preflight-aborted`, seals, and never reaches the closure gate
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**

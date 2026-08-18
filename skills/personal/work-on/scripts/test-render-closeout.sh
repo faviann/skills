@@ -94,11 +94,6 @@ cat >"$fixture/facts.json" <<'EOF'
   ],
   "telemetry": {
     "model_configuration": "gpt-5",
-    "wall_clock_elapsed": "42 seconds",
-    "implementation_rounds": 1,
-    "independent_review_rounds": 1,
-    "remediation_rounds": 0,
-    "validation_executions": 3,
     "blocking_findings_resolved": 0,
     "findings_rejected_at_adjudication": 0,
     "final_workflow_outcome": "Closes"
@@ -158,20 +153,24 @@ No findings required adjudication.
 | Field | Observed value |
 |---|---|
 | Model configuration | gpt-5 |
-| Wall-clock elapsed | 42 seconds |
+| Start-to-seal elapsed | START_TO_SEAL |
 | Implementation rounds | 1 |
 | Independent-review rounds | 1 |
 | Remediation rounds | 0 |
-| Validation executions | 3 |
+| Validation executions | 0 |
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
 | Final workflow outcome | Closes |
 | Telemetry run | TELEMETRY_RUN (schema 2, integrity valid) |
 | Subagent launches | 2 (implementation=1, review-standards=1) |
 | Reviews recorded | 1 (readiness=0, full=1, delta=0) |
+| Reviewed artifact bytes | 0 bytes |
 | Validation executions recorded | 0 (passed=0, failed=0) |
+| Recorded validation duration | 0 ms |
 | Measured phase elapsed | implementation=0s, gate=0s |
 | Workflow provenance | 1 run |
+
+> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.
 
 Run 1: PROVENANCE
 EOF
@@ -182,7 +181,18 @@ awk -v provenance="$provenance" \
 mv "$fixture/expected.with-provenance.md" "$fixture/expected.md"
 
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/actual.md"
-diff -u "$fixture/expected.md" "$fixture/actual.md"
+# Start-to-seal is the one row a wall clock decides. Its shape is asserted here
+# and normalized out of the literal-body diff, so the diff stays exact.
+grep -Eqx '\| Start-to-seal elapsed \| [0-9]+ ms \|' "$fixture/actual.md" || {
+  printf 'FAIL[start-to-seal]: the elapsed row is not a recorded millisecond count\n' >&2
+  grep -F '| Start-to-seal elapsed |' "$fixture/actual.md" >&2
+  exit 1
+}
+normalize_elapsed() {
+  sed -E 's/^\| Start-to-seal elapsed \| [0-9]+ ms \|$/| Start-to-seal elapsed | START_TO_SEAL |/' \
+    "$1"
+}
+diff -u "$fixture/expected.md" <(normalize_elapsed "$fixture/actual.md")
 "$(dirname "$command_under_test")/validate-closeout-body.sh" 164 "$fixture/actual.md"
 
 # The renderer forwards the repository-bound handle to summary. A wrong
@@ -244,7 +254,17 @@ canonical_render_checksum="$(sha256sum "$canonical_render_sink")"
   cd "$legacy_render_worktree"
   "$command_under_test" --run "$legacy_render_run" \
     "$fixture/facts.json" "$fixture/narrative.md" --new-pr
-) >"$fixture/legacy-render.md"
+) >"$fixture/legacy-render.md" 2>"$fixture/legacy-render.err"
+# A schema-1 sink has no seal transition and no attributable review delegation,
+# so the new aggregates are unavailable rather than reconstructible. Each one
+# renders `unknown` and warns; none is fabricated, and none blocks the render.
+grep -Fqx '| Start-to-seal elapsed | unknown |' "$fixture/legacy-render.md"
+grep -Fqx '| Implementation rounds | unknown |' "$fixture/legacy-render.md"
+grep -Fqx '| Independent-review rounds | unknown |' "$fixture/legacy-render.md"
+grep -Fqx '| Remediation rounds | unknown |' "$fixture/legacy-render.md"
+grep -Fqx \
+  "warning: start-to-seal elapsed unavailable for run $legacy_render_run; rendered as unknown" \
+  "$fixture/legacy-render.err"
 grep -Fqx "| Telemetry run | $legacy_render_run (schema 1, integrity legacy-unverifiable) |" \
   "$fixture/legacy-render.md"
 grep -Fqx '| Subagent launches | 1 (implementation=1) |' \
@@ -253,7 +273,7 @@ grep -Fqx '| Subagent launches | 1 (implementation=1) |' \
   cd "$legacy_render_worktree"
   "$command_under_test" --run "$canonical_render_handle" \
     "$fixture/facts.json" "$fixture/narrative.md" --new-pr
-) >"$fixture/canonical-render.md"
+) >"$fixture/canonical-render.md" 2>/dev/null
 grep -Fqx "| Telemetry run | $legacy_render_run (schema 1, integrity legacy-unverifiable) |" \
   "$fixture/canonical-render.md"
 grep -Fqx '| Subagent launches | 2 (review-spec=2) |' \
@@ -266,7 +286,7 @@ git -C "$target_checkout" worktree remove "$legacy_render_worktree"
 
 # stdin is the other documented input mode.
 run_new - "$fixture/narrative.md" <"$fixture/facts.json" >"$fixture/stdin.md"
-diff -u "$fixture/expected.md" "$fixture/stdin.md"
+diff -u "$fixture/expected.md" <(normalize_elapsed "$fixture/stdin.md")
 
 # The pull-request body carries bounded summaries of the run-scoped sink, never
 # its individual events. Growing the sink changes the summarized values and
@@ -278,7 +298,7 @@ telemetry_section() {
     found { print }
   ' "$1" | sed '/^[[:space:]]*$/d'
 }
-[[ "$(telemetry_section "$fixture/actual.md" | wc -l)" -eq 18 ]]
+[[ "$(telemetry_section "$fixture/actual.md" | wc -l)" -eq 21 ]]
 
 grown_run="$(telemetry start --issue 164)"
 render_run="$grown_run"
@@ -301,7 +321,7 @@ telemetry exec --run "$render_run" \
 telemetry resolve --run "$render_run" --outcome Closes
 telemetry seal --run "$render_run"
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/grown.md"
-[[ "$(telemetry_section "$fixture/grown.md" | wc -l)" -eq 18 ]]
+[[ "$(telemetry_section "$fixture/grown.md" | wc -l)" -eq 21 ]]
 grep -Fqx '| Subagent launches | 5 (implementation=1, readiness=1, review-standards=1, review-spec=1, closure-sweep=1) |' \
   "$fixture/grown.md"
 grep -Fqx '| Reviews recorded | 4 (readiness=1, full=3, delta=0) |' \
@@ -310,6 +330,17 @@ grep -Fqx '| Validation executions recorded | 2 (passed=1, failed=1) |' \
   "$fixture/grown.md"
 grep -Fqx "| Telemetry run | $(run_id_from_handle "$grown_run") (schema 2, integrity valid) |" \
   "$fixture/grown.md"
+
+# The mechanical aggregates come from the same sink as the bounded totals.
+# Standards, Spec, and the gate closure sweep shared round 1, so they are one
+# independent-review round rather than three; the readiness checkpoint and the
+# closeout-phase executions contribute no round at all.
+grep -Fqx '| Implementation rounds | 1 |' "$fixture/grown.md"
+grep -Fqx '| Independent-review rounds | 1 |' "$fixture/grown.md"
+grep -Fqx '| Remediation rounds | 0 |' "$fixture/grown.md"
+grep -Fqx '| Validation executions | 2 |' "$fixture/grown.md"
+grep -Eqx '\| Reviewed artifact bytes \| [0-9]+ bytes \|' "$fixture/grown.md"
+grep -Eqx '\| Recorded validation duration \| [0-9]+ ms \|' "$fixture/grown.md"
 
 # No per-launch or per-command event material reaches the body.
 target_head="$(git -C "$target_checkout" rev-parse HEAD)"
@@ -334,8 +365,17 @@ for supplied in run_telemetry telemetry_summary; do
   grep -Fqx 'closeout invalid: run telemetry comes from the run-scoped telemetry sink' \
     "$fixture/sink-$supplied.err"
 done
+# The permitted facts keys are an allowlist, so a sink-owned aggregate is
+# refused under the renderer's own row names, under the summary JSON's names,
+# and under a name nobody has invented yet. A denylist would cover only the
+# first group, and only until the sink grew a field.
 for supplied in telemetry_run subagent_launches reviews validation_outcomes \
-    phase_elapsed; do
+    phase_elapsed wall_clock_elapsed start_to_seal_elapsed \
+    implementation_rounds independent_review_rounds remediation_rounds \
+    validation_executions reviewed_artifact_bytes \
+    recorded_validation_duration \
+    start_to_seal_ms rounds validations phase_elapsed_ms \
+    review_delegations integrity unrecognized_bookkeeping; do
   jq --arg key "$supplied" '.telemetry[$key] = "supplied by facts"' \
     "$fixture/facts.json" >"$fixture/sink-field-$supplied.json"
   if run_new "$fixture/sink-field-$supplied.json" "$fixture/narrative.md" \
@@ -477,6 +517,52 @@ expect_run_failure wrong-issue \
 rm -rf "$telemetry_dir"
 mv "$fixture/saved-telemetry" "$telemetry_dir"
 render_run="$grown_run"
+
+# A seal stamped before its own start describes no interval. The body reports
+# `unknown` with a bounded warning rather than a clamped or fabricated value,
+# and unavailability of one aggregate is not a telemetry-integrity failure: the
+# rest of the closeout renders and hand-back is not blocked.
+backwards_run="$(telemetry start --issue 164)"
+saved_render_run="$render_run"
+render_run="$backwards_run"
+telemetry launch --run "$render_run" \
+  --role implementation --phase implementation --round 1
+telemetry resolve --run "$render_run" --outcome Closes
+telemetry seal --run "$render_run"
+backwards_sink="$(telemetry_sink "$render_run")"
+jq -c 'if .type == "run_sealed" then .epoch_ms = 0 else . end' \
+  "$backwards_sink" >"$fixture/backwards.jsonl"
+cp "$fixture/backwards.jsonl" "$backwards_sink"
+(
+  cd "$target_checkout"
+  "$command_under_test" --run "$render_run" \
+    "$fixture/facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/backwards.md" 2>"$fixture/backwards.err"
+grep -Fqx '| Start-to-seal elapsed | unknown |' "$fixture/backwards.md"
+grep -Fqx '| Implementation rounds | 1 |' "$fixture/backwards.md"
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$backwards_run") (schema 2, integrity valid) |" \
+  "$fixture/backwards.md"
+grep -Fqx \
+  "warning: start-to-seal elapsed unavailable for run $(run_id_from_handle "$backwards_run"); rendered as unknown" \
+  "$fixture/backwards.err"
+[[ "$(wc -l <"$fixture/backwards.err")" -eq 1 ]]
+render_run="$saved_render_run"
+
+# Published identity is the repository context, the issue, and the bare run ID.
+# The owner-only repository binding selects the sink and never leaves the
+# workstation, so no rendered body may contain it.
+for rendered in "$fixture/actual.md" "$fixture/grown.md" "$fixture/backwards.md"; do
+  if grep -Fq -- "${render_run#*@}" "$rendered"; then
+    printf 'FAIL[binding]: the repository binding reached %s\n' "$rendered" >&2
+    exit 1
+  fi
+done
+if grep -Fq -- "$render_run" "$fixture/grown.md"; then
+  printf 'FAIL[binding]: the rendered body carries the bound handle\n' >&2
+  exit 1
+fi
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$render_run") (schema 2, integrity valid) |" \
+  "$fixture/grown.md"
 
 # A paragraph-first narrative must be placed behind a renderer-owned H2
 # boundary so it remains outside the mechanically owned Issues section.
@@ -661,10 +747,6 @@ jq '.acceptance[0].status = "inferred"' "$fixture/facts.json" >"$fixture/unsuppo
 expect_failure unsupported-close "Closes requires every acceptance row to be tested; row 1 is inferred"
 
 count_fields=(
-  implementation_rounds
-  independent_review_rounds
-  remediation_rounds
-  validation_executions
   blocking_findings_resolved
   findings_rejected_at_adjudication
 )
@@ -676,53 +758,33 @@ for field in "${count_fields[@]}"; do
 done
 
 jq '
-  .telemetry.implementation_rounds = "unknown"
-  | .telemetry.independent_review_rounds = "unknown"
-  | .telemetry.remediation_rounds = "unknown"
-  | .telemetry.validation_executions = "unknown"
-  | .telemetry.blocking_findings_resolved = "unknown"
+  .telemetry.blocking_findings_resolved = "unknown"
   | .telemetry.findings_rejected_at_adjudication = "unknown"
 ' "$fixture/facts.json" >"$fixture/unknown-counts.json"
 run_new "$fixture/unknown-counts.json" "$fixture/narrative.md" \
   >"$fixture/unknown-counts.md"
-[[ "$(grep -Fc '| unknown |' "$fixture/unknown-counts.md")" -eq 6 ]]
+[[ "$(grep -Fc '| unknown |' "$fixture/unknown-counts.md")" -eq 2 ]]
 
-# A resumed closeout keeps numeric telemetry cumulative. Equal values and
-# increases are both valid handoffs.
-jq '
-  .telemetry.implementation_rounds = 2
-  | .telemetry.independent_review_rounds = 1
-  | .telemetry.remediation_rounds = 1
-  | .telemetry.validation_executions = 4
-  | .telemetry.blocking_findings_resolved = 1
-  | .telemetry.findings_rejected_at_adjudication = 0
-' "$fixture/facts.json" >"$fixture/cumulative-counts.json"
+# The table describes the latest run, not the pull request's cumulative
+# history, so a later run may legitimately report smaller counts. The previous
+# body recorded one implementation round; a run that launched no implementer
+# reports zero, and that is an accepted observation rather than a lost bound.
+smaller_run="$(telemetry start --issue 164)"
+saved_render_run="$render_run"
+render_run="$smaller_run"
+telemetry resolve --run "$render_run" --outcome Closes
+telemetry seal --run "$render_run"
 (
   cd "$target_checkout"
   "$command_under_test" --run "$render_run" \
-    "$fixture/cumulative-counts.json" "$fixture/narrative.md" \
+    "$fixture/facts.json" "$fixture/narrative.md" \
     --previous-body "$fixture/actual.md" \
-    >"$fixture/cumulative-counts.md"
+    >"$fixture/smaller-counts.md"
 )
-grep -Fqx '| Implementation rounds | 2 |' "$fixture/cumulative-counts.md"
-grep -Fqx '| Independent-review rounds | 1 |' \
-  "$fixture/cumulative-counts.md"
-
-jq '.telemetry.implementation_rounds = 0' \
-  "$fixture/facts.json" >"$fixture/decreased-count.json"
-if (
-  cd "$target_checkout"
-  "$command_under_test" --run "$render_run" \
-    "$fixture/decreased-count.json" "$fixture/narrative.md" \
-    --previous-body "$fixture/actual.md"
-) >"$fixture/decreased-count.out" 2>"$fixture/decreased-count.err"; then
-  printf 'FAIL[decreased-count]: renderer accepted decreasing telemetry\n' >&2
-  exit 1
-fi
-[[ ! -s "$fixture/decreased-count.out" ]]
-grep -Fqx \
-  'closeout body invalid: workflow telemetry Implementation rounds decreased from 1 to 0' \
-  "$fixture/decreased-count.err"
+grep -Fqx '| Implementation rounds | 0 |' "$fixture/smaller-counts.md"
+grep -Fqx '| Independent-review rounds | 0 |' "$fixture/smaller-counts.md"
+grep -Fqx '| Workflow provenance | 2 runs |' "$fixture/smaller-counts.md"
+render_run="$saved_render_run"
 
 # Resuming an existing pull request appends the current run even when its
 # governing fingerprint matches the previous run.

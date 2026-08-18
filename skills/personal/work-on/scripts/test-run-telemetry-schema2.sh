@@ -39,11 +39,6 @@ cat >"$fixture/facts.json" <<'EOF'
   }],
   "telemetry": {
     "model_configuration": "test",
-    "wall_clock_elapsed": "1 second",
-    "implementation_rounds": 1,
-    "independent_review_rounds": 1,
-    "remediation_rounds": 0,
-    "validation_executions": 1,
     "blocking_findings_resolved": 0,
     "findings_rejected_at_adjudication": 0,
     "final_workflow_outcome": "Closes"
@@ -516,6 +511,76 @@ seal_first_run="$(telemetry start --issue 71)"
 append_raw_event "$seal_first_run" run_sealed
 append_raw_event "$seal_first_run" outcome_resolved '{"outcome":"failed"}'
 assert_reason "$seal_first_run" LIFECYCLE_TRANSITION_INVALID
+
+# Mechanical aggregates are derived from recorded events only. Rounds are
+# distinct observed round numbers rather than event counts, so the three
+# reviewers of one gate round are one independent-review round.
+rounds_run="$(telemetry start --issue 71)"
+telemetry launch --run "$rounds_run" \
+  --role implementation --phase implementation --round 1
+telemetry review-delegation --run "$rounds_run" \
+  --role readiness --kind readiness --phase checkpoint --round 1 \
+  --base HEAD --head HEAD
+telemetry review-delegation --run "$rounds_run" \
+  --role review-standards --kind full --phase gate --round 1 \
+  --base HEAD --head HEAD
+telemetry review-delegation --run "$rounds_run" \
+  --role review-spec --kind full --phase gate --round 1 \
+  --base HEAD --head HEAD
+telemetry review-delegation --run "$rounds_run" \
+  --role closure-sweep --kind full --phase gate --round 1 \
+  --base HEAD --head HEAD
+rounds_summary="$(telemetry summary --run "$rounds_run")"
+[[ "$(jq -r '.rounds.implementation' <<<"$rounds_summary")" -eq 1 ]]
+[[ "$(jq -r '.rounds.independent_review' <<<"$rounds_summary")" -eq 1 ]]
+[[ "$(jq -r '.rounds.remediation' <<<"$rounds_summary")" -eq 0 ]]
+
+# A second gate round is a second independent-review round. Delta remediation
+# review and the closeout-phase closure sweep are excluded by their phase and
+# kind, and a remediation implementer is a remediation round rather than an
+# implementation one.
+telemetry launch --run "$rounds_run" \
+  --role implementation --phase remediation --round 2
+telemetry review-delegation --run "$rounds_run" \
+  --role review-standards --kind delta --phase remediation --round 2 \
+  --base HEAD --head HEAD
+telemetry review-delegation --run "$rounds_run" \
+  --role review-standards --kind full --phase gate --round 2 \
+  --base HEAD --head HEAD
+telemetry review-delegation --run "$rounds_run" \
+  --role closure-sweep --kind full --phase closeout --round 2 \
+  --base HEAD --head HEAD
+rounds_summary="$(telemetry summary --run "$rounds_run")"
+[[ "$(jq -r '.rounds.implementation' <<<"$rounds_summary")" -eq 1 ]]
+[[ "$(jq -r '.rounds.independent_review' <<<"$rounds_summary")" -eq 2 ]]
+[[ "$(jq -r '.rounds.remediation' <<<"$rounds_summary")" -eq 1 ]]
+# An `other` launch never becomes an implementation round, whatever its phase.
+telemetry launch --run "$rounds_run" \
+  --role other --phase implementation --round 3
+[[ "$(jq -r '.rounds.implementation' \
+  <<<"$(telemetry summary --run "$rounds_run")")" -eq 1 ]]
+
+# Start-to-seal is the recorded interval between the two lifecycle stamps.
+telemetry resolve --run "$rounds_run" --outcome Closes
+telemetry seal --run "$rounds_run"
+rounds_summary="$(telemetry summary --run "$rounds_run")"
+[[ "$(jq -r '.integrity.state' <<<"$rounds_summary")" == valid ]]
+[[ "$(jq -r '.start_to_seal_ms | type' <<<"$rounds_summary")" == number ]]
+[[ "$(jq -r '.start_to_seal_ms >= 0' <<<"$rounds_summary")" == true ]]
+
+# A seal stamped before its own start describes no interval. The aggregate is
+# unavailable rather than clamped, estimated, or fabricated — and unavailability
+# is not a telemetry-integrity failure.
+backwards_clock_run="$(telemetry start --issue 71)"
+telemetry resolve --run "$backwards_clock_run" --outcome Closes
+telemetry seal --run "$backwards_clock_run"
+backwards_sink="$(sink_for "$backwards_clock_run")"
+jq -c 'if .type == "run_sealed" then .epoch_ms = 0 else . end' \
+  "$backwards_sink" >"$fixture/backwards.jsonl"
+cp "$fixture/backwards.jsonl" "$backwards_sink"
+backwards_summary="$(telemetry summary --run "$backwards_clock_run")"
+[[ "$(jq -r '.integrity.state' <<<"$backwards_summary")" == valid ]]
+[[ "$(jq -r '.start_to_seal_ms' <<<"$backwards_summary")" == null ]]
 
 # Every bounded reason declared by the evaluator must have reached the public
 # renderer through one of the fixtures above. Extracting the closed vocabulary

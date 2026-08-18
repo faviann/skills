@@ -758,6 +758,12 @@ case "$subcommand" in
             started_at: ([$events[] | select(.type == "run_start") | .at] | first),
             finished_at: (if $finish == null then null else $finish.at end),
             final_workflow_outcome: (if $finish == null then null else $finish.outcome end),
+            # Schema 1 has no seal transition and no attributable review
+            # delegation, so neither the interval nor any round is derivable
+            # from it. Report unavailable rather than reconstruct.
+            start_to_seal_ms: null,
+            rounds: {implementation: null, independent_review: null,
+              remediation: null},
             finish_events: ($finishes | length), events: ($events | length),
             events_after_finish: (($recorded | length) - ($events | length)),
             malformed_lines: (($lines | length) - ($parsed | length)),
@@ -970,6 +976,26 @@ case "$subcommand" in
           started_at: ($starts_run[0].at // null),
           outcome_resolved_at: ($resolution.at // null), sealed_at: ($seal.at // null),
           final_workflow_outcome: ($resolution.outcome // null),
+          # A seal stamped before its own start describes no interval. Report
+          # that it is unavailable rather than clamp, estimate, or fabricate one.
+          start_to_seal_ms: (($starts_run[0].epoch_ms // null) as $from
+            | ($seal.epoch_ms // null) as $to
+            | if $from == null or $to == null or $to < $from then null
+              else $to - $from end),
+          # Rounds are distinct observed round numbers, not event counts, so
+          # Standards, Spec, and a gate closure sweep sharing round 1 are one
+          # independent-review round. A gate-phase closure sweep counts; the
+          # closeout-phase one, readiness, and delta remediation review do not.
+          rounds: {
+            implementation: ([$launches[]
+              | select(.role == "implementation" and .phase == "implementation")
+              | .round | numbers] | unique | length),
+            independent_review: ([$reviews[]
+              | select(.kind == "full" and .phase == "gate")
+              | .round | numbers] | unique | length),
+            remediation: ([$launches[]
+              | select(.role == "implementation" and .phase == "remediation")
+              | .round | numbers] | unique | length)},
           outcome_resolution_events: ($resolutions | length),
           seal_events: ($seals | length), events: ($events | length),
           events_after_seal: $after_seal,
