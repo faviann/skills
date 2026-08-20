@@ -93,9 +93,6 @@ cat >"$fixture/facts.json" <<'EOF'
     }
   ],
   "telemetry": {
-    "model_configuration": "gpt-5",
-    "blocking_findings_resolved": 0,
-    "findings_rejected_at_adjudication": 0,
     "final_workflow_outcome": "Closes"
   }
 }
@@ -152,7 +149,7 @@ No findings required adjudication.
 
 | Field | Observed value |
 |---|---|
-| Model configuration | gpt-5 |
+| Model configuration | primary=unknown |
 | Start-to-seal elapsed | START_TO_SEAL |
 | Implementation rounds | 1 |
 | Independent-review rounds | 1 |
@@ -160,8 +157,13 @@ No findings required adjudication.
 | Validation executions | 0 |
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
+| Finding adjudications by reviewer | none |
+| Primary token checkpoint snapshot | unknown |
+| Completed subagent usage | total input=0, cached input=0, cache-write input=0, fresh input=0, output=0, reasoning output=0 |
+| Completed subagent usage by role | none |
+| Token coverage | none (0/2 completed subagents); primary checkpoint snapshot=none |
 | Final workflow outcome | Closes |
-| Telemetry run | TELEMETRY_RUN (schema 2, integrity valid) |
+| Telemetry run | TELEMETRY_RUN (schema 3, integrity valid) |
 | Subagent launches | 2 (implementation=1, review-standards=1) |
 | Reviews recorded | 1 (readiness=0, full=1, delta=0) |
 | Reviewed artifact bytes | 0 bytes |
@@ -170,7 +172,7 @@ No findings required adjudication.
 | Measured phase elapsed | implementation=0s, gate=0s |
 | Workflow provenance | 1 run |
 
-> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.
+> **Source note:** Run telemetry is sink-derived; Final workflow outcome is also asserted by structured closeout facts. Workflow provenance is verified from the frozen run ledger.
 
 Run 1: PROVENANCE
 EOF
@@ -216,74 +218,6 @@ fi
 grep -Fq 'run handle belongs to another repository' \
   "$fixture/foreign-binding.err"
 
-# A closeout rendered inside a still-existing linked worktree can independently
-# select two schema-1 sinks with the same textual run ID. The plain ID selects
-# that worktree's legacy source; the repository-bound handle selects the common-
-# directory canonical source. Neither forensic read may change either file.
-legacy_render_worktree="$fixture/legacy-render-worktree"
-git -C "$target_checkout" worktree add -q -b legacy-render \
-  "$legacy_render_worktree"
-(
-  cd "$legacy_render_worktree"
-  "$(dirname "$command_under_test")/workflow-provenance.sh" capture
-)
-legacy_render_run=20000101T000000Z-00000003
-legacy_render_git_dir="$(git -C "$legacy_render_worktree" \
-  rev-parse --absolute-git-dir)"
-legacy_render_sink="$legacy_render_git_dir/work-on-telemetry/runs/$legacy_render_run.jsonl"
-canonical_render_sink="$telemetry_dir/runs/$legacy_render_run.jsonl"
-canonical_render_handle="$legacy_render_run@${render_run#*@}"
-mkdir -p "$(dirname "$legacy_render_sink")"
-printf '%s\n' \
-  '{"schema":1,"run":"20000101T000000Z-00000003","seq":1,"at":"2000-01-01T00:00:00Z","epoch_ms":946684800000,"type":"run_start","workflow":"work-on"}' \
-  '{"schema":1,"run":"20000101T000000Z-00000003","seq":2,"at":"2000-01-01T00:00:01Z","epoch_ms":946684801000,"type":"subagent_launch","role":"implementation","phase":"implementation","round":1}' \
-  '{"schema":1,"run":"20000101T000000Z-00000003","seq":3,"at":"2000-01-01T00:00:02Z","epoch_ms":946684802000,"type":"run_finish","outcome":"Closes"}' \
-  >"$legacy_render_sink"
-printf '%s\n' \
-  '{"schema":1,"run":"20000101T000000Z-00000003","seq":1,"at":"2000-01-01T00:00:00Z","epoch_ms":946684800000,"type":"run_start","workflow":"work-on"}' \
-  '{"schema":1,"run":"20000101T000000Z-00000003","seq":2,"at":"2000-01-01T00:00:01Z","epoch_ms":946684801000,"type":"subagent_launch","role":"review-spec","phase":"gate","round":1}' \
-  '{"schema":1,"run":"20000101T000000Z-00000003","seq":3,"at":"2000-01-01T00:00:02Z","epoch_ms":946684802000,"type":"subagent_launch","role":"review-spec","phase":"gate","round":2}' \
-  '{"schema":1,"run":"20000101T000000Z-00000003","seq":4,"at":"2000-01-01T00:00:03Z","epoch_ms":946684803000,"type":"run_finish","outcome":"Closes"}' \
-  >"$canonical_render_sink"
-chmod 600 "$legacy_render_sink" "$canonical_render_sink"
-cp "$legacy_render_sink" "$fixture/legacy-render-before.jsonl"
-cp "$canonical_render_sink" "$fixture/canonical-render-before.jsonl"
-legacy_render_checksum="$(sha256sum "$legacy_render_sink")"
-canonical_render_checksum="$(sha256sum "$canonical_render_sink")"
-(
-  cd "$legacy_render_worktree"
-  "$command_under_test" --run "$legacy_render_run" \
-    "$fixture/facts.json" "$fixture/narrative.md" --new-pr
-) >"$fixture/legacy-render.md" 2>"$fixture/legacy-render.err"
-# A schema-1 sink has no seal transition and no attributable review delegation,
-# so the new aggregates are unavailable rather than reconstructible. Each one
-# renders `unknown` and warns; none is fabricated, and none blocks the render.
-grep -Fqx '| Start-to-seal elapsed | unknown |' "$fixture/legacy-render.md"
-grep -Fqx '| Implementation rounds | unknown |' "$fixture/legacy-render.md"
-grep -Fqx '| Independent-review rounds | unknown |' "$fixture/legacy-render.md"
-grep -Fqx '| Remediation rounds | unknown |' "$fixture/legacy-render.md"
-grep -Fqx \
-  "warning: start-to-seal elapsed unavailable for run $legacy_render_run; rendered as unknown" \
-  "$fixture/legacy-render.err"
-grep -Fqx "| Telemetry run | $legacy_render_run (schema 1, integrity legacy-unverifiable) |" \
-  "$fixture/legacy-render.md"
-grep -Fqx '| Subagent launches | 1 (implementation=1) |' \
-  "$fixture/legacy-render.md"
-(
-  cd "$legacy_render_worktree"
-  "$command_under_test" --run "$canonical_render_handle" \
-    "$fixture/facts.json" "$fixture/narrative.md" --new-pr
-) >"$fixture/canonical-render.md" 2>/dev/null
-grep -Fqx "| Telemetry run | $legacy_render_run (schema 1, integrity legacy-unverifiable) |" \
-  "$fixture/canonical-render.md"
-grep -Fqx '| Subagent launches | 2 (review-spec=2) |' \
-  "$fixture/canonical-render.md"
-[[ "$(sha256sum "$legacy_render_sink")" == "$legacy_render_checksum" ]]
-[[ "$(sha256sum "$canonical_render_sink")" == "$canonical_render_checksum" ]]
-cmp "$fixture/legacy-render-before.jsonl" "$legacy_render_sink"
-cmp "$fixture/canonical-render-before.jsonl" "$canonical_render_sink"
-git -C "$target_checkout" worktree remove "$legacy_render_worktree"
-
 # stdin is the other documented input mode.
 run_new - "$fixture/narrative.md" <"$fixture/facts.json" >"$fixture/stdin.md"
 diff -u "$fixture/expected.md" <(normalize_elapsed "$fixture/stdin.md")
@@ -298,7 +232,7 @@ telemetry_section() {
     found { print }
   ' "$1" | sed '/^[[:space:]]*$/d'
 }
-[[ "$(telemetry_section "$fixture/actual.md" | wc -l)" -eq 21 ]]
+[[ "$(telemetry_section "$fixture/actual.md" | wc -l)" -eq 26 ]]
 
 grown_run="$(telemetry start --issue 164)"
 render_run="$grown_run"
@@ -321,14 +255,14 @@ telemetry exec --run "$render_run" \
 telemetry resolve --run "$render_run" --outcome Closes
 telemetry seal --run "$render_run"
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/grown.md"
-[[ "$(telemetry_section "$fixture/grown.md" | wc -l)" -eq 21 ]]
+[[ "$(telemetry_section "$fixture/grown.md" | wc -l)" -eq 26 ]]
 grep -Fqx '| Subagent launches | 5 (implementation=1, readiness=1, review-standards=1, review-spec=1, closure-sweep=1) |' \
   "$fixture/grown.md"
 grep -Fqx '| Reviews recorded | 4 (readiness=1, full=3, delta=0) |' \
   "$fixture/grown.md"
 grep -Fqx '| Validation executions recorded | 2 (passed=1, failed=1) |' \
   "$fixture/grown.md"
-grep -Fqx "| Telemetry run | $(run_id_from_handle "$grown_run") (schema 2, integrity valid) |" \
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$grown_run") (schema 3, integrity valid) |" \
   "$fixture/grown.md"
 
 # The mechanical aggregates come from the same sink as the bounded totals.
@@ -424,7 +358,7 @@ seed_event() {
   seq=$(( $(wc -l <"$sink") + 1 ))
   jq -cn --arg run "$(run_id_from_handle "$handle")" --arg type "$type" \
     --argjson seq "$seq" --argjson extra "$extra" \
-    '{schema: 2, run: $run, seq: $seq, at: "2026-08-14T00:00:00Z",
+    '{schema: 3, run: $run, seq: $seq, at: "2026-08-14T00:00:00Z",
       epoch_ms: 1755000000000, type: $type} + $extra' >>"$sink"
 }
 
@@ -435,7 +369,7 @@ jq '.outcome = "Progresses" | .telemetry.final_workflow_outcome = "Progresses"' 
 unfinished_run="$(telemetry start --issue 164)"
 render_run="$unfinished_run"
 expect_run_failure unfinished \
-  'closeout invalid: run telemetry integrity is incomplete; schema-2 closeout requires valid'
+  'closeout invalid: run telemetry integrity is incomplete; schema-3 closeout requires valid'
 
 # The sink says Progresses while the facts say Closes.
 telemetry resolve --run "$render_run" --outcome Progresses
@@ -455,14 +389,14 @@ expect_run_failure sink-closes \
 duplicate_run="$render_run"
 seed_event "$duplicate_run" outcome_resolved '{"outcome": "Closes"}'
 expect_run_failure duplicate-finish \
-  'closeout invalid: run telemetry integrity is invalid; schema-2 closeout requires valid'
+  'closeout invalid: run telemetry integrity is invalid; schema-3 closeout requires valid'
 
 # A resolution record with no outcome is invalid telemetry.
 render_run="$(telemetry start --issue 164)"
 seed_event "$render_run" outcome_resolved '{}'
 seed_event "$render_run" run_sealed
 expect_run_failure outcomeless-finish \
-  'closeout invalid: run telemetry integrity is invalid; schema-2 closeout requires valid'
+  'closeout invalid: run telemetry integrity is invalid; schema-3 closeout requires valid'
 
 # A finish record carrying something outside the outcome enum contradicts the
 # body rather than being read as agreement.
@@ -470,7 +404,7 @@ render_run="$(telemetry start --issue 164)"
 seed_event "$render_run" outcome_resolved '{"outcome": "merged"}'
 seed_event "$render_run" run_sealed
 expect_run_failure unrecognized-finish \
-  'closeout invalid: run telemetry integrity is invalid; schema-2 closeout requires valid'
+  'closeout invalid: run telemetry integrity is invalid; schema-3 closeout requires valid'
 
 # A finished run whose recorded outcome matches renders.
 matching_run="$(telemetry start --issue 164)"
@@ -481,7 +415,7 @@ OUTCOME=Closes
 telemetry resolve --run "$render_run" --outcome "$OUTCOME"
 telemetry seal --run "$render_run"
 run_new "$fixture/facts.json" "$fixture/narrative.md" >"$fixture/matching.md"
-grep -Fqx "| Telemetry run | $(run_id_from_handle "$matching_run") (schema 2, integrity valid) |" \
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$matching_run") (schema 3, integrity valid) |" \
   "$fixture/matching.md"
 grep -Fqx '| Final workflow outcome | Closes |' "$fixture/matching.md"
 
@@ -496,7 +430,7 @@ run_new "$fixture/progresses-facts.json" "$fixture/narrative.md" \
   >"$fixture/matching-progresses.md"
 grep -Fqx '| Final workflow outcome | Progresses |' \
   "$fixture/matching-progresses.md"
-grep -Fqx "| Telemetry run | $(run_id_from_handle "$progresses_run") (schema 2, integrity valid) |" \
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$progresses_run") (schema 3, integrity valid) |" \
   "$fixture/matching-progresses.md"
 
 render_run="$matching_run"
@@ -540,7 +474,7 @@ cp "$fixture/backwards.jsonl" "$backwards_sink"
 ) >"$fixture/backwards.md" 2>"$fixture/backwards.err"
 grep -Fqx '| Start-to-seal elapsed | unknown |' "$fixture/backwards.md"
 grep -Fqx '| Implementation rounds | 1 |' "$fixture/backwards.md"
-grep -Fqx "| Telemetry run | $(run_id_from_handle "$backwards_run") (schema 2, integrity valid) |" \
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$backwards_run") (schema 3, integrity valid) |" \
   "$fixture/backwards.md"
 grep -Fqx \
   "warning: start-to-seal elapsed unavailable for run $(run_id_from_handle "$backwards_run"); rendered as unknown" \
@@ -561,7 +495,7 @@ if grep -Fq -- "$render_run" "$fixture/grown.md"; then
   printf 'FAIL[binding]: the rendered body carries the bound handle\n' >&2
   exit 1
 fi
-grep -Fqx "| Telemetry run | $(run_id_from_handle "$render_run") (schema 2, integrity valid) |" \
+grep -Fqx "| Telemetry run | $(run_id_from_handle "$render_run") (schema 3, integrity valid) |" \
   "$fixture/grown.md"
 
 # A paragraph-first narrative must be placed behind a renderer-owned H2
@@ -746,25 +680,6 @@ expect_failure contradictory-outcome "outcome Closes contradicts telemetry outco
 jq '.acceptance[0].status = "inferred"' "$fixture/facts.json" >"$fixture/unsupported-close.json"
 expect_failure unsupported-close "Closes requires every acceptance row to be tested; row 1 is inferred"
 
-count_fields=(
-  blocking_findings_resolved
-  findings_rejected_at_adjudication
-)
-for field in "${count_fields[@]}"; do
-  jq --arg field "$field" '.telemetry[$field] = "banana"' \
-    "$fixture/facts.json" >"$fixture/invalid-$field.json"
-  expect_failure "invalid-$field" \
-    "telemetry $field must be a nonnegative integer or unknown"
-done
-
-jq '
-  .telemetry.blocking_findings_resolved = "unknown"
-  | .telemetry.findings_rejected_at_adjudication = "unknown"
-' "$fixture/facts.json" >"$fixture/unknown-counts.json"
-run_new "$fixture/unknown-counts.json" "$fixture/narrative.md" \
-  >"$fixture/unknown-counts.md"
-[[ "$(grep -Fc '| unknown |' "$fixture/unknown-counts.md")" -eq 2 ]]
-
 # The table describes the latest run, not the pull request's cumulative
 # history, so a later run may legitimately report smaller counts. The previous
 # body recorded one implementation round; a run that launched no implementer
@@ -811,6 +726,84 @@ grep -Fqx '| Workflow provenance | 3 runs |' \
 for run_number in 1 2 3; do
   grep -Fqx "Run $run_number: $provenance" "$fixture/resumed-again.md"
 done
+
+# Schema 3 owns model, finding, and token rows mechanically. The facts object
+# carries only the final outcome consistency assertion.
+telemetry3() {
+  (cd "$target_checkout" && \
+    "$(dirname "$command_under_test")/run-telemetry.sh" "$@")
+}
+schema3_run="$(telemetry3 start --issue 164)"
+schema3_implementation="$(telemetry3 launch --run "$schema3_run" \
+  --role implementation --phase implementation --round 1)"
+schema3_reviewer="$(telemetry3 review-delegation --run "$schema3_run" \
+  --role review-standards --kind full --phase gate --round 1 \
+  --base HEAD --head HEAD)"
+for agent_id in "$schema3_implementation" "$schema3_reviewer"; do
+  telemetry3 runtime-observation --run "$schema3_run" \
+    --scope completed-thread --agent-id "$agent_id" \
+    --model gpt-test --effort high --total-input 100 --cached-input 70 \
+    --cache-write-input 10 --output 20 --reasoning-output 5
+done
+accepted_finding="$(telemetry3 finding-adjudicated --run "$schema3_run" \
+  --reviewer-agent-id "$schema3_reviewer" --class evidence-gap \
+  --disposition accepted)"
+telemetry3 finding-adjudicated --run "$schema3_run" \
+  --reviewer-agent-id "$schema3_reviewer" --class contract-defect \
+  --disposition rejected >/dev/null
+telemetry3 finding-resolved --run "$schema3_run" \
+  --finding-id "$accepted_finding"
+telemetry3 runtime-observation --run "$schema3_run" \
+  --scope checkpoint-snapshot --model gpt-test --effort high \
+  --total-input 50 --cached-input 30 --cache-write-input 5 \
+  --output 10 --reasoning-output 2
+telemetry3 resolve --run "$schema3_run" --outcome Closes
+telemetry3 seal --run "$schema3_run"
+jq '.telemetry = {final_workflow_outcome: "Closes"}' \
+  "$fixture/facts.json" >"$fixture/schema3-facts.json"
+(
+  cd "$target_checkout"
+  "$command_under_test" --run "$schema3_run" \
+    "$fixture/schema3-facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/schema3.md"
+grep -Fqx '| Model configuration | primary=gpt-test (high); implementation=gpt-test (high); review-standards=gpt-test (high) |' "$fixture/schema3.md"
+grep -Fqx '| Blocking findings resolved | 1 |' "$fixture/schema3.md"
+grep -Fqx '| Findings rejected at adjudication | 1 |' "$fixture/schema3.md"
+grep -Fqx '| Finding adjudications by reviewer | review-standards: accepted=1, rejected=1, follow-up=0, unresolved=0 |' "$fixture/schema3.md"
+grep -Fqx '| Primary token checkpoint snapshot | total input=50, cached input=30, cache-write input=5, fresh input=15, output=10, reasoning output=2 |' "$fixture/schema3.md"
+grep -Fqx '| Completed subagent usage | total input=200, cached input=140, cache-write input=20, fresh input=40, output=40, reasoning output=10 |' "$fixture/schema3.md"
+grep -Fqx '| Token coverage | complete (2/2 completed subagents); primary checkpoint snapshot=observed |' "$fixture/schema3.md"
+grep -Fqx '> **Source note:** Run telemetry is sink-derived; Final workflow outcome is also asserted by structured closeout facts. Workflow provenance is verified from the frozen run ledger.' "$fixture/schema3.md"
+
+schema3_model_only_run="$(telemetry3 start --issue 164)"
+telemetry3 runtime-observation --run "$schema3_model_only_run" \
+  --scope checkpoint-snapshot --model gpt-test --effort high
+telemetry3 resolve --run "$schema3_model_only_run" --outcome Closes
+telemetry3 seal --run "$schema3_model_only_run"
+(
+  cd "$target_checkout"
+  "$command_under_test" --run "$schema3_model_only_run" \
+    "$fixture/schema3-facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/schema3-model-only.md"
+grep -Fqx '| Model configuration | primary=gpt-test (high) |' \
+  "$fixture/schema3-model-only.md"
+grep -Fqx '| Primary token checkpoint snapshot | unknown |' \
+  "$fixture/schema3-model-only.md"
+grep -Fqx '| Token coverage | none (0/0 completed subagents); primary checkpoint snapshot=none |' \
+  "$fixture/schema3-model-only.md"
+
+jq '.telemetry.model_configuration = "forged"' \
+  "$fixture/schema3-facts.json" >"$fixture/schema3-forged-facts.json"
+if (
+  cd "$target_checkout"
+  "$command_under_test" --run "$schema3_run" \
+    "$fixture/schema3-forged-facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/schema3-forged.out" 2>"$fixture/schema3-forged.err"; then
+  printf 'FAIL[schema3-forged]: renderer accepted sink-owned facts\n' >&2
+  exit 1
+fi
+grep -Fq 'run telemetry comes from the run-scoped telemetry sink' \
+  "$fixture/schema3-forged.err"
 
 # A declared instruction input changed after capture fails verification without
 # emitting a body in either renderer mode.
