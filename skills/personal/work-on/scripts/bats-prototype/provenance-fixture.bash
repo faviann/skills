@@ -1,12 +1,12 @@
-source_skill_root="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
+source_scripts_root="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 
 setup_provenance_fixture() {
   fixture="$(mktemp -d)"
   skills_checkout="$fixture/skills-checkout"
   mkdir -p "$skills_checkout/skills/personal" "$skills_checkout/skills/engineering"
-  cp -R "$source_skill_root/.." "$skills_checkout/skills/personal/work-on"
-  cp -R "$source_skill_root/../../../engineering/tdd" "$skills_checkout/skills/engineering/tdd"
-  cp -R "$source_skill_root/../../../engineering/code-review" "$skills_checkout/skills/engineering/code-review"
+  cp -R "$source_scripts_root/.." "$skills_checkout/skills/personal/work-on"
+  cp -R "$source_scripts_root/../../../engineering/tdd" "$skills_checkout/skills/engineering/tdd"
+  cp -R "$source_scripts_root/../../../engineering/code-review" "$skills_checkout/skills/engineering/code-review"
   git -C "$skills_checkout" init -q -b main
   git -C "$skills_checkout" config user.name 'Provenance Test'
   git -C "$skills_checkout" config user.email provenance@example.invalid

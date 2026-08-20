@@ -187,29 +187,72 @@ size of a full registry conversion.
 
 ## Exact install and run commands
 
-No package manifest was changed. These local commands were executed:
+No package manifest was changed. This exact local sequence was executed in one
+shell:
 
 ```bash
-local_prefix=/dev/shm/issue-60-bats-local
+local_prefix=/dev/shm/issue-60-bats-local-r2
 mkdir -p "$local_prefix"
 npm install --prefix "$local_prefix" --no-save --ignore-scripts bats@1.13.0
 "$local_prefix/node_modules/.bin/bats" skills/personal/work-on/scripts/bats-prototype/workflow-provenance.bats skills/personal/work-on/scripts/bats-prototype/run-registry-every-outcome.bats
 ```
 
-Output began `added 1 package` and the run ended with all 15 `ok` results shown
-above.
+Its complete stdout/stderr, in command order, was:
 
-These CI-shaped commands were also executed locally with
-`ISSUE60_RUNNER_TEMP=/dev/shm`; a future GitHub Actions step could bind that
-task-specific variable to `${{ runner.temp }}` without changing the commands:
+```text
 
-```bash
-npm install --prefix "${ISSUE60_RUNNER_TEMP}/issue-60-bats-ci-exact" --no-save --ignore-scripts bats@1.13.0
-"${ISSUE60_RUNNER_TEMP}/issue-60-bats-ci-exact/node_modules/.bin/bats" skills/personal/work-on/scripts/bats-prototype/workflow-provenance.bats skills/personal/work-on/scripts/bats-prototype/run-registry-every-outcome.bats
+added 1 package in 800ms
+1..15
+ok 1 capture fingerprints only declared bytes and preserves a frozen canonical value
+ok 2 verify rejects changed declared instructions without deleting the frozen ledger
+ok 3 verify rejects a missing ledger without printing a canonical value
+ok 4 target workflow identity is dirty before commit and clean after commit
+ok 5 capture rejects a symlinked declared workflow even when its target is readable
+ok 6 unrecognized and hostile skills origins capture with an unknown pointer
+ok 7 capture fails when git is unavailable
+ok 8 capture rejects a non-Git skills checkout and removes a reachable stale ledger
+ok 9 capture rejects a missing declared instruction and leaves no ledger
+ok 10 capture rejects directory, broken-symlink, and unreadable target workflows
+ok 11 a failed recapture removes the previous run ledger
+ok 12 registry every-outcome group: Closes finalizes automatically after closeout evidence
+ok 13 registry every-outcome group: Progresses finalizes and seals
+ok 14 registry every-outcome group: preflight-aborted finalizes without implementation
+ok 15 registry every-outcome group: abandoned and failed remain finalizable
 ```
 
-Output was `added 1 package` followed by `1..15` and 15 `ok` results. This
-documents a command; it does not add a CI job or runner.
+This exact self-contained, CI-shaped sequence was also executed locally in one
+shell:
+
+```bash
+ISSUE60_RUNNER_TEMP=/dev/shm
+npm install --prefix "${ISSUE60_RUNNER_TEMP}/issue-60-bats-ci-r2" --no-save --ignore-scripts bats@1.13.0
+"${ISSUE60_RUNNER_TEMP}/issue-60-bats-ci-r2/node_modules/.bin/bats" skills/personal/work-on/scripts/bats-prototype/workflow-provenance.bats skills/personal/work-on/scripts/bats-prototype/run-registry-every-outcome.bats
+```
+
+Its complete stdout/stderr, in command order, was:
+
+```text
+
+added 1 package in 1s
+1..15
+ok 1 capture fingerprints only declared bytes and preserves a frozen canonical value
+ok 2 verify rejects changed declared instructions without deleting the frozen ledger
+ok 3 verify rejects a missing ledger without printing a canonical value
+ok 4 target workflow identity is dirty before commit and clean after commit
+ok 5 capture rejects a symlinked declared workflow even when its target is readable
+ok 6 unrecognized and hostile skills origins capture with an unknown pointer
+ok 7 capture fails when git is unavailable
+ok 8 capture rejects a non-Git skills checkout and removes a reachable stale ledger
+ok 9 capture rejects a missing declared instruction and leaves no ledger
+ok 10 capture rejects directory, broken-symlink, and unreadable target workflows
+ok 11 a failed recapture removes the previous run ledger
+ok 12 registry every-outcome group: Closes finalizes automatically after closeout evidence
+ok 13 registry every-outcome group: Progresses finalizes and seals
+ok 14 registry every-outcome group: preflight-aborted finalizes without implementation
+ok 15 registry every-outcome group: abandoned and failed remain finalizable
+```
+
+This documents local command evidence; it does not add a CI job or runner.
 
 ## Dependency and portability
 
