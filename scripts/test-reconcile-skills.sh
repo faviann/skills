@@ -42,6 +42,21 @@ add_skill() {
   printf '%s\n' "# $name" >"$repo/skills/$bucket/$name/SKILL.md"
 }
 
+make_linked_worktree() {
+  local repo="$1"
+  local worktree_parent
+  git -C "$repo" init -q
+  git -C "$repo" config user.name "Reconciler tests"
+  git -C "$repo" config user.email "reconciler-tests@example.com"
+  git -C "$repo" add scripts/reconcile-skills.sh skills
+  git -C "$repo" commit -qm "Create fixture"
+
+  new_tmp_dir
+  worktree_parent="$TMP_DIR"
+  git -C "$repo" worktree add -qb linked-worktree "$worktree_parent/linked"
+  LINKED_WORKTREE="$worktree_parent/linked"
+}
+
 assert_link_target() {
   local link="$1"
   local expected="$2"
@@ -57,16 +72,34 @@ assert_link_target() {
   fi
 }
 
+capture_reconciler_result() {
+  if OUTPUT="$("$@" 2>&1)"; then
+    STATUS=0
+  else
+    STATUS=$?
+  fi
+}
+
 run_reconciler() {
   local home="$1"
   local script="$2"
   shift 2
 
-  if OUTPUT="$(HOME="$home" "$script" "$@" 2>&1)"; then
-    STATUS=0
-  else
-    STATUS=$?
-  fi
+  capture_reconciler_result env HOME="$home" "$script" "$@"
+}
+
+run_reconciler_with_git_environment() {
+  local home="$1"
+  local primary="$2"
+  local script="$3"
+  shift 3
+
+  capture_reconciler_result \
+    env HOME="$home" \
+    GIT_DIR="$primary/.git" \
+    GIT_COMMON_DIR="$primary/.git" \
+    GIT_WORK_TREE="$primary" \
+    "$script" "$@"
 }
 
 test_empty_home_creates_links() {
@@ -132,6 +165,93 @@ test_check_reports_missing_link_without_creating_it() {
     echo "--check did not explain the missing link: $OUTPUT" >&2
     return 1
   fi
+}
+
+test_non_repository_directory_does_not_trip_guard() {
+  local repo home
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh"
+
+  if [ "$STATUS" -ne 0 ]; then
+    echo "non-repository directory tripped the worktree guard: $OUTPUT" >&2
+    return 1
+  fi
+  assert_link_target "$home/.agents/skills/alpha" "$repo/skills/engineering/alpha"
+  assert_link_target "$home/.claude/skills/alpha" "$repo/skills/engineering/alpha"
+}
+
+test_primary_checkout_preserves_success_output() {
+  local repo home
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+  make_linked_worktree "$repo"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh"
+  if [ "$STATUS" -ne 0 ] || [ "$OUTPUT" != "created 2 skill links" ]; then
+    echo "primary checkout default mode changed: $OUTPUT" >&2
+    return 1
+  fi
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh" --check
+  if [ "$STATUS" -ne 0 ] || [ "$OUTPUT" != "skills are reconciled" ]; then
+    echo "primary checkout check mode changed: $OUTPUT" >&2
+    return 1
+  fi
+}
+
+assert_linked_worktree_refusal() {
+  local mode="${1:-}"
+  local git_environment="${2:-clean}"
+  local repo home worktree
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+  make_linked_worktree "$repo"
+  worktree="$LINKED_WORKTREE"
+  mkdir -p "$home/.agents/skills"
+  ln -s "$repo/skills/engineering/alpha" "$home/.agents/skills/alpha"
+
+  if [ "$git_environment" = "overridden" ]; then
+    run_reconciler_with_git_environment \
+      "$home" "$repo" "$worktree/scripts/reconcile-skills.sh" "$mode"
+  elif [ -n "$mode" ]; then
+    run_reconciler "$home" "$worktree/scripts/reconcile-skills.sh" "$mode"
+  else
+    run_reconciler "$home" "$worktree/scripts/reconcile-skills.sh"
+  fi
+
+  if [ "$STATUS" -eq 0 ]; then
+    echo "expected linked worktree invocation to fail in mode: ${mode:-default}" >&2
+    return 1
+  fi
+  if [ "$OUTPUT" != "error: skill links always belong to the primary checkout at $repo; re-run scripts/reconcile-skills.sh from there." ]; then
+    echo "linked worktree refusal was not the single expected message: $OUTPUT" >&2
+    return 1
+  fi
+  if [ "$(readlink "$home/.agents/skills/alpha")" != "$repo/skills/engineering/alpha" ] ||
+    [ -e "$home/.claude" ]; then
+    echo "linked worktree invocation changed skill links in mode: ${mode:-default}" >&2
+    return 1
+  fi
+}
+
+test_linked_worktree_default_mode_refuses_before_changes() {
+  assert_linked_worktree_refusal
+}
+
+test_linked_worktree_check_mode_refuses_before_changes() {
+  assert_linked_worktree_refusal --check
+}
+
+test_linked_worktree_git_environment_cannot_bypass_guard() {
+  assert_linked_worktree_refusal --check overridden
 }
 
 test_duplicate_skill_names_abort_before_changes() {
@@ -393,6 +513,16 @@ test_check_passes_after_reconciliation
 echo "ok - check passes after reconciliation"
 test_check_reports_missing_link_without_creating_it
 echo "ok - check reports missing link without creating it"
+test_non_repository_directory_does_not_trip_guard
+echo "ok - non-repository directory does not trip guard"
+test_primary_checkout_preserves_success_output
+echo "ok - primary checkout preserves success output"
+test_linked_worktree_default_mode_refuses_before_changes
+echo "ok - linked worktree default mode refuses before changes"
+test_linked_worktree_check_mode_refuses_before_changes
+echo "ok - linked worktree check mode refuses before changes"
+test_linked_worktree_git_environment_cannot_bypass_guard
+echo "ok - linked worktree Git environment cannot bypass guard"
 test_duplicate_skill_names_abort_before_changes
 echo "ok - duplicate skill names abort before changes"
 test_real_directory_collision_aborts_without_partial_changes

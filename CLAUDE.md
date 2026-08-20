@@ -40,6 +40,10 @@ To (re)link every skill into the local harness skill directories (`~/.claude/ski
 
 ## Agent skills
 
+### Git worktrees
+
+Linked worktrees, local skill loading, and dependency setup. See [docs/agents/worktrees.md](./docs/agents/worktrees.md).
+
 ### Issue tracker
 
 GitHub Issues on `faviann/skills`, reached via `gh` with an explicit `-R`. See [docs/agents/issue-tracker.md](./docs/agents/issue-tracker.md).

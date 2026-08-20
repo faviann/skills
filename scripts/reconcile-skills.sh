@@ -6,6 +6,26 @@ set -euo pipefail
 # conflict aborts the entire preflight.
 
 REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
+git_from_checkout() {
+  env -i PATH="${PATH:-/usr/bin:/bin}" git -C "$REPO" "$@"
+}
+
+if git_dir="$(git_from_checkout rev-parse --git-dir 2>/dev/null)" &&
+  common_dir="$(git_from_checkout rev-parse --git-common-dir 2>/dev/null)"; then
+  if [[ "$git_dir" != /* ]]; then
+    git_dir="$REPO/$git_dir"
+  fi
+  if [[ "$common_dir" != /* ]]; then
+    common_dir="$REPO/$common_dir"
+  fi
+  git_dir="$(realpath -m -- "$git_dir")"
+  common_dir="$(realpath -m -- "$common_dir")"
+  if [ "$git_dir" != "$common_dir" ]; then
+    primary_checkout="$(dirname "$common_dir")"
+    echo "error: skill links always belong to the primary checkout at $primary_checkout; re-run scripts/reconcile-skills.sh from there." >&2
+    exit 1
+  fi
+fi
 if [ -z "${HOME:-}" ]; then
   echo "error: HOME must be set" >&2
   exit 2
