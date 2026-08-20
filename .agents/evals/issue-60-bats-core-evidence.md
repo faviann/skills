@@ -67,24 +67,27 @@ Bats documents `--filter` as its name-regex selector in the tool's help, and
 Each test was run alone while the production script it covers contained a
 deliberate one-line break. Every test failed. Mutations were applied one at a
 time and restored immediately. The broad provenance mutation changed the
-declared `work-on` input from `SKILL.md` to `SKILL.missing`; four negative-path
-tests that correctly survived that break received a more direct one-line
-mutation. The registry mutation changed the one-line `run_outcomes` declaration
-to an empty array.
+declared `work-on` input from `SKILL.md` to `SKILL.missing`. Six scenarios whose
+own behavior occurs after a successful capture instead received targeted
+one-line mutations, so their prerequisites completed and each isolated failure
+reached the assertion named by the scenario. Four negative-path tests that
+correctly survived the broad break also received direct one-line mutations. The
+registry mutation changed the one-line `run_outcomes` declaration to an empty
+array.
 
 | Named prototype scenario | One-line production break | Isolated result |
 | --- | --- | --- |
 | capture fingerprints only declared bytes and preserves a frozen canonical value | missing declared `work-on` input | `not ok 1`; unreadable declared input |
-| verify rejects changed declared instructions without deleting the frozen ledger | missing declared `work-on` input | `not ok 1`; setup capture failed |
-| verify rejects a missing ledger without printing a canonical value | missing declared `work-on` input | `not ok 1`; setup capture failed |
-| target workflow identity is dirty before commit and clean after commit | missing declared `work-on` input | `not ok 1`; setup capture failed |
+| verify rejects changed declared instructions without deleting the frozen ledger | allowed a changed `work-on` digest to pass verification | `not ok 1`; expected failure, got status 0 and the frozen canonical value on stdout |
+| verify rejects a missing ledger without printing a canonical value | printed a placeholder canonical value on the missing-ledger branch | `not ok 1`; the assertion that stdout was empty failed |
+| target workflow identity is dirty before commit and clean after commit | suppressed `*` when the declared target workflow was absent from `HEAD` | `not ok 1`; the pre-commit workflow component did not match the dirty-value expression |
 | capture rejects a symlinked declared workflow even when its target is readable | removed the `! -L` regular-file guard | `not ok 1`; expected failure, got status 0 |
-| unrecognized and hostile skills origins capture with an unknown pointer | missing declared `work-on` input | `not ok 1`; capture failed |
+| unrecognized and hostile skills origins capture with an unknown pointer | changed the unrecognized-origin fallback from `unknown` to `recognized` | `not ok 1`; the captured pointer did not match the terminal `(unknown@<sha>)` expression |
 | capture fails when git is unavailable | checked for `bash` instead of `git` | `not ok 1`; expected `capture requires git`, got the later Git-backed-target diagnostic |
-| capture rejects a non-Git skills checkout and removes a reachable stale ledger | missing declared `work-on` input | `not ok 1`; prerequisite capture failed |
+| capture rejects a non-Git skills checkout and removes a reachable stale ledger | disabled ledger invalidation on the non-Git skills-checkout rejection | `not ok 1`; rejection and its diagnostic passed, then the stale-ledger absence assertion failed |
 | capture rejects a missing declared instruction and leaves no ledger | replaced the declared `mocking.md` input with an existing input | `not ok 1`; expected failure, got status 0 |
 | capture rejects directory, broken-symlink, and unreadable target workflows | selected only ordinary non-symlink workflow files | `not ok 1`; expected failure, got status 0 |
-| a failed recapture removes the previous run ledger | missing declared `work-on` input | `not ok 1`; initial capture failed |
+| a failed recapture removes the previous run ledger | replaced failure-time ledger removal with a no-op | `not ok 1`; recapture failure and its diagnostic passed, then the previous-ledger absence assertion failed |
 | registry every-outcome group: Closes finalizes automatically after closeout evidence | empty `run_outcomes` | `not ok 1`; finalization refused |
 | registry every-outcome group: Progresses finalizes and seals | empty `run_outcomes` | `not ok 1`; `outcome must be one of:` |
 | registry every-outcome group: preflight-aborted finalizes without implementation | empty `run_outcomes` | `not ok 1`; `outcome must be one of:` |
