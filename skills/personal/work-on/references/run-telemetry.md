@@ -23,9 +23,10 @@ runs never share events. The owner-only repository binding is outside the event
 schema; `start` combines it with the run id as `<run-id>@<binding>`, so a handle
 minted by another repository cannot select a same-named local sink.
 
-Every line carries `schema`, `run`, `seq`, `at`, `epoch_ms`, and `type`. New
-runs use schema **3**; the rendered pull-request body names the schema and its
-bounded integrity state. Schema-1 and schema-2 sinks remain read-only inputs.
+Every line carries `schema`, `run`, `seq`, `at`, `epoch_ms`, and `type`. Runs
+use schema **3**; the rendered pull-request body names the schema and its
+bounded integrity state. `scripts/run-telemetry-schema.sh` owns that production
+contract for the writer, registry, renderer, and closeout validator.
 
 Schema-3 `run_start` records the normalized lowercase GitHub slug from `origin`,
 the positive issue number, committed starting HEAD, and run identity. Optional
@@ -63,11 +64,8 @@ buffered, so an abandoned run leaves exactly what it had recorded.
 Keep the printed handle for this operation. Every recording, summary, render,
 and closeout command requires it; none consults a mutable current-run selection.
 A malformed handle, a handle bound to another repository, or one whose sink is
-missing from this repository's common directory is refused. A plain schema-1 id
-remains accepted only for read-only summary and renderer access to forensic
-sinks in the common directory or the current linked worktree's legacy location.
-A bound handle that selects schema 1 or schema 2 is likewise read-only; the
-schema-3 writer refuses it before torn-line repair or append.
+missing from this repository's common directory is refused. Every command
+requires a repository-bound handle naming a schema-3 sink.
 
 - `launch --role` is `implementation` or `other`. Reviewer roles cannot be
   launched separately from their measured scope.
@@ -191,10 +189,6 @@ Reason codes are closed and machine-readable:
   `LIFECYCLE_TRANSITION_INVALID`, `EVENT_AFTER_SEAL`, and
   `PREFLIGHT_ABORT_AFTER_WORK`.
 
-Schema-1 summaries report `legacy-unverifiable`. They retain historical launch
-and review event counts as recorded observations, never exact reviewer counts.
-Schema-2 reads retain their historical aggregation. Neither schema is rewritten.
-
 This is sink-only integrity. It can prove contradictions and omissions that
 leave a partial event pair, but it cannot prove that a caller made every
 required instrumentation call. A wholly omitted delegation or validation
@@ -273,19 +267,17 @@ deterministic diff or worktree bundle measured once per delegation, not prompt
 bytes, model input, or tokens; `Recorded validation duration` covers
 instrumented top-level wrappers only.
 
-A seal stamped before its own start describes no interval, and a schema-1 sink
-has neither a seal nor an attributable review delegation. Either way the
-aggregate renders `unknown` with a bounded warning, never a clamped or
-estimated value. Unavailability of one aggregate is not a telemetry-integrity
-failure and does not block hand-back.
+A seal stamped before its own start describes no interval. The aggregate
+renders `unknown` with a bounded warning, never a clamped or estimated value.
+Unavailability of one aggregate is not a telemetry-integrity failure and does
+not block hand-back.
 
 Schema-3 facts supply only `final_workflow_outcome` as a consistency assertion.
 Model configuration, finding totals and attribution, the primary checkpoint,
 completed subagent usage total and by role, and token coverage are derived from
 the sink. The renderer refuses every other facts telemetry key and labels the
-primary usage as a checkpoint snapshot, not whole-run usage. Schema-2 facts and
-rendering retain their historical values unchanged. The workflow-provenance
-runs are unchanged.
+primary usage as a checkpoint snapshot, not whole-run usage. The
+workflow-provenance runs are unchanged.
 
 ## Where this fits
 

@@ -73,6 +73,8 @@ command -v jq >/dev/null 2>&1 || fail "run registry requires jq"
 command -v flock >/dev/null 2>&1 || fail "run registry requires flock"
 
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=run-telemetry-schema.sh
+source "$script_root/run-telemetry-schema.sh"
 readonly telemetry_script="$script_root/run-telemetry.sh"
 readonly registry_script="$script_root/run-registry.sh"
 [[ -x "$telemetry_script" ]] || fail "run telemetry script is missing"
@@ -238,7 +240,7 @@ readonly record_validator='
   and (.run_id | type == "string" and test("^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$"))
   and (.repository | type == "string" and test("^[a-z0-9_.-]+/[a-z0-9_.-]+$"))
   and (.issue | type == "number" and floor == . and . > 0)
-  and (.telemetry_schema == 2 or .telemetry_schema == 3)
+  and .telemetry_schema == $telemetry_schema
   and (.sink | locator) and (.worktree | locator)
   and (.repository_binding | type == "string" and test("^[0-9a-f]{32}$"))
   and (.lifecycle | IN($lifecycles[]))
@@ -263,6 +265,7 @@ jq_string_array() {
 
 validate_record() {
   jq -e \
+    --argjson telemetry_schema "$work_on_telemetry_schema_version" \
     --argjson lifecycles "$(jq_string_array "${lifecycle_states[@]}")" \
     --argjson finalizations "$(jq_string_array "${finalization_states[@]}")" \
     --argjson outcomes "$(jq_string_array "${run_outcomes[@]}")" \
@@ -559,7 +562,7 @@ read_summary() {
   summary_json="$( (cd "$workdir" && "$telemetry_script" summary --run "$handle") 2>/dev/null )" \
     || return 1
   sink_schema="$(jq -r '.schema' <<<"$summary_json")"
-  [[ "$sink_schema" == 2 || "$sink_schema" == 3 ]] || return 1
+  [[ "$sink_schema" == "$work_on_telemetry_schema_version" ]] || return 1
   sink_outcome="$(jq -r '.final_workflow_outcome // ""' <<<"$summary_json")"
   if [[ "$(jq -r '.sealed_at // ""' <<<"$summary_json")" != "" ]]; then
     sink_lifecycle=sealed

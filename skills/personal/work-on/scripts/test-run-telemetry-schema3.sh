@@ -3,8 +3,19 @@ set -euo pipefail
 
 readonly script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly telemetry_script="$script_root/run-telemetry.sh"
+# shellcheck source=run-telemetry-schema.sh
+source "$script_root/run-telemetry-schema.sh"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
+
+[[ "$work_on_telemetry_schema_version" -eq 3 ]]
+[[ "20260820T000000Z-0123abcd (schema 3, integrity valid)" \
+  =~ $work_on_telemetry_run_value_pattern ]]
+for schema_consumer in run-telemetry.sh run-registry.sh render-closeout.sh \
+    validate-closeout-body.sh; do
+  grep -Fq 'source "$script_root/run-telemetry-schema.sh"' \
+    "$script_root/$schema_consumer"
+done
 
 repo="$fixture/repo"
 git init -q -b main "$repo"
@@ -241,5 +252,29 @@ jq -cn --arg run "${bad_resolution_run%%@*}" \
     epoch_ms: 1, type: "finding_resolved", finding_id: $finding_id}' \
   >>"$bad_resolution_sink"
 assert_integrity_reason "$bad_resolution_run" FINDING_RESOLUTION_INVALID
+
+wrong_schema_run="$(telemetry start --issue 83)"
+wrong_schema_sink="$(sink_for "$wrong_schema_run")"
+jq -c '.schema = 2' "$wrong_schema_sink" >"$fixture/wrong-schema.jsonl"
+mv "$fixture/wrong-schema.jsonl" "$wrong_schema_sink"
+if telemetry summary --run "$wrong_schema_run" \
+    >"$fixture/wrong-schema-summary.out" \
+    2>"$fixture/wrong-schema-summary.err"; then
+  printf 'FAIL[wrong-schema-summary]: schema-2 sink remained readable\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/wrong-schema-summary.out" ]]
+grep -Fq 'schema-3 summary requires a schema-3 run' \
+  "$fixture/wrong-schema-summary.err"
+if telemetry launch --run "$wrong_schema_run" \
+    --role implementation --phase implementation --round 1 \
+    >"$fixture/wrong-schema-write.out" \
+    2>"$fixture/wrong-schema-write.err"; then
+  printf 'FAIL[wrong-schema-write]: schema-3 writer accepted a schema-2 sink\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/wrong-schema-write.out" ]]
+grep -Fq 'schema-3 writer requires a schema-3 run' \
+  "$fixture/wrong-schema-write.err"
 
 printf 'work-on schema-3 scenarios passed\n'

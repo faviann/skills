@@ -24,7 +24,7 @@ Readable narrative stays readable.
 
 | Field | Observed value |
 |---|---|
-| Model configuration | gpt-5 |
+| Model configuration | primary=gpt-5 (high); implementation=gpt-5 (high) |
 | Start-to-seal elapsed | 42000 ms |
 | Implementation rounds | 1 |
 | Independent-review rounds | 1 |
@@ -32,8 +32,13 @@ Readable narrative stays readable.
 | Validation executions | 3 |
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
+| Finding adjudications by reviewer | readiness: accepted=2, rejected=0, follow-up=0, unresolved=0; review-standards: accepted=0, rejected=2, follow-up=0, unresolved=0 |
+| Primary token checkpoint snapshot | total input=50, cached input=30, cache-write input=5, fresh input=15, output=10, reasoning output=2 |
+| Completed subagent usage | total input=200, cached input=140, cache-write input=20, fresh input=40, output=40, reasoning output=10 |
+| Completed subagent usage by role | implementation: total input=100, cached input=70, cache-write input=10, fresh input=20, output=20, reasoning output=5; readiness: total input=100, cached input=70, cache-write input=10, fresh input=20, output=20, reasoning output=5 |
+| Token coverage | complete (2/2 completed subagents); primary checkpoint snapshot=observed |
 | Final workflow outcome | Closes |
-| Telemetry run | 20260813T101500Z-0123abcd (schema 1, integrity legacy-unverifiable) |
+| Telemetry run | 20260813T101500Z-0123abcd (schema 3, integrity valid) |
 | Subagent launches | 4 (implementation=2, review-standards=1, review-spec=1) |
 | Reviews recorded | 2 (readiness=1, full=1, delta=0) |
 | Reviewed artifact bytes | 91234 bytes |
@@ -42,7 +47,7 @@ Readable narrative stays readable.
 | Measured phase elapsed | implementation=120s, gate=60s |
 | Workflow provenance | 1 run |
 
-> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.
+> **Source note:** Run telemetry is sink-derived; Final workflow outcome is also asserted by structured closeout facts. Workflow provenance is verified from the frozen run ledger.
 
 Run 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
 EOF
@@ -57,21 +62,8 @@ sed 's/$/\r/' "$fixture/canonical.md" >"$fixture/crlf.md"
 "$command_under_test" 164 - <"$fixture/crlf.md"
 "$command_under_test" --require-closes 164 "$fixture/crlf.md"
 
-sed \
-  -e '/| Findings rejected at adjudication |/a\
-| Finding adjudications by reviewer | readiness: accepted=2, rejected=0, follow-up=0, unresolved=0; review-standards: accepted=0, rejected=2, follow-up=0, unresolved=0 |\
-| Primary token checkpoint snapshot | total input=50, cached input=30, cache-write input=5, fresh input=15, output=10, reasoning output=2 |\
-| Completed subagent usage | total input=200, cached input=140, cache-write input=20, fresh input=40, output=40, reasoning output=10 |\
-| Completed subagent usage by role | implementation: total input=100, cached input=70, cache-write input=10, fresh input=20, output=20, reasoning output=5; readiness: total input=100, cached input=70, cache-write input=10, fresh input=20, output=20, reasoning output=5 |\
-| Token coverage | complete (2/2 completed subagents); primary checkpoint snapshot=observed |' \
-  -e 's/| Model configuration | gpt-5 |/| Model configuration | primary=gpt-5 (high); implementation=gpt-5 (high) |/' \
-  -e 's/schema 1, integrity legacy-unverifiable/schema 3, integrity valid/' \
-  -e 's/> \*\*Source note:\*\*.*/> **Source note:** Run telemetry is sink-derived; Final workflow outcome is also asserted by structured closeout facts. Workflow provenance is verified from the frozen run ledger./' \
-  "$fixture/canonical.md" >"$fixture/schema3.md"
-"$command_under_test" 164 "$fixture/schema3.md"
-
 sed 's/primary checkpoint snapshot=observed/primary checkpoint snapshot=estimated/' \
-  "$fixture/schema3.md" >"$fixture/schema3-estimated.md"
+  "$fixture/canonical.md" >"$fixture/schema3-estimated.md"
 if "$command_under_test" 164 "$fixture/schema3-estimated.md" \
     >"$fixture/schema3-estimated.out" 2>"$fixture/schema3-estimated.err"; then
   printf 'FAIL[schema3-estimated]: validator accepted estimated coverage\n' >&2
@@ -137,30 +129,6 @@ cat >>"$fixture/pr-162.md" <<'EOF'
 | Renderer | First criterion |
 
 ## Workflow telemetry
-
-| Field | Observed value |
-|---|---|
-| Model configuration | gpt-5 |
-| Start-to-seal elapsed | 42000 ms |
-| Implementation rounds | 1 |
-| Independent-review rounds | 1 |
-| Remediation rounds | 0 |
-| Validation executions | 3 |
-| Blocking findings resolved | 0 |
-| Findings rejected at adjudication | 0 |
-| Final workflow outcome | Closes |
-| Telemetry run | 20260813T101500Z-0123abcd (schema 1, integrity legacy-unverifiable) |
-| Subagent launches | 4 (implementation=2, review-standards=1, review-spec=1) |
-| Reviews recorded | 2 (readiness=1, full=1, delta=0) |
-| Reviewed artifact bytes | 91234 bytes |
-| Validation executions recorded | 3 (passed=3, failed=0) |
-| Recorded validation duration | 61000 ms |
-| Measured phase elapsed | implementation=120s, gate=60s |
-| Workflow provenance | 1 run |
-
-> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.
-
-Run 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
 EOF
 expect_failure pr-162 "missing canonical closure gate table header"
 
@@ -208,12 +176,12 @@ done
 sed -e '/| Workflow provenance |/d' -e '/^Run 1: /d' "$fixture/canonical.md" \
   >"$fixture/short-telemetry-table.md"
 expect_failure short-telemetry-table \
-  "workflow telemetry must contain seventeen canonical rows"
+  "workflow telemetry does not contain every canonical row"
 
 # The sink-derived rows are mechanically rendered, so a hand-written value in
 # any of them is rejected rather than published as observed telemetry.
 sink_rows=(
-  "Telemetry run|not-a-run-id (schema 1, integrity legacy-unverifiable)"
+  "Telemetry run|not-a-run-id (schema 3, integrity valid)"
   "Telemetry run|20260813T101500Z-0123abcd"
   "Subagent launches|four"
   "Subagent launches|4 (implementation=2"
@@ -263,25 +231,22 @@ sed '/^> \*\*Source note:\*\*/d' "$fixture/canonical.md" \
 expect_failure no-source-note \
   "workflow telemetry is missing the canonical source note"
 
-sed 's/^> \*\*Source note:\*\* Model configuration, /> **Source note:** All of /' \
+sed 's/^> \*\*Source note:\*\* Run telemetry/> **Source note:** All telemetry/' \
   "$fixture/canonical.md" >"$fixture/reworded-source-note.md"
 expect_failure reworded-source-note \
   "workflow telemetry is missing the canonical source note"
 
-# Only the current format is accepted. A body written under the earlier
-# telemetry format stays in place as a historical record and is not migrated,
-# so a `/work-on` run updating such a pull request refuses previous-body
-# validation rather than rendering a second supported shape.
+# Only the complete schema-3 format is accepted.
 sed -e 's/| Start-to-seal elapsed | 42000 ms |/| Wall-clock elapsed | 42 seconds |/' \
   -e '/| Reviewed artifact bytes |/d' \
   -e '/| Recorded validation duration |/d' \
   -e '/^> \*\*Source note:\*\*/d' \
-  "$fixture/canonical.md" >"$fixture/legacy-format.md"
-expect_failure legacy-format \
-  "workflow telemetry must contain seventeen canonical rows"
-expect_failure legacy-previous \
-  "workflow telemetry must contain seventeen canonical rows" \
-  canonical legacy-format
+  "$fixture/canonical.md" >"$fixture/incomplete-format.md"
+expect_failure incomplete-format \
+  "workflow telemetry does not contain every canonical row"
+expect_failure incomplete-previous \
+  "workflow telemetry does not contain every canonical row" \
+  canonical incomplete-format
 
 sed 's/work-on:111111111111/work-on:NOT-A-DIGEST/' \
   "$fixture/canonical.md" >"$fixture/malformed-provenance.md"

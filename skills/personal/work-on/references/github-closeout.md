@@ -235,8 +235,7 @@ seals the run and discharges its registered lifecycle from the sink's own
 sealed summary, and refuses to report success unless that summary is valid. A
 run the registry deliberately left unregistered is sealed the same way and
 reported as `unregistered`.
-Schema-3
-rendering fails unless integrity is `valid`, repository/issue/outcome identity
+Rendering fails unless schema-3 integrity is `valid`, repository/issue/outcome identity
 matches the facts, and the run has exactly one compatible resolution and seal.
 Rendering never repairs the sink.
 
@@ -250,10 +249,7 @@ gh pr view <pr-number> --json body --jq .body \
 
 For an updated pull request, also pass `--previous <old-body.md>` so validation
 proves that its prior provenance runs were preserved as an exact prefix. Only
-the current table format is accepted. A pull request whose body was written
-under the earlier format is not migrated: revalidating it refuses and blocks
-hand-back on that pull request. Those pull requests are finished; leave the
-historical body in place.
+the schema-3 table format is accepted.
 
 Once the body has been read back and validated, make the observation findable:
 
