@@ -51,17 +51,23 @@ jq -e '
     or has("runs") or has("phases")) | not
 ' "$facts" >/dev/null \
   || fail "workflow provenance comes from the run ledger and previous PR body"
-# Only the three primary-reported observations and the outcome consistency
-# assertion are supplied here; every other row is derived from the run's sink
-# below. This is the one list, and it is an allowlist: a name the renderer does
-# not read is refused rather than silently ignored, so the sink can grow an
-# aggregate without a second list somewhere else falling out of step with it.
-telemetry_fields=(
-  model_configuration
-  blocking_findings_resolved
-  findings_rejected_at_adjudication
-  final_workflow_outcome
-)
+
+telemetry_summary="$("$script_root/run-telemetry.sh" summary --run "$run_id")" \
+  || fail "run telemetry summary failed"
+recorded_schema="$(jq -r '.schema // empty' <<<"$telemetry_summary")"
+
+# Schema 3 moved model, finding, and token observations into the sink. Older
+# closeouts retain their historical facts contract and render unchanged.
+if [[ "$recorded_schema" == 3 ]]; then
+  telemetry_fields=(final_workflow_outcome)
+else
+  telemetry_fields=(
+    model_configuration
+    blocking_findings_resolved
+    findings_rejected_at_adjudication
+    final_workflow_outcome
+  )
+fi
 jq -e --argjson allowed "$(printf '%s\n' "${telemetry_fields[@]}" \
     | jq -Rsc 'split("\n") | map(select(length > 0))')" '
   (has("run_telemetry") or has("telemetry_summary")
@@ -168,10 +174,13 @@ for field in "${telemetry_fields[@]}"; do
     || fail "telemetry requires a non-empty value for $field"
 done
 
-telemetry_count_fields=(
-  blocking_findings_resolved
-  findings_rejected_at_adjudication
-)
+telemetry_count_fields=()
+if [[ "$recorded_schema" != 3 ]]; then
+  telemetry_count_fields=(
+    blocking_findings_resolved
+    findings_rejected_at_adjudication
+  )
+fi
 for field in "${telemetry_count_fields[@]}"; do
   jq -e --arg field "$field" \
     '.telemetry[$field] |
@@ -195,25 +204,18 @@ fi
 run_value="$("$script_root/workflow-provenance.sh" verify)" \
   || fail "workflow provenance verification failed"
 
-# The bounded run-telemetry rows are aggregated from the run-scoped sink, never
-# from the facts file. run-telemetry.sh owns the sink, its schema, and the
-# aggregation; this renderer only formats the summary it returns.
-telemetry_summary="$("$script_root/run-telemetry.sh" summary --run "$run_id")" \
-  || fail "run telemetry summary failed"
-
-# Schema-2 successful closeout fails closed on the sink evaluator. Facts name
+# Schema-2 and schema-3 successful closeouts fail closed on the sink evaluator. Facts name
 # the same repository and issue so a valid run cannot be rendered for another
 # closeout. Schema-1 forensic rendering retains its historical outcome checks.
-recorded_schema="$(jq -r '.schema // empty' <<<"$telemetry_summary")"
 integrity_state="$(jq -r '.integrity.state // empty' <<<"$telemetry_summary")"
-if [[ "$recorded_schema" == 2 ]]; then
+if [[ "$recorded_schema" == 2 || "$recorded_schema" == 3 ]]; then
   [[ "$integrity_state" == valid ]] \
-    || fail "run telemetry integrity is ${integrity_state:-invalid}; schema-2 closeout requires valid"
+    || fail "run telemetry integrity is ${integrity_state:-invalid}; schema-$recorded_schema closeout requires valid"
   recorded_resolutions="$(jq -r '.outcome_resolution_events // 0' \
     <<<"$telemetry_summary")"
   recorded_seals="$(jq -r '.seal_events // 0' <<<"$telemetry_summary")"
   [[ "$recorded_resolutions" -eq 1 && "$recorded_seals" -eq 1 ]] \
-    || fail "schema-2 closeout requires one outcome resolution and one seal"
+    || fail "schema-$recorded_schema closeout requires one outcome resolution and one seal"
   facts_repository="$(jq -r '.repository // empty' "$facts")"
   [[ "$facts_repository" =~ ^[a-z0-9_.-]+/[a-z0-9_.-]+$ ]] \
     || fail "repository must be a normalized GitHub owner/repository"
@@ -308,6 +310,63 @@ reviewed_artifact_bytes_value="$(derived_value 'reviewed artifact bytes' \
 validation_duration_value="$(derived_value 'recorded validation duration' \
   '.validations.duration_ms' ' ms')"
 
+telemetry_value() {
+  jq -r --arg field "$1" '.telemetry[$field] | tostring | gsub("\\|"; "&#124;") | gsub("\\r?\\n"; "<br>")' "$facts"
+}
+
+if [[ "$recorded_schema" == 3 ]]; then
+  model_configuration_value="$(summary_value '
+    .runtime_observations as $runtime
+    | (if ($runtime.primary // {} | has("model"))
+        then ["primary=\($runtime.primary.model) (\($runtime.primary.effort))"]
+        else ["primary=unknown"] end)
+      + ([$runtime.completed.by_agent | group_by(.role)[]
+          | .[0].role as $role
+          | ([.[] | select(has("model")) | "\(.model) (\(.effort))"] | unique) as $configs
+          | select(($configs | length) > 0)
+          | "\($role)=\($configs | join(", "))"])
+    | join("; ")')"
+  blocking_findings_resolved_value="$(summary_value '.findings.resolved')"
+  findings_rejected_value="$(summary_value '.findings.rejected')"
+  finding_adjudications_value="$(summary_value '
+    [.findings.by_reviewer[]
+      | select((.accepted + .rejected + .follow_up + .unresolved) > 0)
+      | "\(.role): accepted=\(.accepted), rejected=\(.rejected), "
+        + "follow-up=\(.follow_up), unresolved=\(.unresolved)"]
+    | if length == 0 then "none" else join("; ") end')"
+  primary_tokens_value="$(summary_value '
+    .runtime_observations.primary as $primary
+    | if $primary == null or ($primary | has("tokens") | not) then "unknown"
+      else $primary.tokens
+        | "total input=\(.total_input), cached input=\(.cached_input), "
+          + "cache-write input=\(.cache_write_input), fresh input=\(.fresh_input), "
+          + "output=\(.output), reasoning output=\(.reasoning_output)" end')"
+  completed_tokens_value="$(summary_value '
+    .runtime_observations.completed.tokens
+    | "total input=\(.total_input), cached input=\(.cached_input), "
+      + "cache-write input=\(.cache_write_input), fresh input=\(.fresh_input), "
+      + "output=\(.output), reasoning output=\(.reasoning_output)"')"
+  completed_tokens_by_role_value="$(summary_value '
+    [.runtime_observations.completed.by_role | to_entries[]
+      | select(.value.observed > 0)
+      | .key as $role | .value.tokens
+      | "\($role): total input=\(.total_input), cached input=\(.cached_input), "
+        + "cache-write input=\(.cache_write_input), fresh input=\(.fresh_input), "
+        + "output=\(.output), reasoning output=\(.reasoning_output)"]
+    | if length == 0 then "none" else join("; ") end')"
+  token_coverage_value="$(summary_value '
+    .runtime_observations as $runtime
+    | "\($runtime.completed.coverage) (\($runtime.completed.observed)/"
+      + "\($runtime.completed.total_agents) completed subagents); "
+      + "primary checkpoint snapshot="
+      + (if $runtime.primary == null or ($runtime.primary | has("tokens") | not)
+        then "none" else "observed" end)')"
+else
+  model_configuration_value="$(telemetry_value model_configuration)"
+  blocking_findings_resolved_value="$(telemetry_value blocking_findings_resolved)"
+  findings_rejected_value="$(telemetry_value findings_rejected_at_adjudication)"
+fi
+
 runs=()
 if [[ "$closeout_mode" == previous ]]; then
   mapfile -t runs < <(sed 's/\r$//' "$previous_body" | awk '
@@ -345,14 +404,14 @@ table_rows="$(
   ' "$facts"
 )"
 
-telemetry_value() {
-  jq -r --arg field "$1" '.telemetry[$field] | tostring | gsub("\\|"; "&#124;") | gsub("\\r?\\n"; "<br>")' "$facts"
-}
-
 # The source note is mechanically owned and exact. validate-closeout-body.sh
 # holds the same literal and rejects any body whose note differs, so the two
 # cannot drift silently: every render validates its own candidate below.
-readonly source_note='> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.'
+if [[ "$recorded_schema" == 3 ]]; then
+  readonly source_note='> **Source note:** Run telemetry is sink-derived; Final workflow outcome is also asserted by structured closeout facts. Workflow provenance is verified from the frozen run ledger.'
+else
+  readonly source_note='> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.'
+fi
 
 candidate="$fixture/candidate.md"
 {
@@ -375,14 +434,21 @@ candidate="$fixture/candidate.md"
   printf '\n## Workflow telemetry\n\n'
   printf '| Field | Observed value |\n'
   printf '|---|---|\n'
-  printf '| Model configuration | %s |\n' "$(telemetry_value model_configuration)"
+  printf '| Model configuration | %s |\n' "$model_configuration_value"
   printf '| Start-to-seal elapsed | %s |\n' "$start_to_seal_value"
   printf '| Implementation rounds | %s |\n' "$implementation_rounds_value"
   printf '| Independent-review rounds | %s |\n' "$independent_review_rounds_value"
   printf '| Remediation rounds | %s |\n' "$remediation_rounds_value"
   printf '| Validation executions | %s |\n' "$validation_executions_value"
-  printf '| Blocking findings resolved | %s |\n' "$(telemetry_value blocking_findings_resolved)"
-  printf '| Findings rejected at adjudication | %s |\n' "$(telemetry_value findings_rejected_at_adjudication)"
+  printf '| Blocking findings resolved | %s |\n' "$blocking_findings_resolved_value"
+  printf '| Findings rejected at adjudication | %s |\n' "$findings_rejected_value"
+  if [[ "$recorded_schema" == 3 ]]; then
+    printf '| Finding adjudications by reviewer | %s |\n' "$finding_adjudications_value"
+    printf '| Primary token checkpoint snapshot | %s |\n' "$primary_tokens_value"
+    printf '| Completed subagent usage | %s |\n' "$completed_tokens_value"
+    printf '| Completed subagent usage by role | %s |\n' "$completed_tokens_by_role_value"
+    printf '| Token coverage | %s |\n' "$token_coverage_value"
+  fi
   printf '| Final workflow outcome | %s |\n' "$telemetry_outcome"
   printf '| Telemetry run | %s |\n' "$telemetry_run_value"
   printf '| Subagent launches | %s |\n' "$subagent_launches_value"

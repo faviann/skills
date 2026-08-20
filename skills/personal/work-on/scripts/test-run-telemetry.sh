@@ -252,12 +252,12 @@ refuse_bound_legacy_write() {
   if (cd "$linked_one" && "$command_under_test" "$@") \
       >"$fixture/canonical-schema1-$label.out" \
       2>"$fixture/canonical-schema1-$label.err"; then
-    printf 'FAIL[canonical-schema1-%s]: schema-2 writer accepted schema 1\n' \
+    printf 'FAIL[canonical-schema1-%s]: schema-3 writer accepted schema 1\n' \
       "$label" >&2
     exit 1
   fi
   [[ ! -s "$fixture/canonical-schema1-$label.out" ]]
-  grep -Fq 'schema-2 writer requires a schema-2 run' \
+  grep -Fq 'schema-3 writer requires a schema-3 run' \
     "$fixture/canonical-schema1-$label.err"
   [[ "$(sha256sum "$legacy_linked_sink")" == "$legacy_linked_checksum" ]]
   [[ "$(sha256sum "$canonical_colliding_sink")" == \
@@ -530,7 +530,7 @@ readiness_review="$(jq -c 'select(.type == "review_delegation" and .kind == "rea
 review_bytes() {
   telemetry review-delegation --run "$work_run" --role readiness \
     --kind readiness --phase checkpoint --round 1 \
-    --base "$head_sha" --worktree
+    --base "$head_sha" --worktree >/dev/null
   jq -r '[.[] | select(.type == "review_delegation" and .kind == "readiness")][-1]
     | .input_bytes' -s "$sink"
 }
@@ -696,22 +696,31 @@ truncated_summary="$(telemetry summary --run "$work_run")"
 [[ "$(jq -r '.malformed_lines' <<<"$truncated_summary")" -eq 1 ]]
 [[ "$(jq -r '.subagent_launches.total' <<<"$truncated_summary")" -eq 18 ]]
 
-# 6. Token counts are optional at every stage.
-[[ "$(jq -r '.tokens.coverage' <<<"$truncated_summary")" == none ]]
-[[ "$(jq -r '.tokens.input' <<<"$truncated_summary")" -eq 0 ]]
-telemetry launch --run "$work_run" \
-  --role other --phase gate --round 3 \
-  --tokens-in 1200 --tokens-out 340
+# 6. Runtime observations are post-return and optional.
+[[ "$(jq -r '.runtime_observations.completed.coverage' \
+  <<<"$truncated_summary")" == none ]]
+observed_agent="$(telemetry launch --run "$work_run" \
+  --role other --phase gate --round 3)"
+telemetry runtime-observation --run "$work_run" \
+  --scope completed-thread --agent-id "$observed_agent" \
+  --total-input 1200 --cached-input 800 --cache-write-input 100 \
+  --output 340 --reasoning-output 40
 partial_summary="$(telemetry summary --run "$work_run")"
-[[ "$(jq -r '.tokens.coverage' <<<"$partial_summary")" == partial ]]
-[[ "$(jq -r '.tokens.input' <<<"$partial_summary")" -eq 1200 ]]
-[[ "$(jq -r '.tokens.output' <<<"$partial_summary")" -eq 340 ]]
+[[ "$(jq -r '.runtime_observations.completed.coverage' \
+  <<<"$partial_summary")" == partial ]]
+[[ "$(jq -r '.runtime_observations.completed.tokens.total_input' \
+  <<<"$partial_summary")" -eq 1200 ]]
+[[ "$(jq -r '.runtime_observations.completed.tokens.fresh_input' \
+  <<<"$partial_summary")" -eq 300 ]]
+[[ "$(jq -r '.runtime_observations.completed.tokens.output' \
+  <<<"$partial_summary")" -eq 340 ]]
 
 token_free_run="$(telemetry start --issue 71)"
 telemetry launch --run "$token_free_run" \
   --role implementation --phase implementation --round 1
 token_free_summary="$(telemetry summary --run "$token_free_run")"
-[[ "$(jq -r '.tokens.coverage' <<<"$token_free_summary")" == none ]]
+[[ "$(jq -r '.runtime_observations.completed.coverage' \
+  <<<"$token_free_summary")" == none ]]
 [[ "$(jq -r '.run' <<<"$token_free_summary")" == \
   "$(run_id_from_handle "$token_free_run")" ]]
 
@@ -796,7 +805,7 @@ done
 
 # The recorder has no field for a prompt, a diff, a file body, a command line,
 # or output: every recorded key comes from this closed set.
-readonly allowed_keys='["at","base","command_id","continues_run","duration_ms","epoch_ms","exec_id","exit_status","head","head_is_worktree","input_bytes","issue","kind","outcome","phase","repository","role","round","run","run_identity","schema","seq","tokens_in","tokens_out","type","workflow"]'
+readonly allowed_keys='["agent_id","at","base","class","command_id","continues_run","disposition","duration_ms","effort","epoch_ms","exec_id","exit_status","finding_id","head","head_is_worktree","input_bytes","issue","kind","model","outcome","phase","repository","reviewer_agent_id","role","round","run","run_identity","schema","scope","seq","tokens","type","workflow"]'
 for run_sink in "$sink_root"/runs/*.jsonl; do
   unexpected="$(jq -r -R --argjson allowed "$allowed_keys" '
     fromjson? // empty | keys[]

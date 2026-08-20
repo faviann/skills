@@ -21,6 +21,11 @@ git -C "$skills_checkout" remote add origin \
   'https://github.com/example/skills.git'
 
 readonly command_under_test="$skills_checkout/skills/personal/work-on/scripts/render-closeout.sh"
+schema2_writer="$fixture/run-telemetry-schema2-fixture.sh"
+sed 's/^readonly schema_version=3$/readonly schema_version=2/' \
+  "$skills_checkout/skills/personal/work-on/scripts/run-telemetry.sh" \
+  >"$schema2_writer"
+chmod +x "$schema2_writer"
 readonly closeout_reference="$skills_checkout/skills/personal/work-on/references/github-closeout.md"
 grep -Fq 'resolve --run "$RUN_HANDLE" --outcome "$OUTCOME"' \
   "$closeout_reference"
@@ -48,7 +53,7 @@ provenance="$(
 # deterministic without pinning the fixture to a clock.
 telemetry() {
   (cd "$target_checkout" && \
-    "$(dirname "$command_under_test")/run-telemetry.sh" "$@")
+    "$schema2_writer" "$@")
 }
 telemetry_dir="$target_checkout/.git/work-on-telemetry"
 run_id_from_handle() {
@@ -811,6 +816,84 @@ grep -Fqx '| Workflow provenance | 3 runs |' \
 for run_number in 1 2 3; do
   grep -Fqx "Run $run_number: $provenance" "$fixture/resumed-again.md"
 done
+
+# Schema 3 owns model, finding, and token rows mechanically. The facts object
+# carries only the final outcome consistency assertion.
+telemetry3() {
+  (cd "$target_checkout" && \
+    "$(dirname "$command_under_test")/run-telemetry.sh" "$@")
+}
+schema3_run="$(telemetry3 start --issue 164)"
+schema3_implementation="$(telemetry3 launch --run "$schema3_run" \
+  --role implementation --phase implementation --round 1)"
+schema3_reviewer="$(telemetry3 review-delegation --run "$schema3_run" \
+  --role review-standards --kind full --phase gate --round 1 \
+  --base HEAD --head HEAD)"
+for agent_id in "$schema3_implementation" "$schema3_reviewer"; do
+  telemetry3 runtime-observation --run "$schema3_run" \
+    --scope completed-thread --agent-id "$agent_id" \
+    --model gpt-test --effort high --total-input 100 --cached-input 70 \
+    --cache-write-input 10 --output 20 --reasoning-output 5
+done
+accepted_finding="$(telemetry3 finding-adjudicated --run "$schema3_run" \
+  --reviewer-agent-id "$schema3_reviewer" --class evidence-gap \
+  --disposition accepted)"
+telemetry3 finding-adjudicated --run "$schema3_run" \
+  --reviewer-agent-id "$schema3_reviewer" --class contract-defect \
+  --disposition rejected >/dev/null
+telemetry3 finding-resolved --run "$schema3_run" \
+  --finding-id "$accepted_finding"
+telemetry3 runtime-observation --run "$schema3_run" \
+  --scope checkpoint-snapshot --model gpt-test --effort high \
+  --total-input 50 --cached-input 30 --cache-write-input 5 \
+  --output 10 --reasoning-output 2
+telemetry3 resolve --run "$schema3_run" --outcome Closes
+telemetry3 seal --run "$schema3_run"
+jq '.telemetry = {final_workflow_outcome: "Closes"}' \
+  "$fixture/facts.json" >"$fixture/schema3-facts.json"
+(
+  cd "$target_checkout"
+  "$command_under_test" --run "$schema3_run" \
+    "$fixture/schema3-facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/schema3.md"
+grep -Fqx '| Model configuration | primary=gpt-test (high); implementation=gpt-test (high); review-standards=gpt-test (high) |' "$fixture/schema3.md"
+grep -Fqx '| Blocking findings resolved | 1 |' "$fixture/schema3.md"
+grep -Fqx '| Findings rejected at adjudication | 1 |' "$fixture/schema3.md"
+grep -Fqx '| Finding adjudications by reviewer | review-standards: accepted=1, rejected=1, follow-up=0, unresolved=0 |' "$fixture/schema3.md"
+grep -Fqx '| Primary token checkpoint snapshot | total input=50, cached input=30, cache-write input=5, fresh input=15, output=10, reasoning output=2 |' "$fixture/schema3.md"
+grep -Fqx '| Completed subagent usage | total input=200, cached input=140, cache-write input=20, fresh input=40, output=40, reasoning output=10 |' "$fixture/schema3.md"
+grep -Fqx '| Token coverage | complete (2/2 completed subagents); primary checkpoint snapshot=observed |' "$fixture/schema3.md"
+grep -Fqx '> **Source note:** Run telemetry is sink-derived; Final workflow outcome is also asserted by structured closeout facts. Workflow provenance is verified from the frozen run ledger.' "$fixture/schema3.md"
+
+schema3_model_only_run="$(telemetry3 start --issue 164)"
+telemetry3 runtime-observation --run "$schema3_model_only_run" \
+  --scope checkpoint-snapshot --model gpt-test --effort high
+telemetry3 resolve --run "$schema3_model_only_run" --outcome Closes
+telemetry3 seal --run "$schema3_model_only_run"
+(
+  cd "$target_checkout"
+  "$command_under_test" --run "$schema3_model_only_run" \
+    "$fixture/schema3-facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/schema3-model-only.md"
+grep -Fqx '| Model configuration | primary=gpt-test (high) |' \
+  "$fixture/schema3-model-only.md"
+grep -Fqx '| Primary token checkpoint snapshot | unknown |' \
+  "$fixture/schema3-model-only.md"
+grep -Fqx '| Token coverage | none (0/0 completed subagents); primary checkpoint snapshot=none |' \
+  "$fixture/schema3-model-only.md"
+
+jq '.telemetry.model_configuration = "forged"' \
+  "$fixture/schema3-facts.json" >"$fixture/schema3-forged-facts.json"
+if (
+  cd "$target_checkout"
+  "$command_under_test" --run "$schema3_run" \
+    "$fixture/schema3-forged-facts.json" "$fixture/narrative.md" --new-pr
+) >"$fixture/schema3-forged.out" 2>"$fixture/schema3-forged.err"; then
+  printf 'FAIL[schema3-forged]: renderer accepted sink-owned facts\n' >&2
+  exit 1
+fi
+grep -Fq 'run telemetry comes from the run-scoped telemetry sink' \
+  "$fixture/schema3-forged.err"
 
 # A declared instruction input changed after capture fails verification without
 # emitting a body in either renderer mode.

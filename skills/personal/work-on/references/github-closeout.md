@@ -114,9 +114,6 @@ Put the closeout facts in an untracked JSON file with this shape:
     }
   ],
   "telemetry": {
-    "model_configuration": "observed value or unknown",
-    "blocking_findings_resolved": 0,
-    "findings_rejected_at_adjudication": 0,
     "final_workflow_outcome": "Closes"
   }
 }
@@ -141,7 +138,7 @@ For an existing pull request, first save its live body, then render with
 `--previous-body <old-body.md>` in place of `--new-pr`. Exactly one mode is
 required. The renderer accepts `-` instead of the facts path to read facts from
 stdin. It fails before writing any body when the run's frozen provenance cannot
-be verified, the run has no telemetry sink, schema-2 integrity is not valid,
+be verified, the run has no telemetry sink, schema-3 integrity is not valid,
 repository/issue/outcome identity differs, the facts are malformed, the
 authoritative criteria and
 closure rows do not match exactly once, a required acceptance row or telemetry
@@ -188,9 +185,8 @@ Include `## Finding adjudications` in the narrative with the ledger's rationale
 lines and the sweep's trace table; omit it when no blocking findings were
 adjudicated.
 
-Three observations are primary-reported through the facts file — model
-configuration, blocking findings resolved, and findings rejected at
-adjudication. Every other row is derived from the run's telemetry sink:
+The final outcome remains a primary-supplied consistency assertion. Every
+displayed observation is derived from the run's telemetry sink:
 
 ```md
 ## Workflow telemetry
@@ -205,6 +201,11 @@ adjudication. Every other row is derived from the run's telemetry sink:
 | Validation executions | <count> |
 | Blocking findings resolved | <count or unknown> |
 | Findings rejected at adjudication | <count or unknown> |
+| Finding adjudications by reviewer | <disposition counts by reviewer role> |
+| Primary token checkpoint snapshot | <separated token fields, or unknown> |
+| Completed subagent usage | <separated token fields> |
+| Completed subagent usage by role | <separated token fields by observed role> |
+| Token coverage | <coverage and primary checkpoint availability> |
 | Final workflow outcome | Closes or Progresses |
 | Telemetry run | <bare run id> (schema <version>, integrity <state>) |
 | Subagent launches | <total and by-role breakdown> |
@@ -220,8 +221,8 @@ Use observed values only; never estimate. The outcome must match the issue
 mapping. A mechanical count of zero is a plain `0`, not a flag.
 
 The renderer aggregates every sink-derived row itself, appends the mechanically
-owned source note naming which rows are primary-reported, and rejects facts
-whose `telemetry` object holds anything beyond the four fields shown above —
+owned source note, and rejects facts
+whose `telemetry` object holds anything beyond the one field shown above —
 under any name, not a fixed list of forbidden ones; see
 `references/run-telemetry.md`. The
 table describes the latest run alone, so a later run may legitimately report
@@ -234,7 +235,7 @@ seals the run and discharges its registered lifecycle from the sink's own
 sealed summary, and refuses to report success unless that summary is valid. A
 run the registry deliberately left unregistered is sealed the same way and
 reported as `unregistered`.
-Schema-2
+Schema-3
 rendering fails unless integrity is `valid`, repository/issue/outcome identity
 matches the facts, and the run has exactly one compatible resolution and seal.
 Rendering never repairs the sink.

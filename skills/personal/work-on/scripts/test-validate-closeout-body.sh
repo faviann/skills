@@ -58,6 +58,29 @@ sed 's/$/\r/' "$fixture/canonical.md" >"$fixture/crlf.md"
 "$command_under_test" --require-closes 164 "$fixture/crlf.md"
 
 sed \
+  -e '/| Findings rejected at adjudication |/a\
+| Finding adjudications by reviewer | readiness: accepted=2, rejected=0, follow-up=0, unresolved=0; review-standards: accepted=0, rejected=2, follow-up=0, unresolved=0 |\
+| Primary token checkpoint snapshot | total input=50, cached input=30, cache-write input=5, fresh input=15, output=10, reasoning output=2 |\
+| Completed subagent usage | total input=200, cached input=140, cache-write input=20, fresh input=40, output=40, reasoning output=10 |\
+| Completed subagent usage by role | implementation: total input=100, cached input=70, cache-write input=10, fresh input=20, output=20, reasoning output=5; readiness: total input=100, cached input=70, cache-write input=10, fresh input=20, output=20, reasoning output=5 |\
+| Token coverage | complete (2/2 completed subagents); primary checkpoint snapshot=observed |' \
+  -e 's/| Model configuration | gpt-5 |/| Model configuration | primary=gpt-5 (high); implementation=gpt-5 (high) |/' \
+  -e 's/schema 1, integrity legacy-unverifiable/schema 3, integrity valid/' \
+  -e 's/> \*\*Source note:\*\*.*/> **Source note:** Run telemetry is sink-derived; Final workflow outcome is also asserted by structured closeout facts. Workflow provenance is verified from the frozen run ledger./' \
+  "$fixture/canonical.md" >"$fixture/schema3.md"
+"$command_under_test" 164 "$fixture/schema3.md"
+
+sed 's/primary checkpoint snapshot=observed/primary checkpoint snapshot=estimated/' \
+  "$fixture/schema3.md" >"$fixture/schema3-estimated.md"
+if "$command_under_test" 164 "$fixture/schema3-estimated.md" \
+    >"$fixture/schema3-estimated.out" 2>"$fixture/schema3-estimated.err"; then
+  printf 'FAIL[schema3-estimated]: validator accepted estimated coverage\n' >&2
+  exit 1
+fi
+grep -Fq 'workflow telemetry Token coverage is malformed' \
+  "$fixture/schema3-estimated.err"
+
+sed \
   -e 's/^Closes #164$/Progresses #164/' \
   -e 's/| Final workflow outcome | Closes |/| Final workflow outcome | Progresses |/' \
   "$fixture/canonical.md" >"$fixture/progresses.md"

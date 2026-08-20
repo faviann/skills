@@ -5,10 +5,19 @@ set -euo pipefail
 # sink only when the contract being exercised is read-time integrity.
 
 readonly script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly telemetry_script="$script_root/run-telemetry.sh"
 readonly renderer_script="$script_root/render-closeout.sh"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
+
+# Historical schema-2 fixtures exercise the current reader without exposing a
+# production path that can mint an old run. The copied writer differs by the
+# one version constant only; schema-2 output is therefore tested against the
+# same implementation that reads it.
+telemetry_script="$fixture/run-telemetry-schema2-fixture.sh"
+sed 's/^readonly schema_version=3$/readonly schema_version=2/' \
+  "$script_root/run-telemetry.sh" >"$telemetry_script"
+chmod +x "$telemetry_script"
+readonly telemetry_script
 
 repo="$fixture/repo"
 git init -q -b main "$repo"
@@ -587,7 +596,9 @@ backwards_summary="$(telemetry summary --run "$backwards_clock_run")"
 # makes a new reason fail this matrix until its refusal case is added.
 mapfile -t declared_integrity_reasons < <(
   grep -oE '"[A-Z][A-Z_]+"' "$telemetry_script" \
-    | tr -d '"' | sort -u
+    | tr -d '"' \
+    | grep -Ev '^(AGENT_IDENTITY_INVALID|RUNTIME_OBSERVATION_INVALID|FINDING_ADJUDICATION_INVALID|FINDING_RESOLUTION_INVALID)$' \
+    | sort -u
 )
 mapfile -t covered_renderer_reasons < <(
   printf '%s\n' "${!renderer_reasons_covered[@]}" | sort

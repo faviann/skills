@@ -45,7 +45,7 @@ One record is one JSON object with exactly these fields:
 | `run_id` | the run's id, as minted by `run-telemetry.sh start` |
 | `repository` | normalized lowercase `owner/repository` |
 | `issue` | positive issue number |
-| `telemetry_schema` | the sink's schema, `2` |
+| `telemetry_schema` | the sink's schema, `2` or `3` |
 | `sink` | absolute path of the run's JSON-lines sink |
 | `worktree` | absolute path of the worktree the run started in |
 | `repository_binding` | the sink's opaque repository binding |

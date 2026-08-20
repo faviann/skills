@@ -238,7 +238,7 @@ readonly record_validator='
   and (.run_id | type == "string" and test("^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$"))
   and (.repository | type == "string" and test("^[a-z0-9_.-]+/[a-z0-9_.-]+$"))
   and (.issue | type == "number" and floor == . and . > 0)
-  and .telemetry_schema == 2
+  and (.telemetry_schema == 2 or .telemetry_schema == 3)
   and (.sink | locator) and (.worktree | locator)
   and (.repository_binding | type == "string" and test("^[0-9a-f]{32}$"))
   and (.lifecycle | IN($lifecycles[]))
@@ -552,12 +552,14 @@ notify_observer_finalized() {
 summary_json=""
 sink_lifecycle=""
 sink_outcome=""
+sink_schema=""
 read_summary() {
   local workdir="$1" handle="$2"
   summary_json=""
   summary_json="$( (cd "$workdir" && "$telemetry_script" summary --run "$handle") 2>/dev/null )" \
     || return 1
-  [[ "$(jq -r '.schema' <<<"$summary_json")" == 2 ]] || return 1
+  sink_schema="$(jq -r '.schema' <<<"$summary_json")"
+  [[ "$sink_schema" == 2 || "$sink_schema" == 3 ]] || return 1
   sink_outcome="$(jq -r '.final_workflow_outcome // ""' <<<"$summary_json")"
   if [[ "$(jq -r '.sealed_at // ""' <<<"$summary_json")" != "" ]]; then
     sink_lifecycle=sealed
@@ -606,12 +608,13 @@ initial_record() {
     --argjson schema "$record_schema" \
     --arg run_id "$run" --arg repository "$repository" --argjson issue "$issue" \
     --arg sink "$sink" --arg worktree "$worktree" --arg binding "$binding" \
+    --argjson telemetry_schema "$sink_schema" \
     --arg lifecycle "$sink_lifecycle" --arg outcome "$sink_outcome" \
     --arg observer "$observer_id" --arg control "$control_id" \
     --arg stamp "$stamp" --argjson updated_epoch "$(now_epoch)" \
     'def maybe: if . == "" then null else . end;
      {schema: $schema, run_id: $run_id, repository: $repository, issue: $issue,
-      telemetry_schema: 2, sink: $sink, worktree: $worktree,
+      telemetry_schema: $telemetry_schema, sink: $sink, worktree: $worktree,
       repository_binding: $binding, lifecycle: $lifecycle,
       outcome: ($outcome | maybe), summary_sha256: null, finalization_id: null,
       finalization: "pending", observer: ($observer | maybe),
@@ -722,7 +725,7 @@ halt_finalization() {
 # An ordinary run that registry admission deliberately skipped still hands back
 # through #71's own resolve/seal path, so nothing about it depends on a row that
 # was never created. Omitting the registry is all this path omits: the outcome
-# assertion, the run's identity, the seal, and schema-2 integrity are required
+# assertion, the run's identity, the seal, and supported-schema integrity are required
 # here exactly as they are for a registered run, because a caller may not be
 # told a hand-back succeeded on weaker terms than #71's.
 finalize_unregistered_run() {
@@ -738,14 +741,14 @@ finalize_unregistered_run() {
       --outcome "$requested_outcome") >/dev/null \
       || fail "run $run_id could not resolve outcome $requested_outcome"
     read_summary "$workdir" "$handle" \
-      || fail "run $run_id has no readable schema-2 summary after resolving"
+      || fail "run $run_id has no readable telemetry summary after resolving"
   fi
   if [[ "$sink_lifecycle" != sealed ]]; then
     (cd "$workdir" && "$telemetry_script" seal --run "$handle") >/dev/null \
       || fail "run $run_id could not be sealed"
   fi
   read_summary "$workdir" "$handle" \
-    || fail "run $run_id has no readable schema-2 summary after sealing"
+    || fail "run $run_id has no readable telemetry summary after sealing"
   [[ "$(jq -r '.run' <<<"$summary_json")" == "$run_id" \
     && -n "$(jq -r '.repository // ""' <<<"$summary_json")" ]] \
     || fail "run $run_id does not match the sink its handle selects"
@@ -766,7 +769,7 @@ finalize_without_record() {
   workdir="$(git rev-parse --show-toplevel 2>/dev/null)" \
     || fail "run $run_id is not registered and no repository is available here"
   read_summary "$workdir" "$handle" \
-    || fail "run $run_id is not registered and has no readable schema-2 summary"
+    || fail "run $run_id is not registered and has no readable telemetry summary"
   repository="$(jq -r '.repository // ""' <<<"$summary_json")"
   issue="$(jq -r '.issue // ""' <<<"$summary_json")"
   resolve_observer_applicability "$repository" "$issue"
@@ -816,7 +819,7 @@ drive_finalization() {
       "run $run_id has no telemetry sink at its recorded location"
   read_summary "$resolved_workdir" "$handle" \
     || halt_finalization "$key" "$current" unreproducible SUMMARY_FAILED \
-      "run $run_id has no readable schema-2 summary"
+      "run $run_id has no readable telemetry summary"
 
   # The sink is canonical for identity too: a row whose repository, issue, or
   # run no longer matches the sink it names is never acted on — and its
@@ -881,7 +884,7 @@ drive_finalization() {
         "run $run_id could not resolve outcome $requested_outcome"
     read_summary "$resolved_workdir" "$handle" \
       || halt_finalization "$key" "$current" failed SUMMARY_FAILED \
-        "run $run_id has no readable schema-2 summary after resolving"
+        "run $run_id has no readable telemetry summary after resolving"
     write_record "$key" "$(transition_record "$current" finalizing "")"
     current="$(read_record "$key")"
   elif [[ "$outcome_is_assertion" == true && -n "$requested_outcome" \
@@ -897,7 +900,7 @@ drive_finalization() {
         "run $run_id could not be sealed"
     read_summary "$resolved_workdir" "$handle" \
       || halt_finalization "$key" "$current" failed SUMMARY_FAILED \
-        "run $run_id has no readable schema-2 summary after sealing"
+        "run $run_id has no readable telemetry summary after sealing"
     write_record "$key" "$(transition_record "$current" finalizing "")"
     current="$(read_record "$key")"
   fi
@@ -978,7 +981,7 @@ case "$subcommand" in
     # belonging to another repository is refused here even when this repository
     # holds a sink with the same textual run id.
     read_summary "$worktree" "$handle" \
-      || fail "register requires a schema-2 run in this repository"
+      || fail "register requires a supported telemetry run in this repository"
     [[ "$(jq -r '.run' <<<"$summary_json")" == "$run_id" ]] \
       || fail "the run handle does not match the sink it selects"
     repository="$(jq -r '.repository // ""' <<<"$summary_json")"
