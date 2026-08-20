@@ -66,18 +66,19 @@ Bats documents `--filter` as its name-regex selector in the tool's help, and
 
 Each test was run alone while the production script it covers contained a
 deliberate one-line break. Every test failed. Mutations were applied one at a
-time and restored immediately. The broad provenance mutation changed the
-declared `work-on` input from `SKILL.md` to `SKILL.missing`. Six scenarios whose
-own behavior occurs after a successful capture instead received targeted
-one-line mutations, so their prerequisites completed and each isolated failure
-reached the assertion named by the scenario. Four negative-path tests that
-correctly survived the broad break also received direct one-line mutations. The
-registry mutation changed the one-line `run_outcomes` declaration to an empty
-array.
+time and restored immediately. The first scenario received a targeted mutation
+that added file modes to declared-input digests: its initial capture completed,
+then changing only an executable bit reached and failed the assertion that the
+canonical fingerprint depends only on declared paths and bytes. Six other
+scenarios received targeted one-line mutations of behavior exercised after
+successful prerequisite setup, so each isolated failure reached the assertion
+named by the scenario. Four negative-path tests received direct one-line
+mutations of the paths they exercise. The registry mutation changed the
+one-line `run_outcomes` declaration to an empty array.
 
 | Named prototype scenario | One-line production break | Isolated result |
 | --- | --- | --- |
-| capture fingerprints only declared bytes and preserves a frozen canonical value | missing declared `work-on` input | `not ok 1`; unreadable declared input |
+| capture fingerprints only declared bytes and preserves a frozen canonical value | included each declared file's mode in its digest | `not ok 1`; after initial capture, the executable-bit-only change altered the canonical value and failed the byte-only assertion |
 | verify rejects changed declared instructions without deleting the frozen ledger | allowed a changed `work-on` digest to pass verification | `not ok 1`; expected failure, got status 0 and the frozen canonical value on stdout |
 | verify rejects a missing ledger without printing a canonical value | printed a placeholder canonical value on the missing-ledger branch | `not ok 1`; the assertion that stdout was empty failed |
 | target workflow identity is dirty before commit and clean after commit | suppressed `*` when the declared target workflow was absent from `HEAD` | `not ok 1`; the pre-commit workflow component did not match the dirty-value expression |
@@ -93,13 +94,13 @@ array.
 | registry every-outcome group: preflight-aborted finalizes without implementation | empty `run_outcomes` | `not ok 1`; `outcome must be one of:` |
 | registry every-outcome group: abandoned and failed remain finalizable | empty `run_outcomes` | `not ok 1`; `outcome must be one of:` |
 
-Representative direct output from the broad provenance mutation:
+Representative direct output from the targeted declared-byte mutation:
 
 ```text
 1..1
 not ok 1 capture fingerprints only declared bytes and preserves a frozen canonical value
-# expected success, got status 1
-# workflow provenance: declared instruction input is unreadable: /tmp/<fixture>/skills-checkout/skills/personal/work-on/SKILL.missing
+# (in test file skills/personal/work-on/scripts/bats-prototype/workflow-provenance.bats, line 22)
+#   `[[ "$(verify_in "$skills_checkout")" == "$clean_canonical" ]]' failed
 ```
 
 The provenance prototype also uses Bats 1.13.0's `run --separate-stderr` at
