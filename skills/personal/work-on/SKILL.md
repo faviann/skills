@@ -18,11 +18,17 @@ Authority invariants (bind regardless of workflow):
   primary.
 - Adjudicate every review finding against the contract before delegation; never
   forward raw findings.
-- For every implementation, delegate to a fresh subagent and run independent
-  review plus the closure gate. Give delegates a scoped implementation
-  contract directly, permit other GitHub reads and workspace edits only, and
-  prohibit comment refetches, commits, or GitHub mutations. Return only the
-  scoped implementation report to the primary.
+- Delegate the initial implementation to a fresh subagent, retain its harness
+  target or identifier, and keep it as implementation owner through
+  remediation. Send accepted directives through the harness's supported
+  continuation mechanism. If the harness cannot continue that context, report
+  the limitation and use a fresh delegate; invent no handoff or persistence
+  mechanism. For every implementation, run independent review plus the closure
+  gate, with fresh review subagents independent of the implementation context
+  and prior reviewers. Give implementation delegates a scoped contract
+  directly, permit other GitHub reads and workspace edits only, and prohibit
+  comment refetches, commits, or GitHub mutations. Return only the scoped
+  implementation report to the primary.
 - Define the authoritative slice contract—the trusted snapshot—as the ready
   issue body, full comments whose `author_association` is `OWNER`, `MEMBER`, or
   `COLLABORATOR`, and parent/spec docs they reference. Omit every other comment
