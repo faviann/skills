@@ -201,7 +201,7 @@ adjudication. Every other row is derived from the run's telemetry sink:
 | Start-to-seal elapsed | <milliseconds> ms, or unknown |
 | Implementation rounds | <count> |
 | Independent-review rounds | <count> |
-| Remediation rounds | <count> |
+| Remediation implementation launches | <count> |
 | Validation executions | <count> |
 | Blocking findings resolved | <count or unknown> |
 | Findings rejected at adjudication | <count or unknown> |
@@ -277,5 +277,6 @@ narrative, rendered body, and any other closeout scratch untracked.
 <!-- Maintainer watch signals, not workflow instructions. Across recent
 work-on PRs: (a) adjudication sections dominated by "keeping it"
 justifications → the sweep flags junk; tighten what it flags. (b) zero
-findings rejected in telemetry while remediation rounds stay high →
-adjudication isn't biting; raw findings are likely being forwarded. -->
+findings rejected in telemetry while independent-review rounds stay high →
+inspect whether adjudication is filtering findings or raw findings are being
+forwarded; repeated full gates can also expose real new defects. -->

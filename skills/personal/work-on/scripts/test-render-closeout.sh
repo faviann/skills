@@ -156,7 +156,7 @@ No findings required adjudication.
 | Start-to-seal elapsed | START_TO_SEAL |
 | Implementation rounds | 1 |
 | Independent-review rounds | 1 |
-| Remediation rounds | 0 |
+| Remediation implementation launches | 0 |
 | Validation executions | 0 |
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
@@ -261,7 +261,7 @@ canonical_render_checksum="$(sha256sum "$canonical_render_sink")"
 grep -Fqx '| Start-to-seal elapsed | unknown |' "$fixture/legacy-render.md"
 grep -Fqx '| Implementation rounds | unknown |' "$fixture/legacy-render.md"
 grep -Fqx '| Independent-review rounds | unknown |' "$fixture/legacy-render.md"
-grep -Fqx '| Remediation rounds | unknown |' "$fixture/legacy-render.md"
+grep -Fqx '| Remediation implementation launches | unknown |' "$fixture/legacy-render.md"
 grep -Fqx \
   "warning: start-to-seal elapsed unavailable for run $legacy_render_run; rendered as unknown" \
   "$fixture/legacy-render.err"
@@ -337,7 +337,7 @@ grep -Fqx "| Telemetry run | $(run_id_from_handle "$grown_run") (schema 2, integ
 # closeout-phase executions contribute no round at all.
 grep -Fqx '| Implementation rounds | 1 |' "$fixture/grown.md"
 grep -Fqx '| Independent-review rounds | 1 |' "$fixture/grown.md"
-grep -Fqx '| Remediation rounds | 0 |' "$fixture/grown.md"
+grep -Fqx '| Remediation implementation launches | 0 |' "$fixture/grown.md"
 grep -Fqx '| Validation executions | 2 |' "$fixture/grown.md"
 grep -Eqx '\| Reviewed artifact bytes \| [0-9]+ bytes \|' "$fixture/grown.md"
 grep -Eqx '\| Recorded validation duration \| [0-9]+ ms \|' "$fixture/grown.md"
@@ -371,7 +371,8 @@ done
 # first group, and only until the sink grew a field.
 for supplied in telemetry_run subagent_launches reviews validation_outcomes \
     phase_elapsed wall_clock_elapsed start_to_seal_elapsed \
-    implementation_rounds independent_review_rounds remediation_rounds \
+    implementation_rounds independent_review_rounds \
+    remediation_implementation_launches \
     validation_executions reviewed_artifact_bytes \
     recorded_validation_duration \
     start_to_seal_ms rounds validations phase_elapsed_ms \
