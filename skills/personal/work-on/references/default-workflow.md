@@ -23,14 +23,6 @@ never carried into implementation for the closure gate to discover.
 
 ## 2. Delegate implementation
 
-Before every spawn, choose a deterministic Codex agent path from the issue,
-role, and round. Record the launch or review delegation first, retain the
-printed sink-owned `agent_id` with that path, then spawn. Role, phase, and round
-are not pairing keys. After the delegate returns, use
-`scripts/codex-observation.sh` and record its completed-thread observation for
-that exact `agent_id` as `references/run-telemetry.md` specifies. A missing or
-incomplete local observation records no estimate.
-
 Spawn a fresh subagent and give it this contract directly, populated only from
 the primary's adjudicated contract and trusted snapshot:
 
@@ -121,12 +113,6 @@ Log one rationale line per decision in an untracked ledger at
 dismiss re-raised findings by prior rationale unless the reviewer brings new
 evidence. Reviewers never see the ledger.
 
-For each decision, record `finding-adjudicated` with the originating reviewer
-`agent_id`, `contract-defect` or `evidence-gap` class, and its disposition;
-retain every printed `finding_id`. Record `finding-resolved` once the next
-committed and verified round resolves an accepted finding. A closure evidence
-directive is an `evidence-gap`, not a code defect.
-
 Batch all blockers from one combined gate to one fresh implementation delegate.
 Run affected focused checks, commit, and rerun the gate until clean; do not run
 the full regression suite in this loop.
@@ -137,11 +123,6 @@ After the combined gate is clean, run the full regression command once and
 `git diff --check`. Any code change invalidates the gate and validation;
 otherwise finalize the existing closure table and complete
 `references/github-closeout.md`.
-
-Immediately before outcome resolution and registry finalization, use
-`scripts/codex-observation.sh` to record the primary runtime observation with
-scope `checkpoint-snapshot`. It is an in-run checkpoint, never a whole-run
-usage claim.
 
 Report: outcome, commits, tests/checks run, review results, gate table, and
 leftovers/follow-ups.
