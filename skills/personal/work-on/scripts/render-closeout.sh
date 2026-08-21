@@ -299,7 +299,7 @@ implementation_rounds_value="$(derived_value 'implementation rounds' \
   '.rounds.implementation')"
 independent_review_rounds_value="$(derived_value 'independent-review rounds' \
   '.rounds.independent_review')"
-remediation_rounds_value="$(derived_value 'remediation rounds' \
+remediation_launches_value="$(derived_value 'remediation implementation launches' \
   '.rounds.remediation')"
 validation_executions_value="$(derived_value 'validation executions' \
   '.validations.total')"
@@ -379,7 +379,7 @@ candidate="$fixture/candidate.md"
   printf '| Start-to-seal elapsed | %s |\n' "$start_to_seal_value"
   printf '| Implementation rounds | %s |\n' "$implementation_rounds_value"
   printf '| Independent-review rounds | %s |\n' "$independent_review_rounds_value"
-  printf '| Remediation rounds | %s |\n' "$remediation_rounds_value"
+  printf '| Remediation implementation launches | %s |\n' "$remediation_launches_value"
   printf '| Validation executions | %s |\n' "$validation_executions_value"
   printf '| Blocking findings resolved | %s |\n' "$(telemetry_value blocking_findings_resolved)"
   printf '| Findings rejected at adjudication | %s |\n' "$(telemetry_value findings_rejected_at_adjudication)"

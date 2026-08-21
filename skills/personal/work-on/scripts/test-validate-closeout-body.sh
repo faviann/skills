@@ -28,7 +28,7 @@ Readable narrative stays readable.
 | Start-to-seal elapsed | 42000 ms |
 | Implementation rounds | 1 |
 | Independent-review rounds | 1 |
-| Remediation rounds | 0 |
+| Remediation implementation launches | 0 |
 | Validation executions | 3 |
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
@@ -121,7 +121,7 @@ cat >>"$fixture/pr-162.md" <<'EOF'
 | Start-to-seal elapsed | 42000 ms |
 | Implementation rounds | 1 |
 | Independent-review rounds | 1 |
-| Remediation rounds | 0 |
+| Remediation implementation launches | 0 |
 | Validation executions | 3 |
 | Blocking findings resolved | 0 |
 | Findings rejected at adjudication | 0 |
@@ -161,7 +161,7 @@ expect_failure missing-row "closure gate must contain at least one acceptance ro
 count_fields=(
   "Implementation rounds"
   "Independent-review rounds"
-  "Remediation rounds"
+  "Remediation implementation launches"
   "Validation executions"
   "Blocking findings resolved"
   "Findings rejected at adjudication"

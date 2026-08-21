@@ -39,8 +39,11 @@ Scoped implementation contract:
 - Required commands: <targeted and baseline checks>
 - Authority: GitHub reads and workspace edits only. Do not refetch issue
   comments, commit, mutate GitHub, or change the contract.
+- Coherence pass: <copy the complete bounded coherence-pass instruction from
+  `SKILL.md`'s authority invariants>
 - Completion: use `/tdd` at the named seams where possible, implement only this
-  contract, run the required checks, then stop.
+  contract, run the required checks, perform the populated Coherence pass, then
+  stop.
 ```
 
 The scoped contract is the delegate's complete implementation workflow. The
@@ -72,8 +75,11 @@ primary retains adjudication and repair.
 
 Inspect the worktree and run affected focused checks. Before the first commit,
 delegate one fresh raw-artifact readiness sweep; adjudicate it once and batch
-all blockers to a fresh implementation delegate. Re-check affected evidence,
-then commit normally; each later round adds a commit (no amend or squash).
+all blockers back to the initial implementation delegate through the harness's
+supported continuation mechanism, applying the implementation-owner fallback
+in `SKILL.md`'s authority invariants when continuation is unavailable. Re-check
+affected evidence, then commit normally; each later round adds a commit (no
+amend or squash).
 
 After committing, status only the criteria this round claims. `tested` requires
 evidence of the actual artifact and mode that would fail if the behavior — or
@@ -93,7 +99,8 @@ table remains provisional until final validation.
 
 Adjudicate checkpoint directives, both review axes, and closure findings
 together. A directive with a mechanical seam is blocking and must be resolved
-in the next committed round. If proof would require a gate-only artifact, use
+in the next committed round unless `SKILL.md`'s Fowler/baseline-smell authority
+invariant leaves it advisory. If proof would require a gate-only artifact, use
 the closure gate's human/escalation path instead of inventing one.
 
 Never forward raw findings. For each blocking finding, first trace the
@@ -113,9 +120,13 @@ Log one rationale line per decision in an untracked ledger at
 dismiss re-raised findings by prior rationale unless the reviewer brings new
 evidence. Reviewers never see the ledger.
 
-Batch all blockers from one combined gate to one fresh implementation delegate.
-Run affected focused checks, commit, and rerun the gate until clean; do not run
-the full regression suite in this loop.
+Batch all blockers from one combined gate back to the initial implementation
+delegate through the harness's supported continuation mechanism, applying the
+implementation-owner fallback in `SKILL.md`'s authority invariants when
+continuation is unavailable. Run affected focused checks, commit, and rerun the
+gate with fresh reviewers until clean; do not show later reviewers prior
+reports, adjudications, or the ledger, and do not run the full regression suite
+in this loop.
 
 ## 6. Closeout
 

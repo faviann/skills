@@ -221,10 +221,17 @@ alone and with no change to the event schema:
 | Start-to-seal elapsed | `run_sealed.epoch_ms - run_start.epoch_ms` |
 | Implementation rounds | distinct `round` over `subagent_launch` with `role=implementation`, `phase=implementation` |
 | Independent-review rounds | distinct `round` over `review_delegation` with `kind=full`, `phase=gate` |
-| Remediation rounds | distinct `round` over `subagent_launch` with `role=implementation`, `phase=remediation` |
+| Remediation implementation launches | distinct `round` over `subagent_launch` with `role=implementation`, `phase=remediation` |
 | Validation executions | recorded `validation_start` count |
 | Reviewed artifact bytes | sum of valid `review_delegation.input_bytes` |
 | Recorded validation duration | sum of valid `validation_end.duration_ms` |
+
+`Remediation implementation launches` counts fresh implementation delegates
+launched during remediation. Remediation continued in the retained
+implementation delegate launches no subagent and never increments it, so the
+row does not count logical remediation rounds and no aggregate here does. A
+non-zero value therefore reports fallback: the harness could not continue that
+context and the workflow launched a new delegate instead.
 
 A round is a distinct observed round number, not an event count: Standards,
 Spec, and a gate-phase closure sweep sharing one round are one

@@ -137,7 +137,7 @@ telemetry_fields=(
   "Start-to-seal elapsed"
   "Implementation rounds"
   "Independent-review rounds"
-  "Remediation rounds"
+  "Remediation implementation launches"
   "Validation executions"
   "Blocking findings resolved"
   "Findings rejected at adjudication"
@@ -186,7 +186,7 @@ for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
   [[ -n "$value" ]] \
     || fail "workflow telemetry row $((index + 1)) has an empty observed value"
   case "$field" in
-    "Implementation rounds"|"Independent-review rounds"|"Remediation rounds"|"Validation executions"|"Blocking findings resolved"|"Findings rejected at adjudication")
+    "Implementation rounds"|"Independent-review rounds"|"Remediation implementation launches"|"Validation executions"|"Blocking findings resolved"|"Findings rejected at adjudication")
       [[ "$value" == unknown || "$value" =~ ^[0-9]+$ ]] \
         || fail "workflow telemetry $field must be a nonnegative integer or unknown"
       ;;

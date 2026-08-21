@@ -18,11 +18,31 @@ Authority invariants (bind regardless of workflow):
   primary.
 - Adjudicate every review finding against the contract before delegation; never
   forward raw findings.
-- For every implementation, delegate to a fresh subagent and run independent
-  review plus the closure gate. Give delegates a scoped implementation
-  contract directly, permit other GitHub reads and workspace edits only, and
-  prohibit comment refetches, commits, or GitHub mutations. Return only the
-  scoped implementation report to the primary.
+- Delegate the initial implementation to a fresh subagent, retain its harness
+  target or identifier, and keep it as implementation owner through
+  remediation. Send accepted directives through the harness's supported
+  continuation mechanism. If the harness cannot continue that context, report
+  the limitation and use a fresh delegate; invent no handoff or persistence
+  mechanism. For every implementation, run independent review plus the closure
+  gate, with fresh review subagents independent of the implementation context
+  and prior reviewers. Give implementation delegates a scoped contract
+  directly, permit other GitHub reads and workspace edits only, and prohibit
+  comment refetches, commits, or GitHub mutations. Return only the scoped
+  implementation report to the primary.
+- Treat Fowler/baseline smells as judgement calls. They block only when their
+  reproduction demonstrates a documented repository-standard violation or an
+  acceptance-criterion defect with observable impact. Mechanical
+  reproducibility alone leaves a cleanup preference advisory.
+- After the initial implementation delegate completes its red-green slices and
+  focused checks are green, require that same delegate to perform one bounded,
+  behavior-preserving coherence pass before readiness and the first cumulative
+  gate. Give it these bounds: it may remove local duplication introduced by the
+  slices, improve misleading names, simplify unnecessarily indirect local
+  control flow, and restore local or domain coherence; focused tests stay
+  unchanged and green; it adds no behavior or acceptance criterion, removes no
+  public or validation seam, introduces no speculative abstraction, and does
+  no unrelated cleanup. Work requiring test changes or observable behavior
+  changes returns to an explicit red-green slice.
 - Define the authoritative slice contract—the trusted snapshot—as the ready
   issue body, full comments whose `author_association` is `OWNER`, `MEMBER`, or
   `COLLABORATOR`, and parent/spec docs they reference. Omit every other comment
