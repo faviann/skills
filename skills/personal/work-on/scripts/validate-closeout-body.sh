@@ -5,10 +5,6 @@ set -euo pipefail
 # This checks shape and consistency only; afk-merge.sh remains responsible for
 # independently deciding whether the evidence merits an unattended merge.
 
-script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=run-telemetry-schema.sh
-source "$script_root/run-telemetry-schema.sh"
-
 require_closes=false
 previous_source=""
 while [[ "${1:-}" == --* ]]; do
@@ -145,11 +141,6 @@ telemetry_fields=(
   "Validation executions"
   "Blocking findings resolved"
   "Findings rejected at adjudication"
-  "Finding adjudications by reviewer"
-  "Primary token checkpoint snapshot"
-  "Completed subagent usage"
-  "Completed subagent usage by role"
-  "Token coverage"
   "Final workflow outcome"
   "Telemetry run"
   "Subagent launches"
@@ -161,22 +152,20 @@ telemetry_fields=(
   "Workflow provenance"
 )
 readonly telemetry_row_count="${#telemetry_fields[@]}"
-readonly telemetry_source_note='> **Source note:** Run telemetry is sink-derived; Final workflow outcome is also asserted by structured closeout facts. Workflow provenance is verified from the frozen run ledger.'
-readonly telemetry_run_pattern="$work_on_telemetry_run_value_pattern"
+readonly telemetry_source_note='> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.'
+readonly telemetry_run_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8} \(schema (1, integrity legacy-unverifiable|2, integrity valid)\)$'
 readonly elapsed_ms_pattern='^(unknown|[0-9]+ ms)$'
 readonly artifact_bytes_pattern='^(unknown|[0-9]+ bytes)$'
 readonly subagent_launches_pattern='^(0|[1-9][0-9]* \([a-z-]+=[1-9][0-9]*(, [a-z-]+=[1-9][0-9]*)*\))$'
 readonly reviews_pattern='^[0-9]+ \(readiness=[0-9]+, full=[0-9]+, delta=[0-9]+\)$'
 readonly validations_pattern='^[0-9]+ \(passed=[0-9]+, failed=[0-9]+(, interrupted=[1-9][0-9]*)?(, incomplete=[1-9][0-9]*)?\)$'
 readonly phase_elapsed_pattern='^(unknown|[a-z-]+=[0-9]+s(, [a-z-]+=[0-9]+s)*)$'
-readonly finding_by_reviewer_pattern='^(none|[a-z-]+: accepted=[0-9]+, rejected=[0-9]+, follow-up=[0-9]+, unresolved=[0-9]+(; [a-z-]+: accepted=[0-9]+, rejected=[0-9]+, follow-up=[0-9]+, unresolved=[0-9]+)*)$'
-readonly token_usage_pattern='^(unknown|total input=[0-9]+, cached input=[0-9]+, cache-write input=[0-9]+, fresh input=[0-9]+, output=[0-9]+, reasoning output=[0-9]+)$'
-readonly token_usage_by_role_pattern='^(none|[a-z-]+: total input=[0-9]+, cached input=[0-9]+, cache-write input=[0-9]+, fresh input=[0-9]+, output=[0-9]+, reasoning output=[0-9]+(; [a-z-]+: total input=[0-9]+, cached input=[0-9]+, cache-write input=[0-9]+, fresh input=[0-9]+, output=[0-9]+, reasoning output=[0-9]+)*)$'
-readonly token_coverage_pattern='^(none|partial|complete) \([0-9]+/[0-9]+ completed subagents\); primary checkpoint snapshot=(none|observed)$'
-readonly model_configuration_pattern='^primary=(unknown|[A-Za-z0-9][A-Za-z0-9._-]* \((none|minimal|low|medium|high|xhigh|max|ultra)\))(; [a-z-]+=[A-Za-z0-9][A-Za-z0-9._-]* \((none|minimal|low|medium|high|xhigh|max|ultra)\)(, [A-Za-z0-9][A-Za-z0-9._-]* \((none|minimal|low|medium|high|xhigh|max|ultra)\))*)*$'
-if [[ "${#telemetry_lines[@]}" -lt $((telemetry_row_count + 3)) ]]; then
-  fail "workflow telemetry does not contain every canonical row"
-fi
+# Only this format is accepted. A body written under the earlier telemetry
+# format stays in place as a historical record and is not migrated, so
+# revalidating one — as a `/work-on` update of that pull request does — refuses
+# here rather than rendering a second supported shape.
+[[ "${#telemetry_lines[@]}" -ge $((telemetry_row_count + 3)) ]] \
+  || fail "workflow telemetry must contain seventeen canonical rows"
 
 for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
   row="${telemetry_lines[$((index + 2))]}"
@@ -197,10 +186,6 @@ for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
   [[ -n "$value" ]] \
     || fail "workflow telemetry row $((index + 1)) has an empty observed value"
   case "$field" in
-    "Model configuration")
-      [[ "$value" =~ $model_configuration_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
     "Implementation rounds"|"Independent-review rounds"|"Remediation rounds"|"Validation executions"|"Blocking findings resolved"|"Findings rejected at adjudication")
       [[ "$value" == unknown || "$value" =~ ^[0-9]+$ ]] \
         || fail "workflow telemetry $field must be a nonnegative integer or unknown"
@@ -231,22 +216,6 @@ for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
       ;;
     "Measured phase elapsed")
       [[ "$value" =~ $phase_elapsed_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-    "Finding adjudications by reviewer")
-      [[ "$value" =~ $finding_by_reviewer_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-    "Primary token checkpoint snapshot"|"Completed subagent usage")
-      [[ "$value" =~ $token_usage_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-    "Completed subagent usage by role")
-      [[ "$value" =~ $token_usage_by_role_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-    "Token coverage")
-      [[ "$value" =~ $token_coverage_pattern ]] \
         || fail "workflow telemetry $field is malformed"
       ;;
   esac

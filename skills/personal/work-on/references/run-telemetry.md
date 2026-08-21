@@ -23,15 +23,14 @@ runs never share events. The owner-only repository binding is outside the event
 schema; `start` combines it with the run id as `<run-id>@<binding>`, so a handle
 minted by another repository cannot select a same-named local sink.
 
-Every line carries `schema`, `run`, `seq`, `at`, `epoch_ms`, and `type`. Runs
-use schema **3**; the rendered pull-request body names the schema and its
-bounded integrity state. `scripts/run-telemetry-schema.sh` owns that production
-contract for the writer, registry, renderer, and closeout validator.
+Every line carries `schema`, `run`, `seq`, `at`, `epoch_ms`, and `type`. New
+runs use schema **2**; the rendered pull-request body names the schema and its
+bounded integrity state. Schema-1 sinks remain read-only forensic inputs.
 
-Schema-3 `run_start` records the normalized lowercase GitHub slug from `origin`,
+Schema-2 `run_start` records the normalized lowercase GitHub slug from `origin`,
 the positive issue number, committed starting HEAD, and run identity. Optional
 `continues_run` is accepted only when its repository-bound handle names a
-schema-3 run for the same repository and issue. It records continuity only;
+schema-2 run for the same repository and issue. It records continuity only;
 readiness is neither skipped nor reused because a continuation exists.
 
 Several subagents and validation wrappers may record at the same time, so
@@ -51,12 +50,8 @@ buffered, so an abandoned run leaves exactly what it had recorded.
 | When | Command |
 |---|---|
 | Once, when the run begins | `RUN_HANDLE="$(run-telemetry.sh start --issue N [--continues-run HANDLE])"` |
-| Every implementation-agent launch | `AGENT_ID="$(run-telemetry.sh launch --run "$RUN_HANDLE" --role implementation --phase P --round N)"` |
-| Every reviewer delegation | `AGENT_ID="$(run-telemetry.sh review-delegation --run "$RUN_HANDLE" --role R --kind K --phase P --round N --base REF (--head REF \| --worktree))"` |
-| After a delegate returns | `run-telemetry.sh runtime-observation --run "$RUN_HANDLE" --scope completed-thread --agent-id "$AGENT_ID" [bounded observation fields]` |
-| At finding adjudication | `FINDING_ID="$(run-telemetry.sh finding-adjudicated --run "$RUN_HANDLE" --reviewer-agent-id "$AGENT_ID" --class C --disposition D)"` |
-| When an accepted finding is resolved | `run-telemetry.sh finding-resolved --run "$RUN_HANDLE" --finding-id "$FINDING_ID"` |
-| Immediately before outcome resolution | `run-telemetry.sh runtime-observation --run "$RUN_HANDLE" --scope checkpoint-snapshot [bounded observation fields]` |
+| Every implementation-agent launch | `run-telemetry.sh launch --run "$RUN_HANDLE" --role implementation --phase P --round N [--tokens-in N --tokens-out N]` |
+| Every reviewer delegation | `run-telemetry.sh review-delegation --run "$RUN_HANDLE" --role R --kind K --phase P --round N --base REF (--head REF \| --worktree)` |
 | Every top-level validation command | `run-telemetry.sh exec --run "$RUN_HANDLE" --command-id ID --phase P --round N -- <command>` |
 | Once, when the run's outcome resolves | `run-telemetry.sh resolve --run "$RUN_HANDLE" --outcome (Closes\|Progresses\|preflight-aborted\|abandoned\|failed)` |
 | Once, after final evidence is recorded | `run-telemetry.sh seal --run "$RUN_HANDLE"` |
@@ -64,16 +59,16 @@ buffered, so an abandoned run leaves exactly what it had recorded.
 Keep the printed handle for this operation. Every recording, summary, render,
 and closeout command requires it; none consults a mutable current-run selection.
 A malformed handle, a handle bound to another repository, or one whose sink is
-missing from this repository's common directory is refused. Every command
-requires a repository-bound handle naming a schema-3 sink.
+missing from this repository's common directory is refused. A plain schema-1 id
+remains accepted only for read-only summary and renderer access to forensic
+sinks in the common directory or the current linked worktree's legacy location.
+A bound handle that selects schema 1 is likewise forensic-only; schema-2
+writers refuse it before torn-line repair or append.
 
 - `launch --role` is `implementation` or `other`. Reviewer roles cannot be
   launched separately from their measured scope.
 - `review-delegation --role` is one of `readiness`, `review-standards`,
   `review-spec`, or `closure-sweep`. One invocation is exactly one reviewer.
-- `launch` and `review-delegation` print the unique sink-owned `agent_id`
-  allocated under the sink lock. Retain it with the deterministic Codex agent
-  path chosen before spawning; role, phase, and round are not pairing keys.
 - `--phase` is one of `orient`, `implementation`, `checkpoint`, `gate`,
   `remediation`, `closeout`.
 - `--kind` is one of `readiness`, `full`, `delta`. `delta` exists in the schema
@@ -100,34 +95,9 @@ requires a repository-bound handle naming a schema-3 sink.
   separate, singular end-of-recording transition. See
   [The run's outcome and seal](#the-runs-outcome-and-seal).
 
-`runtime-observation` accepts model with effort, and all five token fields as a
-group: `--total-input`, `--cached-input`, `--cache-write-input`, `--output`, and
-`--reasoning-output`. Cached plus cache-write input cannot exceed total input;
-fresh input is derived by subtraction. Reasoning output is a subset of output.
-A completed observation names one known `agent_id` and is singular; the primary
-uses one `checkpoint-snapshot` without an agent id. Missing observations render
-`none` or `partial` coverage. Never estimate a token count.
-
-`finding-adjudicated` accepts class `contract-defect` or `evidence-gap`, and
-disposition `accepted`, `rejected`, `follow-up`, or `unresolved`. Its origin is
-exactly one reviewer delegation. It prints a sink-owned `finding_id`; only an
-accepted finding can be resolved, exactly once.
-
-## Codex observation adapter
-
-`scripts/codex-observation.sh` reads one closed JSON request from stdin. For the
-current thread use `{"target":"current","sessions_root":"..."}`. For a
-completed depth-1 delegate use `{"target":"delegate","agent_path":"/root/...","sessions_root":"..."}`.
-The adapter takes current/root identity from Codex's environment, matches exact
-session metadata, and returns only bounded model, effort, and cumulative token
-fields. `missing`, `ambiguous`, `malformed`, and `incomplete` results carry
-bounded error codes. The sessions root is injectable for tests.
-
-The adapter never writes the sink. Convert a `complete` observation into the
-provider-neutral `runtime-observation` fields above after the delegate returns,
-or at the primary checkpoint. An absent or incomplete adapter result records no
-runtime event; coverage reports the omission without an estimate. Neither the
-provider thread/session identity nor `agent_path` enters the sink.
+Token counts are optional. A runtime that does not expose them records launches
+without `--tokens-in`/`--tokens-out`; the summary then reports token coverage as
+`none` or `partial` and nothing fails. Never estimate a token count.
 
 ## The worktree-review bundle
 
@@ -156,13 +126,13 @@ closeout validation and evidence may follow it. `seal` explicitly ends the
 record; every later event is an integrity violation. Duplicate resolutions and
 seals are refused.
 
-Rendering a schema-3 `Closes` or `Progresses` closeout requires one compatible
+Rendering a schema-2 `Closes` or `Progresses` closeout requires one compatible
 resolution, one seal, and `integrity=valid`. Its normalized repository, issue,
 and outcome must match the structured closeout facts.
 
 ## Deterministic integrity
 
-`summary` evaluates schema 3 as `valid`, `incomplete`, or `invalid` and returns
+`summary` evaluates schema 2 as `valid`, `incomplete`, or `invalid` and returns
 only bounded reason codes. It checks the unique start identity, schema and run
 consistency, event shapes and sequence, review combinations, validation pairs,
 lifecycle order, outcome resolution, sealing, and post-seal events. An
@@ -181,13 +151,14 @@ Reason codes are closed and machine-readable:
 - invalid review/validation — `REVIEW_DELEGATION_INVALID`,
   `VALIDATION_PAIR_INVALID`, `VALIDATION_IDENTITY_MISMATCH`,
   `VALIDATION_COMPLETION_INVALID`;
-- invalid agent/runtime/finding evidence — `AGENT_IDENTITY_INVALID`,
-  `RUNTIME_OBSERVATION_INVALID`, `FINDING_ADJUDICATION_INVALID`, and
-  `FINDING_RESOLUTION_INVALID`;
 - invalid lifecycle — `OUTCOME_RESOLUTION_COUNT_INVALID`,
   `OUTCOME_RESOLUTION_INVALID`, `SEAL_COUNT_INVALID`,
   `LIFECYCLE_TRANSITION_INVALID`, `EVENT_AFTER_SEAL`, and
   `PREFLIGHT_ABORT_AFTER_WORK`.
+
+Schema-1 summaries report `legacy-unverifiable`. They retain historical launch
+and review event counts as recorded observations, never exact reviewer counts,
+and reads never rewrite their source sinks.
 
 This is sink-only integrity. It can prove contradictions and omissions that
 leave a partial event pair, but it cannot prove that a caller made every
@@ -267,17 +238,17 @@ deterministic diff or worktree bundle measured once per delegation, not prompt
 bytes, model input, or tokens; `Recorded validation duration` covers
 instrumented top-level wrappers only.
 
-A seal stamped before its own start describes no interval. The aggregate
-renders `unknown` with a bounded warning, never a clamped or estimated value.
-Unavailability of one aggregate is not a telemetry-integrity failure and does
-not block hand-back.
+A seal stamped before its own start describes no interval, and a schema-1 sink
+has neither a seal nor an attributable review delegation. Either way the
+aggregate renders `unknown` with a bounded warning, never a clamped or
+estimated value. Unavailability of one aggregate is not a telemetry-integrity
+failure and does not block hand-back.
 
-Schema-3 facts supply only `final_workflow_outcome` as a consistency assertion.
-Model configuration, finding totals and attribution, the primary checkpoint,
-completed subagent usage total and by role, and token coverage are derived from
-the sink. The renderer refuses every other facts telemetry key and labels the
-primary usage as a checkpoint snapshot, not whole-run usage. The
-workflow-provenance runs are unchanged.
+None of these rows is supplied through the facts file; the renderer permits
+only the primary-reported fields in the facts `telemetry` object and refuses
+every other key, so a new aggregate here needs no matching change there. Model configuration, blocking findings resolved, and findings
+rejected at adjudication remain primary-reported, and a source note below the
+table says so. The workflow-provenance runs are unchanged.
 
 ## Where this fits
 
