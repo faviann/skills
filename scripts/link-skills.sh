@@ -14,13 +14,32 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 DESTS=("$HOME/.claude/skills" "$HOME/.agents/skills")
+EXCLUDES_FILE="$REPO/.agents/skill-link-excludes"
+
+declare -A excluded_name=()
+if [ -f "$EXCLUDES_FILE" ]; then
+  while IFS= read -r name || [ -n "$name" ]; do
+    case "$name" in
+      ""|\#*) continue ;;
+    esac
+    if [[ ! "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+      echo "error: invalid skill name in $EXCLUDES_FILE: $name" >&2
+      exit 1
+    fi
+    excluded_name["$name"]=true
+  done <"$EXCLUDES_FILE"
+fi
 
 # Collect the repo's skills once, link into every destination.
 names=()
 srcs=()
 while IFS= read -r -d '' skill_md; do
   src="$(dirname "$skill_md")"
-  names+=("$(basename "$src")")
+  name="$(basename "$src")"
+  if [ -n "${excluded_name[$name]+present}" ]; then
+    continue
+  fi
+  names+=("$name")
   srcs+=("$src")
 done < <(
   find "$REPO/skills" \

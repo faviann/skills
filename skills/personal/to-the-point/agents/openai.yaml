@@ -1,5 +1,0 @@
-interface:
-  display_name: "To The Point"
-  short_description: "Action-first, no-preamble output"
-policy:
-  allow_implicit_invocation: false

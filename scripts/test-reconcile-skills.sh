@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RECONCILER="$ROOT/scripts/reconcile-skills.sh"
+LINKER="$ROOT/scripts/link-skills.sh"
 
 tmp_dirs=()
 
@@ -27,7 +28,9 @@ make_test_context() {
   fixture="$TMP_DIR"
   mkdir -p "$fixture/scripts"
   cp "$RECONCILER" "$fixture/scripts/reconcile-skills.sh"
+  cp "$LINKER" "$fixture/scripts/link-skills.sh"
   chmod +x "$fixture/scripts/reconcile-skills.sh"
+  chmod +x "$fixture/scripts/link-skills.sh"
   TEST_REPO="$fixture"
 
   new_tmp_dir
@@ -505,6 +508,86 @@ test_in_progress_and_deprecated_skills_are_not_installed() {
   fi
 }
 
+test_excluded_skills_are_removed() {
+  local repo home unrelated
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+  add_skill "$repo" misc upstream-only
+  mkdir -p "$repo/.agents" "$home/.agents/skills" "$home/.claude/skills"
+  printf '%s\n' "upstream-only" >"$repo/.agents/skill-link-excludes"
+  ln -s "$repo/skills/misc/upstream-only" "$home/.agents/skills/upstream-only"
+  ln -s "$repo/skills/misc/upstream-only" "$home/.claude/skills/upstream-only"
+
+  new_tmp_dir
+  unrelated="$TMP_DIR"
+  ln -s "$unrelated" "$home/.agents/skills/local-link"
+
+  HOME="$home" "$repo/scripts/reconcile-skills.sh"
+
+  assert_link_target "$home/.agents/skills/alpha" "$repo/skills/engineering/alpha"
+  assert_link_target "$home/.claude/skills/alpha" "$repo/skills/engineering/alpha"
+  if [ -e "$home/.agents/skills/upstream-only" ] ||
+    [ -L "$home/.agents/skills/upstream-only" ] ||
+    [ -e "$home/.claude/skills/upstream-only" ] ||
+    [ -L "$home/.claude/skills/upstream-only" ]; then
+    echo "excluded skill remains installed" >&2
+    return 1
+  fi
+  if [ "$(readlink "$home/.agents/skills/local-link")" != "$unrelated" ]; then
+    echo "excluding a skill changed an unrelated link" >&2
+    return 1
+  fi
+}
+
+test_check_reports_excluded_skill_without_removing_it() {
+  local repo home installed
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" misc upstream-only
+  mkdir -p "$repo/.agents" "$home/.agents/skills"
+  printf '%s\n' "upstream-only" >"$repo/.agents/skill-link-excludes"
+  installed="$home/.agents/skills/upstream-only"
+  ln -s "$repo/skills/misc/upstream-only" "$installed"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh" --check
+
+  if [ "$STATUS" -eq 0 ]; then
+    echo "expected --check to fail for an excluded installed skill" >&2
+    return 1
+  fi
+  assert_link_target "$installed" "$repo/skills/misc/upstream-only"
+  if [[ "$OUTPUT" != *"excluded skill is still linked: $installed"* ]]; then
+    echo "--check did not explain the excluded link: $OUTPUT" >&2
+    return 1
+  fi
+}
+
+test_linker_does_not_install_excluded_skills() {
+  local repo home
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+  add_skill "$repo" misc upstream-only
+  mkdir -p "$repo/.agents"
+  printf '%s\n' "upstream-only" >"$repo/.agents/skill-link-excludes"
+
+  HOME="$home" "$repo/scripts/link-skills.sh"
+
+  assert_link_target "$home/.agents/skills/alpha" "$repo/skills/engineering/alpha"
+  assert_link_target "$home/.claude/skills/alpha" "$repo/skills/engineering/alpha"
+  if [ -e "$home/.agents/skills/upstream-only" ] ||
+    [ -L "$home/.agents/skills/upstream-only" ] ||
+    [ -e "$home/.claude/skills/upstream-only" ] ||
+    [ -L "$home/.claude/skills/upstream-only" ]; then
+    echo "linker installed an excluded skill" >&2
+    return 1
+  fi
+}
+
 test_empty_home_creates_links
 echo "ok - empty home creates links"
 test_second_run_is_idempotent
@@ -541,3 +624,9 @@ test_blocking_parent_aborts_without_partial_changes
 echo "ok - blocking parent aborts without partial changes"
 test_in_progress_and_deprecated_skills_are_not_installed
 echo "ok - in-progress and deprecated skills are not installed"
+test_excluded_skills_are_removed
+echo "ok - excluded skills are removed"
+test_check_reports_excluded_skill_without_removing_it
+echo "ok - check reports excluded skills without removing them"
+test_linker_does_not_install_excluded_skills
+echo "ok - linker does not install excluded skills"

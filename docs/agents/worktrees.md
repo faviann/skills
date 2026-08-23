@@ -8,6 +8,8 @@ The local harness loads installed skill links from the primary checkout. Editing
 
 Run both local installers, `scripts/link-skills.sh` and `scripts/reconcile-skills.sh`, only from the primary checkout. Installing links to a temporary worktree would leave them dangling when that worktree is removed. The reconciler guards against this mistake and refuses to run from a linked worktree; return to the primary checkout and re-run it there.
 
+Both installers skip skill names listed in `.agents/skill-link-excludes`. The reconciler also removes existing repository links for those names.
+
 ## Fresh worktrees have no dependencies
 
 A fresh worktree has no `node_modules`. `npm run check-plugin-version` works without installing dependencies because `scripts/sync-plugin-version.mjs` imports only Node.js built-ins. Run `npm ci` before `npm run changeset` or `npm run version`, which need the `changeset` binary.

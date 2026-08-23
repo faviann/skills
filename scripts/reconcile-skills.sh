@@ -47,9 +47,24 @@ fi
 
 DESTS=("$HOME/.agents/skills" "$HOME/.claude/skills")
 HARNESS_DIRS=("$HOME/.agents" "$HOME/.claude")
+EXCLUDES_FILE="$REPO/.agents/skill-link-excludes"
 names=()
 sources=()
 declare -A source_by_name=()
+declare -A excluded_name=()
+declare -A excluded_source_by_name=()
+if [ -f "$EXCLUDES_FILE" ]; then
+  while IFS= read -r name || [ -n "$name" ]; do
+    case "$name" in
+      ""|\#*) continue ;;
+    esac
+    if [[ ! "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+      echo "error: invalid skill name in $EXCLUDES_FILE: $name" >&2
+      exit 1
+    fi
+    excluded_name["$name"]=true
+  done <"$EXCLUDES_FILE"
+fi
 while IFS= read -r -d '' skill_md; do
   source_dir="$(dirname "$skill_md")"
   name="$(basename "$source_dir")"
@@ -61,6 +76,10 @@ while IFS= read -r -d '' skill_md; do
     exit 1
   fi
   source_by_name["$name"]="$source_dir"
+  if [ -n "${excluded_name[$name]+present}" ]; then
+    excluded_source_by_name["$name"]="$source_dir"
+    continue
+  fi
   names+=("$name")
   sources+=("$source_dir")
 done < <(
@@ -75,6 +94,7 @@ done < <(
 
 missing_sources=()
 missing_targets=()
+excluded_targets=()
 conflicts=()
 
 for harness_dir in "${HARNESS_DIRS[@]}"; do
@@ -125,7 +145,9 @@ for destination in "${DESTS[@]}"; do
     while IFS= read -r -d '' installed_link; do
       installed_name="$(basename "$installed_link")"
       if [ -n "${source_by_name[$installed_name]+present}" ]; then
-        continue
+        if [ -z "${excluded_source_by_name[$installed_name]+present}" ]; then
+          continue
+        fi
       fi
 
       raw_target="$(readlink "$installed_link")"
@@ -133,6 +155,11 @@ for destination in "${DESTS[@]}"; do
         resolved_target="$(realpath -m -- "$raw_target")"
       else
         resolved_target="$(realpath -m -- "$(dirname "$installed_link")/$raw_target")"
+      fi
+      if [ -n "${excluded_source_by_name[$installed_name]+present}" ] &&
+        [ "$resolved_target" = "$(realpath -m -- "${excluded_source_by_name[$installed_name]}")" ]; then
+        excluded_targets+=("$installed_link")
+        continue
       fi
       case "$resolved_target" in
         "$REPO"|"$REPO"/*)
@@ -154,22 +181,35 @@ if [ "${#conflicts[@]}" -ne 0 ]; then
 fi
 
 if "$check"; then
-  if [ "${#missing_targets[@]}" -eq 0 ]; then
+  if [ "${#missing_targets[@]}" -eq 0 ] &&
+    [ "${#excluded_targets[@]}" -eq 0 ]; then
     echo "skills are reconciled"
     exit 0
   fi
   for target in "${missing_targets[@]}"; do
     echo "missing: $target" >&2
   done
+  for target in "${excluded_targets[@]}"; do
+    echo "excluded skill is still linked: $target" >&2
+  done
   exit 1
 fi
+
+for target in "${excluded_targets[@]}"; do
+  rm -- "$target"
+done
 
 for i in "${!missing_targets[@]}"; do
   mkdir -p "$(dirname "${missing_targets[$i]}")"
   ln -s "${missing_sources[$i]}" "${missing_targets[$i]}"
 done
 
-if [ "${#missing_targets[@]}" -eq 0 ]; then
+if [ "${#excluded_targets[@]}" -ne 0 ] &&
+  [ "${#missing_targets[@]}" -ne 0 ]; then
+  echo "removed ${#excluded_targets[@]} excluded skill links and created ${#missing_targets[@]} skill links"
+elif [ "${#excluded_targets[@]}" -ne 0 ]; then
+  echo "removed ${#excluded_targets[@]} excluded skill links"
+elif [ "${#missing_targets[@]}" -eq 0 ]; then
   echo "skills are reconciled"
 else
   echo "created ${#missing_targets[@]} skill links"
