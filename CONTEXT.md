@@ -50,6 +50,54 @@ _Avoid_: taxonomy gate, counted shape
 The `work-on` telemetry fingerprint hashes the declared `work-on`, `tdd`, and `code-review` instruction files plus the selected workflow file that governed a run. This is runtime attribution, not the risk-shapes provenance record that maps production examples to their sources.
 _Avoid_: instruction version, risk-shapes provenance
 
+**Candidate identity**:
+The exact repository and candidate-controlled content being assessed. It identifies the content whose behavior or evidence is under review; a base revision participates only when the operation depends on the base or diff, while environment, toolchain, and external validation inputs are separate evidence-qualification inputs.
+_Avoid_: branch name, "the latest code"
+
+**Validation identity**:
+The stable identity of one validation or check definition: the exact command, arguments, working directory, and other check-defining inputs needed to distinguish it from a different validation. It does not include the execution's result, producer, or candidate content.
+_Avoid_: test name, execution id, "tests passed"
+
+**Reusable-evidence identity**:
+The complete identity against which prior raw validation evidence remains applicable: one **Candidate identity**, one **Validation identity**, plus the relevant environment, toolchain, external-input, and artifact identities whose change could affect the validation. Evidence may be reused only while this identity still qualifies.
+_Avoid_: validation run id, pass result
+
+**Reusable validation evidence**:
+The raw inspectable result of a validation execution, tied to a qualifying **Reusable-evidence identity** and source provenance, that another reviewer may adjudicate without inheriting the producer's conclusion.
+_Avoid_: pass assertion, validation summary
+
+**Validation surface**:
+The complete finite set of concrete artifact, mode, host, or public-boundary instances whose behavior an acceptance criterion requires direct evidence about for its **Issue** to close. It names evidence targets, not the criterion's potentially unbounded input or state space, the validation seams or actions used to observe them, or every file an implementation may touch.
+_Avoid_: acceptance surface
+
+**Validation-surface manifest**:
+The run-local materialization of every acceptance criterion's **Validation surface**, frozen when the **Closability gate** passes against the trusted preflight state, including the trusted snapshot, selected workflow, and pre-implementation base. It is binding, recoverable contract state for direct-evidence obligations—not a limit on implementation or review scope—and is distinct from telemetry, **Workflow provenance**, and tracked repository artifacts.
+_Avoid_: acceptance-surface manifest
+
+**Reviewed anchor**:
+The exact **Candidate identity** from which the next remediation delta is computed after all review axes required for that candidate have completed under unchanged governing inputs. The initial cumulative gate establishes the first Reviewed anchor; subsequent completed delta gates may advance it. It does not imply that the candidate is clean, accepted, or eligible for closeout.
+_Avoid_: approved candidate, clean baseline
+
+**Corrective batch**:
+One automatic, accepted-blocker-driven correction after the initial cumulative gate that changes the exact candidate content identity. Blockers adjudicated and repaired together form one batch; surrounding review, validation, evidence gathering, synchronization, and state-machine restarts do not.
+_Avoid_: finding, review round, validation run, remediation attempt
+
+**Convergence lifecycle**:
+One logical `work-on` attempt governed by one corrective-batch budget, spanning session or telemetry segments, continuation, review-chain restarts, synchronization, and ordinary resume until a durable outcome. A materially re-entered successor is a new lifecycle rather than a continuation of the old one.
+_Avoid_: run, telemetry segment, review chain
+
+**Convergence episode**:
+The analysis grouping of one **Convergence lifecycle** and its causally connected successor lifecycles, so corrective repetition remains visible across legitimate re-entry. It is an observation boundary, not workflow state or an outcome.
+_Avoid_: retry chain, extended lifecycle
+
+**Independent judgment**:
+A fresh reviewer's own assessment of the candidate, contract, and evidence, made without inheriting another participant's conclusions or dispositions.
+_Avoid_: independent review execution
+
+**Independent execution**:
+A validation execution performed from a fresh independent review context when qualifying existing evidence cannot settle a concrete assurance question. One qualifying Independent execution may answer more than one assurance question; it is not required once per reviewer or workflow stage.
+_Avoid_: one rerun per reviewer, duplicated validation
+
 **Run telemetry sink**:
 The run-scoped, untracked JSON-lines file in the target repository's Git common directory where one `work-on` run appends implementation launches, atomic reviewer delegations, validation executions, outcome resolution, and its seal. It holds the events and deterministic integrity result; the pull-request body holds only bounded summaries aggregated from it. Distinct from **Workflow provenance**, which fingerprints the instructions that governed the run rather than what the run did.
 _Avoid_: event log, analytics store, telemetry ledger
@@ -67,7 +115,7 @@ The bounded `## Workflow telemetry` table one `work-on` closeout writes into a p
 _Avoid_: control window, experiment sample, results branch, wall-clock elapsed (the row is **Start-to-seal elapsed**)
 
 **Closability gate**:
-The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available in this run. It runs on the contract alone and produces no artifact; failing it aborts the run before any code exists. Distinct from the **closure gate**, which inspects a finished candidate's evidence at closeout — the closability gate asks whether `tested` evidence is *reachable*, the closure gate asks whether it was *produced*.
+The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available and its direct-evidence obligation can be materialized as a finite **Validation surface** in the run's **Validation-surface manifest** against the trusted preflight state. It produces run-local semantic contract state rather than a tracked repository artifact, and failure aborts before implementation begins. Distinct from the **closure gate**, which decides whether the required direct evidence was actually produced.
 _Avoid_: closure gate (for this), readiness gate, closability report
 
 **Correctness contract**:
@@ -85,9 +133,15 @@ _Avoid_: model kind, model family
 - A **Correctness contract** has one or more **Responsibilities**, and several **Correctness contracts** may share one **Responsibility**
 - A **Risk shape** helps locate **Correctness contracts** but does not determine how many a slice contains
 - A `work-on` run has one **Run telemetry sink** and one **Workflow provenance** value
+- A **Reusable-evidence identity** combines one **Candidate identity**, one **Validation identity**, and the relevant qualifying execution inputs
+- **Reusable validation evidence** has one **Reusable-evidence identity** and may support many reviewers' **Independent judgments**
+- **Independent execution** supplies new raw evidence for an **Independent judgment** when qualifying **Reusable validation evidence** cannot settle the assurance question
 - A `work-on` run has at most one **Run registry** record, which names at most one **Control observer**; the record is registered before implementation and finalized on hand-back
 - A successful `work-on` PR closeout writes one **PR-local observation**, whose latest-run values are not a lower bound on any later run's
 - A `work-on` run passes one **Closability gate** before it delegates implementation; a run that fails it resolves as `preflight-aborted`, seals, and never reaches the closure gate
+- A **Validation-surface manifest** materializes the required **Validation surfaces** when the **Closability gate** passes
+- A **Convergence lifecycle** has one corrective-batch budget and may span several `work-on` telemetry segments or review chains
+- A **Convergence episode** contains one or more causally connected **Convergence lifecycles**
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
 - A **Map** holds many **Decision tickets** and one **Not yet specified** section
