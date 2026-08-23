@@ -9,6 +9,7 @@
   },
   "license": "MIT",
   "scripts": {
+    "test": "bash scripts/run-shell-tests.sh",
     "changeset": "changeset",
     "version": "changeset version && node scripts/sync-plugin-version.mjs",
     "check-plugin-version": "node scripts/sync-plugin-version.mjs --check"
