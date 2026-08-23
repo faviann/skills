@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Install this fork's skills, except in-progress and deprecated ones, as
-# per-skill links. Existing entries are never rewritten or removed: any
+# per-skill links, and remove the links this repository no longer owns a skill
+# for. Entries that belong to anything else are never rewritten or removed: any
 # conflict aborts the entire preflight.
 
 REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -95,6 +96,7 @@ done < <(
 missing_sources=()
 missing_targets=()
 excluded_targets=()
+stale_targets=()
 conflicts=()
 
 for harness_dir in "${HARNESS_DIRS[@]}"; do
@@ -163,9 +165,7 @@ for destination in "${DESTS[@]}"; do
       fi
       case "$resolved_target" in
         "$REPO"|"$REPO"/*)
-          conflicts+=(
-            "stale repository link: $installed_link -> $raw_target"
-          )
+          stale_targets+=("$installed_link")
           ;;
       esac
     done < <(find "$destination" -mindepth 1 -maxdepth 1 -type l -print0)
@@ -182,7 +182,8 @@ fi
 
 if "$check"; then
   if [ "${#missing_targets[@]}" -eq 0 ] &&
-    [ "${#excluded_targets[@]}" -eq 0 ]; then
+    [ "${#excluded_targets[@]}" -eq 0 ] &&
+    [ "${#stale_targets[@]}" -eq 0 ]; then
     echo "skills are reconciled"
     exit 0
   fi
@@ -192,10 +193,13 @@ if "$check"; then
   for target in "${excluded_targets[@]}"; do
     echo "excluded skill is still linked: $target" >&2
   done
+  for target in "${stale_targets[@]}"; do
+    echo "stale repository link is still linked: $target" >&2
+  done
   exit 1
 fi
 
-for target in "${excluded_targets[@]}"; do
+for target in "${excluded_targets[@]}" "${stale_targets[@]}"; do
   rm -- "$target"
 done
 
@@ -204,13 +208,22 @@ for i in "${!missing_targets[@]}"; do
   ln -s "${missing_sources[$i]}" "${missing_targets[$i]}"
 done
 
-if [ "${#excluded_targets[@]}" -ne 0 ] &&
-  [ "${#missing_targets[@]}" -ne 0 ]; then
-  echo "removed ${#excluded_targets[@]} excluded skill links and created ${#missing_targets[@]} skill links"
-elif [ "${#excluded_targets[@]}" -ne 0 ]; then
-  echo "removed ${#excluded_targets[@]} excluded skill links"
-elif [ "${#missing_targets[@]}" -eq 0 ]; then
+summary=()
+if [ "${#excluded_targets[@]}" -ne 0 ]; then
+  summary+=("removed ${#excluded_targets[@]} excluded skill links")
+fi
+if [ "${#stale_targets[@]}" -ne 0 ]; then
+  summary+=("removed ${#stale_targets[@]} stale skill links")
+fi
+if [ "${#missing_targets[@]}" -ne 0 ]; then
+  summary+=("created ${#missing_targets[@]} skill links")
+fi
+if [ "${#summary[@]}" -eq 0 ]; then
   echo "skills are reconciled"
 else
-  echo "created ${#missing_targets[@]} skill links"
+  line="${summary[0]}"
+  for part in "${summary[@]:1}"; do
+    line="$line and $part"
+  done
+  echo "$line"
 fi
