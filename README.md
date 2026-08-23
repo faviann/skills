@@ -181,6 +181,16 @@ And crucially, [`/improve-codebase-architecture`](./skills/engineering/improve-c
 
 Software engineering fundamentals matter more than ever. These skills are my best effort at condensing these fundamentals into repeatable practices, to help you ship the best apps of your career. Enjoy.
 
+## Testing
+
+Run every shell test suite from the repository root:
+
+```bash
+npm test
+```
+
+This is the same command pull-request CI runs. See [the shell-test policy](./docs/agents/testing.md) for suite membership and CI decisions.
+
 ## Reference
 
 These split on one axis — who can invoke them. **User-invoked** skills are reachable only when you type them (e.g. `/grill-me`); their job is to orchestrate. **Model-invoked** skills can be invoked by you _or_ reached for automatically by the agent when the task fits; they hold the reusable discipline. A user-invoked skill may invoke model-invoked skills, but never another user-invoked one.

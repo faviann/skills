@@ -44,6 +44,10 @@ To (re)link every skill into the local harness skill directories (`~/.claude/ski
 
 Linked worktrees, local skill loading, and dependency setup. See [docs/agents/worktrees.md](./docs/agents/worktrees.md).
 
+### Shell tests
+
+The all-suite command, suite membership, and pull-request policy live in [docs/agents/testing.md](./docs/agents/testing.md).
+
 ### Issue tracker
 
 GitHub Issues on `faviann/skills`, reached via `gh` with an explicit `-R`. See [docs/agents/issue-tracker.md](./docs/agents/issue-tracker.md).

@@ -113,7 +113,7 @@ as a separate review; if it ever becomes one, drop it and always take ours.
 
 ## What this cannot do
 
-There are no tests and no CI here beyond `release.yml`, and the one eval — hand-run,
-covering a single skill's discrimination — enforces nothing. These are prose rules read
-by agents, not enforcement. They make a violation provable once someone looks; they do
-not make anyone look.
+Pull-request CI now runs the repository's shell suites, but the one eval — hand-run,
+covering a single skill's discrimination — enforces none of these prose rules. They are
+read by agents, not executable checks. They make a violation provable once someone
+looks; they do not make anyone look.
