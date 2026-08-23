@@ -425,6 +425,92 @@ test_relative_stale_repository_link_is_removed() {
   fi
 }
 
+test_sibling_prefix_link_is_preserved() {
+  local base repo home sibling preserved
+  new_tmp_dir
+  base="$TMP_DIR"
+  repo="$base/skills"
+  mkdir -p "$repo/scripts"
+  cp "$RECONCILER" "$repo/scripts/reconcile-skills.sh"
+  chmod +x "$repo/scripts/reconcile-skills.sh"
+  new_tmp_dir
+  home="$TMP_DIR"
+  add_skill "$repo" engineering alpha
+
+  # A sibling path that shares $REPO's prefix without being under it: a link
+  # into it is not repository-owned and must survive.
+  sibling="$base/skills-worktrees/b/skills/engineering/removed"
+  mkdir -p "$sibling"
+  preserved="$home/.agents/skills/removed"
+  mkdir -p "$(dirname "$preserved")"
+  ln -s "$sibling" "$preserved"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh"
+
+  if [ "$STATUS" -ne 0 ]; then
+    echo "a sibling-prefix link failed reconciliation: $OUTPUT" >&2
+    return 1
+  fi
+  if [ "$(readlink "$preserved")" != "$sibling" ]; then
+    echo "sibling-prefix link was removed or rewritten" >&2
+    return 1
+  fi
+  assert_link_target "$home/.agents/skills/alpha" "$repo/skills/engineering/alpha"
+}
+
+test_repository_link_to_a_non_installed_bucket_is_removed() {
+  local repo home installed
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+  add_skill "$repo" in-progress beta
+  installed="$home/.claude/skills/beta"
+  mkdir -p "$(dirname "$installed")"
+  ln -s "$repo/skills/in-progress/beta" "$installed"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh"
+
+  if [ "$STATUS" -ne 0 ]; then
+    echo "expected a link to a non-installed bucket to be reconciled: $OUTPUT" >&2
+    return 1
+  fi
+  if [ -L "$installed" ] || [ -e "$installed" ]; then
+    echo "link to a non-installed bucket was not removed" >&2
+    return 1
+  fi
+  assert_link_target "$home/.claude/skills/alpha" "$repo/skills/engineering/alpha"
+}
+
+test_check_reports_a_stale_link_as_the_only_discrepancy() {
+  local repo home stale stale_target
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+
+  HOME="$home" "$repo/scripts/reconcile-skills.sh" >/dev/null
+
+  stale="$home/.agents/skills/removed"
+  stale_target="$repo/skills/engineering/removed"
+  ln -s "$stale_target" "$stale"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh" --check
+
+  if [ "$STATUS" -ne 1 ]; then
+    echo "expected --check to exit 1 for a stale-only discrepancy: $STATUS" >&2
+    return 1
+  fi
+  if [ "$(readlink "$stale")" != "$stale_target" ]; then
+    echo "--check modified the stale link" >&2
+    return 1
+  fi
+  if [[ "$OUTPUT" != "stale repository link is still linked: $stale" ]]; then
+    echo "--check did not report the stale link alone: $OUTPUT" >&2
+    return 1
+  fi
+}
+
 test_check_reports_stale_repository_link_without_removing_it() {
   local repo home stale stale_target
   make_test_context
@@ -699,8 +785,14 @@ test_stale_repository_link_is_removed
 echo "ok - stale repository link is removed"
 test_relative_stale_repository_link_is_removed
 echo "ok - relative stale repository link is removed"
+test_sibling_prefix_link_is_preserved
+echo "ok - sibling-prefix link is preserved"
+test_repository_link_to_a_non_installed_bucket_is_removed
+echo "ok - repository link to a non-installed bucket is removed"
 test_check_reports_stale_repository_link_without_removing_it
 echo "ok - check reports stale repository link without removing it"
+test_check_reports_a_stale_link_as_the_only_discrepancy
+echo "ok - check reports a stale link as the only discrepancy"
 test_stale_removal_does_not_run_when_a_conflict_aborts
 echo "ok - stale removal does not run when a conflict aborts"
 test_unrelated_destination_entries_are_preserved
