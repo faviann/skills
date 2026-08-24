@@ -153,8 +153,10 @@ adjudications, or dispositions.
 
 ## 3. Primary checkpoint
 
-Inspect the worktree and run affected focused checks. Before the first commit,
-delegate one fresh raw-artifact readiness sweep; adjudicate it once and batch
+Inspect the worktree and, unless qualifying evidence for the exact current
+candidate and check identity already settles their assurance question, run
+affected focused checks. Before the first commit, delegate one fresh
+raw-artifact readiness sweep; adjudicate it once and batch
 all blockers back to the initial implementation delegate through the harness's
 supported continuation mechanism, applying the implementation-owner fallback
 in `SKILL.md`'s authority invariants when continuation is unavailable. Re-check
@@ -204,16 +206,19 @@ evidence. Reviewers never see the ledger.
 Batch all blockers from one combined gate back to the initial implementation
 delegate through the harness's supported continuation mechanism, applying the
 implementation-owner fallback in `SKILL.md`'s authority invariants when
-continuation is unavailable. Run affected focused checks, commit, and rerun the
+continuation is unavailable. Run affected focused checks under the same
+candidate and check identity rule, applying `references/validation-evidence.md`,
+then commit and rerun the
 gate with fresh reviewers until clean; do not show later reviewers prior
 reports, adjudications, or the ledger, and do not run the full regression suite
 in this loop.
 
 ## 6. Closeout
 
-At Closeout, evaluate full regression evidence for qualifying reuse under
-`references/validation-evidence.md`; execute the full regression only when
-existing evidence cannot settle its concrete assurance question. Run
+At Closeout, reuse qualifying full-regression evidence for the exact final
+Candidate and Validation identity when it already exists and settles its
+assurance question, under `references/validation-evidence.md`; otherwise execute
+the full regression there. Never pre-produce it earlier to be reused. Run
 `git diff --check`. Any code change invalidates the gate and validation;
 otherwise finalize the existing closure table and complete
 `references/github-closeout.md`.

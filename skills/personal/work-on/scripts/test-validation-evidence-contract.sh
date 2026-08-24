@@ -83,7 +83,7 @@ requires_contract "$POLICY" \
   'timing.*concurrency.*nondeterminism.*environment.*host.*uncertain identity.*provenance.*suspect evidence.*discriminating reproduction' \
   'inspect.*raw evidence.*static.*inspection.*cheapest.*targeted.*broader' \
   'smallest reproduction.*not.*full-suite rerun' \
-  'For confidence.*to be safe.*do not justify.*expensive'
+  'For confidence.*to be safe.*do not justify another execution'
 echo 'ok - concrete uncertainty escalates through the narrowest Independent execution'
 
 requires_contract "$POLICY" \
@@ -93,7 +93,7 @@ requires_contract "$POLICY" \
   'final blind confirmation.*exact clean.*candidate.*complete direct evidence' \
   'failing.*stale.*contradictory.*incomplete.*inadequate.*blocking' \
   'rerun-until-green.*adjudicat' \
-  'hard-rule violation.*blocking.*does not.*require.*expensive execution'
+  'hard-rule violation.*blocking.*does not.*require.*another execution'
 echo 'ok - cross-stage reuse preserves final confirmation and hard blocking failures'
 
 requires_contract "$POLICY" \
@@ -104,7 +104,7 @@ requires_contract "$POLICY" \
   'safe provenance locator.*access-controlled source evidence' \
   'unsafe or unrecoverable.*non-reusable.*safe qualifying evidence' \
   'ordinary reviewer report.*Reusable-evidence identity.*provenance locator.*Independent.*judgment' \
-  'another execution.*assurance question.*insufficient.*narrowest adequate' \
+  'execution claimed as necessary for Independent assurance.*assurance question.*insufficient.*narrowest adequate' \
   'Do not copy raw (output|evidence).*Run telemetry sink.*another.*subsystem'
 echo 'ok - privacy constraints govern reuse and reports carry only safe reasoning'
 
@@ -125,8 +125,11 @@ requires_contract "$POLICY" \
   'frozen Validation-surface manifest remains the complete population of direct evidence' \
   'this policy decides whether qualifying evidence.*must be executed again'
 requires_contract "$WORKFLOW" \
-  'final regression reuses qualifying evidence unless execution is required' \
-  'Closeout.*full regression.*qualifying.*validation-evidence.md.*execute.*cannot settle'
+  'both primary focused-check sites and closeout follow candidate/check identity' \
+  'Inspect the worktree and, unless qualifying evidence for the exact current candidate and check identity already settles their assurance question, run affected focused checks' \
+  'Run affected focused checks under the same candidate and check identity rule, applying .references/validation-evidence.md' \
+  'At Closeout, reuse qualifying full-regression evidence for the exact final Candidate and Validation identity.*otherwise execute the full regression there' \
+  'Never pre-produce it earlier to be reused'
 forbids_contract "$CLOSEOUT" \
   'closure does not automatically rerun checks for generic risk confidence' \
   'Rerun the highest-risk checks yourself'
@@ -139,14 +142,47 @@ requires_contract "$POLICY" \
   'producer role cannot substitute for identity or required Independent execution' \
   'validity depends on identity and provenance, not producer role' \
   'documented contract or hard rule.*requires re-execution.*cannot otherwise be resolved' \
-  'Implementation-context execution cannot satisfy.*fresh Independent review context'
+  'assurance question itself requires an Independent context.*implementation-context execution does not satisfy it.*fresh Independent review context'
 echo 'ok - identity governs reuse and explicit reproduction contracts still execute'
 
+# Need determines required execution; cost only suppresses unnecessary
+# materially costly repetition. The guardrail is unreachable until sufficiency
+# is settled, so misclassifying cost wastes effort but never skips assurance.
 requires_contract "$POLICY" \
-  'expensive deterministic execution defaults to one qualifying result per identity' \
-  'unchanged candidate.*expensive deterministic Validation identity.*one qualifying execution.*default' \
-  'additional expensive execution.*recorded distinct assurance (question|reason)'
-echo 'ok - expensive deterministic duplication requires a distinct assurance reason'
+  'assurance sufficiency alone decides whether another execution is required' \
+  'Assurance sufficiency alone determines whether another execution is required' \
+  'settles the concrete assurance question, another execution is not required' \
+  'When it does not, execute the narrowest check that settles it' \
+  'workflow-stage transition is never itself a reason to execute again'
+echo 'ok - sufficiency alone requires execution and stage transitions never do'
+
+requires_contract "$POLICY" \
+  'the cost guardrail is an efficiency directive reachable only after sufficiency' \
+  'Only after sufficiency is established.*do not repeat materially costly deterministic validation already covered by qualifying evidence that settles the current assurance question' \
+  'Materially costly means repeating the validation would meaningfully add workflow latency or consume a scarce resource' \
+  'never consult or build a duration threshold, timing history, telemetry-based classification, cost database, or persistent resource metadata' \
+  'efficiency directive, not an assurance invariant' \
+  'never a reason to skip an execution sufficiency requires' \
+  'Trivially cheap checks stay at reviewer discretion' \
+  'Do not move or pre-produce validation merely to create reusable evidence' \
+  'discretionary cheap check owes no justification record'
+forbids_contract "$POLICY" \
+  'no runtime predicate classifies validation by cost' \
+  'expensive deterministic|additional expensive execution|expensive duplicate' \
+  '(materially costly|expensive|costly)[^.]{0,160}(is the default|at most one|once per|requires a (recorded )?distinct assurance)' \
+  '(one|a single) qualifying execution[^.]{0,160}(default|per (identity|candidate))'
+
+# The guardrail is reachable only after sufficiency, and clause order is the
+# whole mitigation for reading it as licence to skip a required execution. A
+# cost rule that migrates above the sufficiency rule must fail here.
+required_at="$(grep -n '^## Required execution$' "$POLICY" | cut -d: -f1)"
+guardrail_at="$(grep -n '^## Repetition guardrail$' "$POLICY" | cut -d: -f1)"
+if [[ -z "$required_at" || -z "$guardrail_at" ]]; then
+  fail 'the policy states required execution and the repetition guardrail as sections'
+elif (( required_at >= guardrail_at )); then
+  fail 'sufficiency is settled before the repetition guardrail becomes reachable'
+fi
+echo 'ok - cost suppresses repetition without becoming a correctness predicate'
 
 if (( failures > 0 )); then
   printf '\n%s validation-evidence contract assertion(s) failed.\n' "$failures" >&2

@@ -34,11 +34,12 @@ definitions, relevant generated artifacts, external inputs, environment, or
 toolchain state invalidate the evidence they can affect. When irrelevance is not
 mechanically clear, obtain fresh evidence from the affected validation.
 
-## Independent execution
+## Required execution
 
-For each unchanged candidate and expensive deterministic Validation identity,
-one qualifying execution is the default. Every additional expensive execution
-requires a recorded distinct assurance reason.
+Assurance sufficiency alone determines whether another execution is required.
+When qualifying evidence for the exact current Candidate identity and Validation
+identity settles the concrete assurance question, another execution is not
+required. When it does not, execute the narrowest check that settles it.
 
 Independent execution is required when existing evidence cannot settle a
 concrete assurance question involving timing, concurrency, nondeterminism,
@@ -46,9 +47,10 @@ environment- or host-sensitive behavior, uncertain identity or provenance,
 incomplete, stale, contradictory, or otherwise suspect evidence,
 or a finding that needs discriminating reproduction. A documented contract or
 hard rule triggers re-execution only when it requires re-execution or its
-assurance question cannot otherwise be resolved. Implementation-context
-execution cannot satisfy that requirement: at least one fresh Independent
-review context performs the qualifying execution.
+assurance question cannot otherwise be resolved. Where the assurance question
+itself requires an Independent context, implementation-context execution does
+not satisfy it: at least one fresh Independent review context performs the
+qualifying execution. Otherwise producer role does not determine validity.
 
 Escalate in this order:
 
@@ -60,9 +62,25 @@ Escalate in this order:
 
 Timing and concurrency require the smallest reproduction that establishes the
 property, not an automatic full-suite rerun. "For confidence", "to be safe",
-or independently repeating an already adequate green result do not justify an
-expensive duplicate. One qualifying Independent execution may answer several
-named assurance questions and is never required once per reviewer or stage.
+or independently repeating an already adequate green result do not justify
+another execution. One qualifying Independent execution may answer several
+named assurance questions and is never required once per reviewer or stage. A
+workflow-stage transition is never itself a reason to execute again.
+
+## Repetition guardrail
+
+Only after sufficiency is established: do not repeat materially costly
+deterministic validation already covered by qualifying evidence that settles the
+current assurance question. Materially costly means repeating the validation
+would meaningfully add workflow latency or consume a scarce resource. Judge that
+qualitatively; never consult or build a duration threshold, timing history,
+telemetry-based classification, cost database, or persistent resource metadata.
+
+This is an efficiency directive, not an assurance invariant. Violating it wastes
+resources; it does not by itself make the candidate or review unsound, and it is
+never a reason to skip an execution sufficiency requires. Trivially cheap checks
+stay at reviewer discretion. Do not move or pre-produce validation merely to
+create reusable evidence.
 
 ## Validity across stages
 
@@ -73,11 +91,12 @@ confirmation still independently assesses the exact clean accepted candidate
 and the sufficiency of its complete direct evidence; behavior- or
 evidence-changing remediation invalidates that confirmation.
 
-Failing, stale, contradictory, incomplete, or inadequate evidence remains
-blocking. Adjudicate what failed and the evidence's bearing on the contract
+Failing, stale, contradictory, incomplete, identity-invalid, or otherwise
+inadequate evidence remains blocking and never reaches the repetition
+guardrail. Adjudicate what failed and the evidence's bearing on the contract
 before another execution; a rerun-until-green chain without adjudication cannot
 erase a failure. A documented hard-rule violation remains blocking, but does
-not by itself require another expensive execution.
+not by itself require another execution.
 
 ## Safe evidence
 
@@ -96,9 +115,10 @@ than weakening those constraints.
 Keep reuse and rerun reasoning in the ordinary reviewer report. For reused
 evidence, record the Reusable-evidence identity, safe provenance locator, and
 fresh Independent sufficiency judgment for the named criterion or assurance
-question. For another execution, also name the assurance question, why existing
-evidence and static inspection were insufficient, and why the execution was the
-narrowest adequate check.
+question. For an execution claimed as necessary for Independent assurance, also
+name the assurance question, why existing evidence and static inspection were
+insufficient, and why the execution was the narrowest adequate check. A
+discretionary cheap check owes no justification record.
 
 Do not copy raw evidence into the Run telemetry sink or create another evidence
 subsystem. Raw harness transcripts and access-controlled result artifacts
