@@ -10,9 +10,9 @@ production or test edits, implementation commits, and any pull request.
 
 The gate decides only whether the issue is closable in this run. It changes no
 readiness, Standards, Spec, closure, remediation, validation, or closeout
-semantics, and adds no tracked artifact, telemetry field, or published output of
-its own. A pass records nothing beyond the run-local Validation-surface manifest
-it freezes. An abort resolves the run's existing outcome as
+semantics, and adds no tracked artifact, ledger, or telemetry field of its own.
+A pass records nothing beyond the run-local Validation-surface manifest it
+freezes. An abort resolves the run's existing outcome as
 `preflight-aborted`, as the abort steps below require.
 
 ## The reasoning the primary produces

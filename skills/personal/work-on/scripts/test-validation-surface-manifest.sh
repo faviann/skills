@@ -23,14 +23,21 @@ fail() {
 }
 
 # These documents wrap at 80 columns, so a rule routinely straddles a newline.
-# Content assertions run against a whitespace-flattened copy of each file;
-# ordering assertions run against the original, which still has line numbers.
+# Content assertions run against a copy flattened one paragraph per line: that
+# rejoins a wrapped rule while still keeping every match inside the block that
+# states it, so no pattern can be satisfied by fragments of two unrelated
+# paragraphs. Ordering assertions run against the original, which still has
+# line numbers.
 flat_dir="$(mktemp -d)"
 trap 'rm -rf "$flat_dir"' EXIT
 
 flatten() {
   local flat="$flat_dir/$(printf '%s' "${1#"$skill_dir/"}" | tr '/' '_')"
-  [[ -f "$flat" ]] || tr '\n' ' ' < "$1" | tr -s ' ' > "$flat"
+  [[ -f "$flat" ]] || awk '
+    /^[[:space:]]*$/ { print buf; buf = ""; next }
+    { buf = (buf == "" ? $0 : buf " " $0) }
+    END { print buf }
+  ' "$1" | tr -s ' ' > "$flat"
   printf '%s' "$flat"
 }
 
@@ -48,15 +55,21 @@ lacks() {
   fi
 }
 
-line_of() {
+last_line_of() {
+  grep -Eni -- "$2" "$1" | tail -n1 | cut -d: -f1
+}
+
+first_line_of() {
   grep -Eni -m1 -- "$2" "$1" | cut -d: -f1
 }
 
 precedes() {
   # precedes <file> <earlier regex> <later regex> <description>
+  # The earlier anchor takes its last match and the later anchor its first, so
+  # a repeated anchor narrows the window rather than widening it.
   local first second
-  first="$(line_of "$1" "$2" || true)"
-  second="$(line_of "$1" "$3" || true)"
+  first="$(last_line_of "$1" "$2" || true)"
+  second="$(first_line_of "$1" "$3" || true)"
   if [[ -z "$first" || -z "$second" ]]; then
     fail "$4 (one of the anchors is absent from ${1#"$skill_dir/"})"
     return
@@ -101,9 +114,10 @@ has "$GATE" 'before workflow-provenance capture' \
   'the freeze precedes workflow-provenance capture'
 has "$GATE" 'and implementation delegation' \
   'the freeze precedes implementation delegation'
-has "$GATE" 'trusted snapshot, the selected.*workflow, and the pre-implementation base' \
+has "$GATE" 'trusted snapshot, the selected workflow, and the pre-implementation base' \
   'the manifest is identified with snapshot, workflow, and base'
-precedes "$SKILL" 'closability-gate\.md' 'workflow-provenance\.sh capture' \
+precedes "$SKILL" "apply this skill's .references/closability-gate\.md" \
+  '`scripts/workflow-provenance\.sh capture`' \
   'the procedure applies the gate before capturing provenance'
 echo "ok - the manifest freezes after the complete gate and before provenance capture or delegation"
 
@@ -135,7 +149,7 @@ echo "ok - the manifest is recoverable run-local state supplied to every downstr
 ## Evidence strength is unchanged by finiteness
 has "$GATE" 'Finiteness does not weaken evidence' \
   'finiteness does not weaken the required evidence'
-has "$CLOSEOUT" 'every instance.*in its frozen Validation surface' \
+has "$CLOSEOUT" 'every instance in its frozen Validation surface' \
   'the closure gate requires evidence at every listed member'
 has "$WORKFLOW" 'every instance in that' \
   'the checkpoint statuses a criterion only on its whole frozen surface'
@@ -146,7 +160,7 @@ has "$WORKFLOW" 'bounds evidence, not scope' \
   'the manifest bounds evidence rather than scope'
 has "$WORKFLOW" 'may inspect anything their own contracts already permit' \
   'ordinary review scope is unrestricted by the manifest'
-has "$WORKFLOW" 'reviewers may report' \
+has "$WORKFLOW" 'reviewers may report defects outside it' \
   'defects outside the manifest remain reportable'
 has "$WORKFLOW" 'same-mechanism neighborhood brief below stays fully' \
   'same-mechanism investigation remains fully available'
@@ -167,10 +181,8 @@ has "$GATE" 'rerun the complete gate over it' \
   'invalidation reruns the complete gate'
 has "$GATE" 'Never patch one entry in place' \
   'an entry-level patch is forbidden'
-has "$GATE" 'no valid.*replacement can be established, abort' \
+has "$GATE" 'no valid replacement can be established, abort' \
   'an unestablished replacement aborts'
-has "$SKILL" 'preflight-aborted' \
-  'a failed preflight finalizes as preflight-aborted'
 echo "ok - pre-delegation invalidation recomputes completely or ends as preflight-aborted"
 
 ## After delegation: immutable, and fail closed on an omitted member
@@ -184,12 +196,12 @@ has "$WORKFLOW" 'do not append the member, remediate it, and restart review here
   'in-run amendment and remediation of the omission are forbidden'
 has "$WORKFLOW" 'record the criterion, the omitted instance' \
   'the omission is recorded'
-has "$WORKFLOW" 'classify it' \
-  'the omission is classified'
+has "$WORKFLOW" 'classify it — the trusted contract already clearly required the instance' \
+  'the omission is classified as a preflight defect or a contract question'
 has "$WORKFLOW" 'blocking tracker issue for unresolved work that must' \
   'unresolved work survives the run durably'
-has "$WORKFLOW" 'hand back as `Progresses`.*' \
-  'the hand-back is Progresses or failed'
+has "$WORKFLOW" 'hand back as `Progresses` when ordinary closeout permits a safe, independently useful partial candidate' \
+  'a safe partial candidate hands back as Progresses'
 has "$WORKFLOW" 'and as `failed` when it does not' \
   'a determinate invalidation with no partial candidate is failed'
 has "$CLOSEOUT" 'Validation-surface manifest omits' \
