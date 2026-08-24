@@ -25,15 +25,14 @@ into implementation for the closure gate to discover.
 ## Validation-surface manifest custody
 
 The manifest frozen by `references/closability-gate.md` is this run's complete
-direct-evidence obligation. At the start of every continuation or resume, verify
-it before reuse. Before delegation, first run this skill's
-`scripts/workflow-provenance.sh verify` from the target repository. Reuse is
+direct-evidence obligation. At the start of every continuation or resume, run
+this skill's `scripts/workflow-provenance.sh verify` from the target repository
+before any manifest reuse, whether before or after delegation. Reuse is
 available only when it succeeds: because manifest freeze removes the previous
 ledger, success proves provenance was captured after this manifest froze and
 that the selected workflow has not changed. If provenance was not captured
 after this manifest froze because the interruption preceded capture, or
-verification reports drift, discard the manifest and take the gate's settled
-complete preflight/manifest recomputation path.
+verification reports drift, the manifest cannot be reused.
 
 Whether before or after delegation, reconstruct the trusted-snapshot bytes
 through the gate's canonical `manifest-identity.sh snapshot` command and, from
@@ -53,11 +52,12 @@ workflow. Only then read the manifest body back, supply it verbatim to the
 implementation delegate and to the readiness, Standards, Spec, and closure
 contexts, and keep it available for adjudication.
 
-Before delegation, a missing, malformed, corrupt, or mismatched manifest is an
-invalid manifest input: discard it and take the gate's settled complete
-preflight/manifest recomputation path. After delegation, the frozen manifest is
-immutable; take the fail-closed hand-back below instead of rebuilding, patching,
-or silently reusing it.
+Before delegation, a missing or failing Workflow provenance ledger or a missing,
+malformed, corrupt, or mismatched manifest is an invalid manifest input: discard
+the manifest and take the gate's settled complete preflight/manifest
+recomputation path. After delegation, either Workflow provenance or manifest
+verification failure takes the fail-closed hand-back below because the manifest
+is immutable; do not rebuild, patch, or silently reuse it.
 
 It bounds evidence, not scope. Implementation may touch any other artifact this
 issue authorizes; readiness, both `code-review` axes, and the closure sweep may

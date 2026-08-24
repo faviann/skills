@@ -182,13 +182,15 @@ has "$WORKFLOW" 'At the start of every continuation or resume' \
 has "$WORKFLOW" 'manifest-identity.sh verify' \
   'resume verifies the manifest identity before reuse'
 has "$WORKFLOW" 'workflow-provenance.sh verify' \
-  'pre-delegation resume verifies the selected workflow before manifest reuse'
+  'resume verifies the selected workflow before manifest reuse'
+has "$WORKFLOW" 'before any manifest reuse, whether before or after delegation' \
+  'provenance verification governs both sides of the delegation boundary'
 has "$WORKFLOW" 'provenance was not captured after this manifest froze' \
   'an interruption before provenance capture invalidates the old manifest'
-has "$WORKFLOW" 'Before delegation, a missing, malformed, corrupt, or mismatched manifest' \
-  'a pre-delegation mismatch takes complete recomputation'
-has "$WORKFLOW" 'After delegation, the frozen manifest is immutable' \
-  'a post-delegation mismatch takes fail-closed hand-back'
+has "$WORKFLOW" 'Before delegation, a missing or failing Workflow provenance ledger or a missing, malformed, corrupt, or mismatched manifest' \
+  'either pre-delegation verification failure takes complete recomputation'
+has "$WORKFLOW" 'After delegation, either Workflow provenance or manifest verification failure takes the fail-closed hand-back' \
+  'either post-delegation verification failure takes fail-closed hand-back'
 has "$WORKFLOW" 'readiness, Standards, Spec, and closure contexts' \
   'the workflow supplies the manifest to every review context'
 has "$WORKFLOW" 'available for adjudication' \
@@ -403,6 +405,9 @@ echo "ok - capture rejects workflow drift between manifest derivation and captur
   "$PROVENANCE" capture --expected-workflow "$selected_workflow_identity"
   "$PROVENANCE" verify >/dev/null
 )
+# The implementation delegate has launched. Provenance drift on this resume is
+# now immutable-run failure, not permission to rebuild the manifest.
+delegation_crossed=true
 printf '\nworkflow drift\n' >>"$identity_repo/docs/workflow.md"
 (
   cd "$identity_repo"
@@ -417,8 +422,9 @@ fi
 [[ ! -s "$flat_dir/workflow-drift.out" ]]
 grep -Fqx 'workflow provenance: workflow instructions changed since capture' \
   "$flat_dir/workflow-drift.err"
+[[ "$delegation_crossed" == true ]]
 git -C "$identity_repo" restore docs/workflow.md
-echo "ok - selected-workflow drift cannot reuse the frozen manifest"
+echo "ok - post-delegation selected-workflow drift cannot reuse the frozen manifest"
 
 snapshot_digest="$(sha256sum <"$snapshot" | cut -d' ' -f1)"
 base_sha="$(git -C "$identity_repo" rev-parse HEAD)"
