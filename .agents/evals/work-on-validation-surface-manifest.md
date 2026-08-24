@@ -192,7 +192,11 @@ in the run.
 
 **B reproduces the mechanism #103 exists to remove.** Its pre-#103 evaluator
 found all five conditions holding and delegated, resting the decision on exactly
-the reasoning the Overmind PR 211 diagnostic named:
+the reasoning named by the executing agent's diagnostic on Overmind PR
+[#211](https://github.com/faviann/overmind/pull/211) — the run that
+[#99](https://github.com/faviann/skills/issues/99) records as the origin of this
+rule, and that [#98](https://github.com/faviann/skills/issues/98) names as the
+upstream scope/closability multiplier wave 1 attacks:
 
 > "Every document they reference" resolves the judgment call by making the set
 > the transitive closure of references, not a curated subset. The delegate
@@ -315,9 +319,11 @@ sentence of its own reasoning.
 - Evaluators were *instructed* to read only the named files rather than
   sandboxed without other access. None reported reading anything else, and none
   cited a key.
-- Every case is constructed. B is shaped after the Overmind PR 211 mechanism but
-  is not abstracted from that run, so no key here is corroborated by a
-  production verdict.
+- Every case is constructed. B is shaped after the Overmind PR
+  [#211](https://github.com/faviann/overmind/pull/211) mechanism as
+  [#99](https://github.com/faviann/skills/issues/99) describes it, but is not
+  abstracted from that run — none of its documents, counts, or timings are
+  reproduced here — so no key is corroborated by a production verdict.
 - Because the arms are prompt-adapted, the six cases are not comparable to each
   other. A `reuse` and an `abort` are scored against different keys under
   different answer formats; only the same case across versions compares.
