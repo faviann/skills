@@ -34,10 +34,16 @@ touch "$target_checkout/.keep"
 git -C "$target_checkout" add .
 git -C "$target_checkout" commit -qm fixture
 ledger="$target_checkout/.git/work-on-provenance.json"
-(
-  cd "$target_checkout"
-  "$(dirname "$command_under_test")/workflow-provenance.sh" capture
-)
+capture_provenance() {
+  local checkout="$1" command="$2" workflow_identity workflow_boundary
+  workflow_identity="$(cd "$checkout" && "$command" identify-workflow)"
+  workflow_boundary="$(git -C "$checkout" rev-parse --absolute-git-dir)/work-on-provenance.workflow-sha256"
+  (umask 077 && printf '%s\n' "$workflow_identity" >"$workflow_boundary")
+  (cd "$checkout" && "$command" capture \
+    --expected-workflow "$workflow_identity")
+}
+capture_provenance "$target_checkout" \
+  "$(dirname "$command_under_test")/workflow-provenance.sh"
 provenance="$(
   cd "$target_checkout"
   "$(dirname "$command_under_test")/workflow-provenance.sh" verify
@@ -223,10 +229,8 @@ grep -Fq 'run handle belongs to another repository' \
 legacy_render_worktree="$fixture/legacy-render-worktree"
 git -C "$target_checkout" worktree add -q -b legacy-render \
   "$legacy_render_worktree"
-(
-  cd "$legacy_render_worktree"
-  "$(dirname "$command_under_test")/workflow-provenance.sh" capture
-)
+capture_provenance "$legacy_render_worktree" \
+  "$(dirname "$command_under_test")/workflow-provenance.sh"
 legacy_render_run=20000101T000000Z-00000003
 legacy_render_git_dir="$(git -C "$legacy_render_worktree" \
   rev-parse --absolute-git-dir)"
@@ -641,10 +645,8 @@ exit 1
 EOF
 chmod +x "$drifted_script_root/"*.sh
 cp "$ledger" "$fixture/original-ledger.json"
-(
-  cd "$target_checkout"
-  "$drifted_script_root/workflow-provenance.sh" capture
-)
+capture_provenance "$target_checkout" \
+  "$drifted_script_root/workflow-provenance.sh"
 if (cd "$target_checkout" && \
     "$drifted_script_root/render-closeout.sh" --run "$render_run" \
       "$fixture/facts.json" "$fixture/narrative.md" --new-pr) \

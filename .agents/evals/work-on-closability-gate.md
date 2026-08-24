@@ -27,7 +27,7 @@ prompt:
 > criterion, name the production path, the artifact/mode/boundary the behavior
 > is observed through, the validation action that runs after implementation,
 > and the observation that would fail if the criterion were not satisfied;
-> **Conditions** — state whether each of the gate's five conditions holds;
+> **Conditions** — state whether each of the gate's conditions holds;
 > **Verdict** — commit to exactly one word, `proceed` or `abort`, naming the
 > failing condition and the narrow route out on an abort. Report any
 > contradiction or ambiguity you find in the gate, quoting the exact phrase.

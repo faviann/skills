@@ -71,7 +71,7 @@ The complete finite set of concrete artifact, mode, host, or public-boundary ins
 _Avoid_: acceptance surface
 
 **Validation-surface manifest**:
-The run-local materialization of every acceptance criterion's **Validation surface**, frozen when the **Closability gate** passes against the trusted preflight state, including the trusted snapshot, selected workflow, and pre-implementation base. It is binding, recoverable contract state for direct-evidence obligations—not a limit on implementation or review scope—and is distinct from telemetry, **Workflow provenance**, and tracked repository artifacts.
+The run-local materialization of every acceptance criterion's **Validation surface**, frozen when the **Closability gate** passes after the trusted snapshot and selected workflow are read. Its recoverable identity binds the exact trusted snapshot and pre-implementation base; the selected workflow remains an invalidation input identified by **Workflow provenance**, and the manifest remains contract state for evidence rather than a limit on implementation or review scope.
 _Avoid_: acceptance-surface manifest
 
 **Reviewed anchor**:

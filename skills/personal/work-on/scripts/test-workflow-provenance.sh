@@ -27,7 +27,12 @@ command_under_test="$skills_checkout/skills/personal/work-on/scripts/workflow-pr
 skills_ledger="$skills_checkout/.git/work-on-provenance.json"
 
 capture_in() {
-  (cd "$1" && "${2:-$command_under_test}" capture)
+  local workflow_identity workflow_boundary
+  workflow_identity="$(cd "$1" && "${2:-$command_under_test}" identify-workflow)"
+  workflow_boundary="$(git -C "$1" rev-parse --absolute-git-dir)/work-on-provenance.workflow-sha256"
+  (umask 077 && printf '%s\n' "$workflow_identity" >"$workflow_boundary")
+  (cd "$1" && "${2:-$command_under_test}" capture \
+    --expected-workflow "$workflow_identity")
 }
 verify_in() {
   (cd "$1" && "${2:-$command_under_test}" verify)
@@ -206,7 +211,8 @@ done
 [[ ! -e "$no_git_bin/git" ]]
 if (
   cd "$target_checkout"
-  PATH="$no_git_bin" /bin/bash "$command_under_test" capture
+  PATH="$no_git_bin" /bin/bash "$command_under_test" capture \
+    --expected-workflow "$(printf '0%.0s' {1..64})"
 ) >"$fixture/no-git.out" 2>"$fixture/no-git.err"; then
   printf 'FAIL[no-git]: capture succeeded without git\n' >&2
   exit 1

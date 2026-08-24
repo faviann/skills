@@ -10,8 +10,9 @@ production or test edits, implementation commits, and any pull request.
 
 The gate decides only whether the issue is closable in this run. It changes no
 readiness, Standards, Spec, closure, remediation, validation, or closeout
-semantics, and adds no artifact, ledger, or telemetry field of its own. A pass
-records nothing. An abort resolves the run's existing outcome as
+semantics, and adds no tracked artifact, ledger, or telemetry field of its own.
+A pass records nothing beyond the run-local Validation-surface manifest it
+freezes. An abort resolves the run's existing outcome as
 `preflight-aborted`, as the abort steps below require.
 
 ## The reasoning the primary produces
@@ -40,9 +41,41 @@ A seam is **not** available when validation depends on:
 - a gate-only artifact whose sole consumer is the gate; or
 - indirect inference where the closure contract requires direct evidence.
 
+## The Validation surface each criterion must materialize
+
+A criterion's **Validation surface** is the complete finite set of concrete
+artifact, mode, host, or public-boundary instances whose behavior it requires
+direct evidence about for the issue to close. It is not the criterion's input or
+state domain — coverage inside a seam may stay parameterized, property-based, or
+representative — and it is not the implementation diff. It answers which
+instances must carry direct evidence, never where implementation or review may
+look; the selected workflow owns that boundary.
+
+Materialize every surface here, in one of two forms:
+
+- an explicit finite enumeration; or
+- a deterministic, non-interpretive finite selection rule.
+
+Either form must actually be evaluated during this preflight and produce the
+complete concrete list for the trusted snapshot — the one list any later
+execution against that same snapshot would also produce. `all relevant
+authority` and `whatever implementation touches` fail, because later judgement
+can grow their population. A deterministic traversal or tracked-path rule passes
+only when executing it here yields that list.
+
+A surface may name an exact artifact this issue authorizes creating, but only
+when its identity, location, and criterion role are already determinable from
+the trusted contract. An artifact implementation merely turns out to touch never
+joins a surface.
+
+Finiteness does not weaken evidence: every member still requires the direct
+evidence its criterion demands under conditions 1 and 3.
+
+Together, these surfaces are the run's **Validation-surface manifest**.
+
 ## Conditions
 
-The gate passes only when all five hold.
+The gate passes only when all six hold.
 
 1. **Every acceptance criterion has a direct validation seam**, available under
    the rules above.
@@ -74,6 +107,14 @@ The gate passes only when all five hold.
    choose the contract. Adjudicate ordinary wording against the trusted
    sources; never invent a requirement or choose between genuinely
    incompatible trusted ones.
+6. **Every criterion's Validation surface is finite and materialized here.**
+   Abort when a criterion's direct-evidence population can be settled only by
+   later judgement — an interpretive rule, an open-ended traversal, or a
+   population the implementation delegate would have to discover. A criterion
+   whose surface the trusted contract does not make decidable — evaluated
+   against the trusted snapshot and the pre-implementation base — takes this
+   abort; it is never rescued by reading the criterion more narrowly than the
+   trusted contract states it.
 
 ## Manual and human seams
 
@@ -93,11 +134,133 @@ repository-independent size threshold. Review-budget fit remains a triage and
 calibration concern. A large or contract-dense issue whose every criterion has
 direct, available validation passes.
 
+## Freeze and custody
+
+The manifest freezes when the complete gate passes — after the trusted snapshot
+and the selected workflow have been read, and before workflow-provenance capture
+and implementation delegation. Identify it with the trusted snapshot and the
+pre-implementation base it was materialized from. The selected workflow remains
+an invalidation input below; Workflow provenance owns its instruction-version
+identity rather than duplicating it in the manifest.
+
+Before applying the gate, retain the exact selected-workflow identity in the
+primary's working context; the path below is relative to the skill root:
+
+```bash
+selected_workflow_identity="$(scripts/workflow-provenance.sh identify-workflow)"
+```
+
+This shell value is not manifest identity or another durable record. It is the
+comparison input for the post-freeze capture. Losing it before capture
+invalidates the not-yet-delegated manifest and takes complete recomputation;
+identifying the workflow again cannot authorize a manifest already derived.
+
+Before applying the gate, retain the exact source-labelled trusted snapshot it
+will read. Preserve each trusted source's attribution and body in that one
+snapshot; it is the run's contract, not a serialization a later context must
+recreate. Record the committed base before the gate as
+`pre_implementation_base="$(git rev-parse HEAD)"`.
+
+Keep that snapshot and the manifest in two untracked run-local files in the
+target repository's Git common directory:
+
+```text
+$(git rev-parse --path-format=absolute --git-common-dir)/work-on-manifest/
+  <run-id>.trusted-snapshot.json
+  <run-id>.md
+```
+
+using the bare run id from `$RUN_HANDLE`, before its `@`. Both survive a branch
+switch and every supported continuation or resume of the run, and never reach a
+published artifact. They are run-local semantic contract state: not telemetry,
+not Workflow provenance, not Run registry state, and never tracked repository
+artifacts. Provenance fingerprints the instructions this run read; it carries
+neither object.
+
+Create the directory and both files for their owner only — `0700` and `0600`.
+Create each in the shell first, guarded so re-running this step never truncates
+what a resume still needs:
+
+```bash
+manifest_dir="$(git rev-parse --path-format=absolute --git-common-dir)/work-on-manifest"
+run_id="${RUN_HANDLE%%@*}"
+trusted_snapshot_file="$manifest_dir/$run_id.trusted-snapshot.json"
+manifest_file="$manifest_dir/$run_id.md"
+[[ -d "$manifest_dir" ]] || (umask 077 && mkdir -p "$manifest_dir")
+chmod 700 "$manifest_dir"
+[[ -e "$trusted_snapshot_file" ]] || (umask 077 && : >"$trusted_snapshot_file")
+[[ -e "$manifest_file" ]] || (umask 077 && : >"$manifest_file")
+chmod 600 "$trusted_snapshot_file"
+chmod 600 "$manifest_file"
+```
+
+The guards protect frozen state a resume still needs from a repeated creation
+step; a rebuild before delegation still overwrites both paths' contents
+outright, as invalidation requires. Create each file in the shell before writing
+it, then reapply `0600`: the umask closes the creation-to-chmod window only for
+shell-created files, while an editor may replace an inode at its default mode.
+Write the exact source-labelled snapshot before applying the gate, and write the
+materialized manifest when the complete gate passes. Then, from the target
+repository, run this skill's identity helper; the path below is relative to the
+skill root:
+
+```bash
+scripts/manifest-identity.sh freeze \
+  --manifest "$manifest_file" \
+  --snapshot "$trusted_snapshot_file" \
+  --base "$pre_implementation_base" \
+  --workflow-identity "$selected_workflow_identity"
+```
+
+The command requires both frozen files to be owner-only, prepends the full base
+SHA, the snapshot's SHA-256 digest, and one binding digest over both identities
+plus the manifest body, and atomically replaces the manifest at `0600`.
+Immediately before replacement, it removes the
+target worktree's previous Workflow provenance ledger, so only a capture after
+this freeze can authorize reuse. It also seals the retained workflow identity
+in Workflow provenance's owner-only sidecar, not in the manifest; a later
+identity cannot be substituted for it during capture. The binding makes
+malformed identity fields, a changed manifest body, or a missing, replaced, or
+changed snapshot fail verification. Retain both files for the run's supported
+continuation/resume lifetime. A run's record of a workstation's work is not
+group- or world-readable.
+
+After the freeze, return to the procedure with the retained identity. The later
+capture in `SKILL.md` step 7 compares the current selected workflow with that
+retained identity before it writes the provenance ledger. A mismatch invalidates
+the manifest and takes complete recomputation before delegation; a later
+identity obtained from the changed workflow cannot authorize the old manifest.
+
+The selected workflow supplies the manifest to the implementation delegate and
+to the readiness, Standards, Spec, and closure contexts, and keeps it available
+to the primary for adjudication. It is contract input, not a prior review
+conclusion: reviewers stay independent about whether the evidence satisfies a
+criterion, and may report that the manifest conflicts with the trusted contract.
+
+## Invalidation before delegation
+
+Any change to an input the manifest was derived from invalidates it — the
+trusted contract or snapshot, the selected workflow, or an enumeration rule or
+its inputs.
+
+While no implementation delegate has launched and no implementation work has
+begun, discard the manifest, rebuild the affected trusted preflight state, and
+rerun the complete gate over it. Rerunning it is not a second gate: the run
+passes one complete gate, over whichever trusted preflight state it finally
+delegates from. Never patch one entry in place: re-materialize every criterion's
+surface, including those whose own inputs did not move. If no valid replacement
+can be established, abort as below.
+
+After implementation is delegated the manifest is immutable for this run, and
+the selected workflow owns what happens when a trusted criterion turns out to
+require an omitted member.
+
 ## Pass
 
 Keep the compact criterion-to-seam reasoning in the primary's working context,
-capture workflow provenance, and continue the selected workflow unchanged. A
-pass records nothing; the run's outcome remains the closure gate's to resolve.
+write the frozen manifest, capture workflow provenance, and continue the
+selected workflow unchanged. A pass records nothing else; the run's outcome
+remains the closure gate's to resolve.
 
 ## Abort
 
@@ -108,8 +271,8 @@ implementation commit or pull request. Then:
    `scripts/run-registry.sh finalize --run "$RUN_HANDLE" --outcome preflight-aborted`,
    which resolves that outcome in the sink this run already opened, seals it,
    and discharges the run's registered lifecycle in one step;
-2. name the exact criterion, prerequisite, command, or contract conflict that
-   failed;
+2. name the exact criterion, prerequisite, command, unmaterializable validation
+   surface, or contract conflict that failed;
 3. explain why direct `tested` evidence is unavailable;
 4. name the one narrow route out — return to triage; split or amend the issue;
    complete a blocking prerequisite; obtain the explicitly required
