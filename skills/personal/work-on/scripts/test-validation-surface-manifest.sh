@@ -15,6 +15,7 @@ GATE="$skill_dir/references/closability-gate.md"
 WORKFLOW="$skill_dir/references/default-workflow.md"
 CLOSEOUT="$skill_dir/references/github-closeout.md"
 IDENTITY="$skill_dir/scripts/manifest-identity.sh"
+PROVENANCE="$skill_dir/scripts/workflow-provenance.sh"
 
 failures=0
 
@@ -174,6 +175,10 @@ has "$WORKFLOW" 'At the start of every continuation or resume' \
   'the workflow recovers the manifest on continuation or resume'
 has "$WORKFLOW" 'manifest-identity.sh verify' \
   'resume verifies the manifest identity before reuse'
+has "$WORKFLOW" 'workflow-provenance.sh verify' \
+  'pre-delegation resume verifies the selected workflow before manifest reuse'
+has "$WORKFLOW" 'provenance was not captured after this manifest froze' \
+  'an interruption before provenance capture invalidates the old manifest'
 has "$WORKFLOW" 'Before delegation, a missing, malformed, corrupt, or mismatched manifest' \
   'a pre-delegation mismatch takes complete recomputation'
 has "$WORKFLOW" 'After delegation, the frozen manifest is immutable' \
@@ -274,19 +279,94 @@ printf 'base\n' >"$identity_repo/base.txt"
 git -C "$identity_repo" add base.txt
 git -C "$identity_repo" commit -qm 'base'
 
+sources_a="$flat_dir/trusted-sources-a.json"
+sources_b="$flat_dir/trusted-sources-b.json"
+sources_changed="$flat_dir/trusted-sources-changed.json"
 snapshot="$flat_dir/trusted-snapshot.jsonl"
+snapshot_rebuilt="$flat_dir/trusted-snapshot-rebuilt.jsonl"
+snapshot_changed="$flat_dir/trusted-snapshot-changed.jsonl"
 manifest_dir="$identity_repo/.git/work-on-manifest"
 manifest="$manifest_dir/test-run.md"
 mkdir -p "$manifest_dir"
 printf '%s\n' \
-  '{"source":"issue:example/repo#103:body","body":"trusted contract"}' \
-  >"$snapshot"
+  '[{"body":"trusted contract","source":"issue:example/repo#103:body"},' \
+  ' {"source":"comment:2","body":"line one\nline two"}]' >"$sources_a"
+printf '%s\n' \
+  '[ { "body" : "line one\u000aline two", "source" : "comment:2" },' \
+  ' { "source" : "issue:example/repo#103:body", "body" : "trusted contract" } ]' \
+  >"$sources_b"
+printf '%s\n' \
+  '[{"source":"issue:example/repo#103:body","body":"changed contract"},' \
+  ' {"source":"comment:2","body":"line one\nline two"}]' \
+  >"$sources_changed"
+
+"$IDENTITY" snapshot --input "$sources_a" --output "$snapshot"
+"$IDENTITY" snapshot --input "$sources_b" --output "$snapshot_rebuilt"
+"$IDENTITY" snapshot --input "$sources_changed" --output "$snapshot_changed"
+cmp -s "$snapshot" "$snapshot_rebuilt"
+[[ "$(sha256sum <"$snapshot" | cut -d' ' -f1)" == \
+  "$(sha256sum <"$snapshot_rebuilt" | cut -d' ' -f1)" ]]
+if cmp -s "$snapshot" "$snapshot_changed"; then
+  fail 'canonical snapshot identity ignored an actual trusted-source change'
+fi
+[[ "$(stat -c '%a' "$snapshot")" == 600 ]]
+echo "ok - equivalent trusted sources reconstruct one canonical snapshot identity"
+
 printf '%s\n' '- criterion 1: cmd/build' >"$manifest"
+
+# A newly frozen manifest cannot inherit a provenance ledger from an older
+# freeze. Until capture succeeds after this freeze, continuation must recompute.
+mkdir -p "$identity_repo/docs"
+printf '# Selected workflow\n' >"$identity_repo/docs/workflow.md"
+git -C "$identity_repo" add docs/workflow.md
+git -C "$identity_repo" commit -qm 'selected workflow'
+(
+  cd "$identity_repo"
+  "$PROVENANCE" capture
+)
+[[ -f "$identity_repo/.git/work-on-provenance.json" ]]
 
 (
   cd "$identity_repo"
   "$IDENTITY" freeze --manifest "$manifest" --snapshot "$snapshot" --base HEAD
 )
+
+[[ ! -e "$identity_repo/.git/work-on-provenance.json" ]]
+(
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot" >/dev/null
+)
+if (
+  cd "$identity_repo"
+  "$PROVENANCE" verify
+) >"$flat_dir/pre-capture.out" 2>"$flat_dir/pre-capture.err"; then
+  fail 'continuation accepted a manifest frozen before provenance capture'
+fi
+[[ ! -s "$flat_dir/pre-capture.out" ]]
+grep -Fq 'run ledger is missing' "$flat_dir/pre-capture.err"
+echo "ok - interruption before provenance capture cannot reuse the frozen manifest"
+
+(
+  cd "$identity_repo"
+  "$PROVENANCE" capture
+  "$PROVENANCE" verify >/dev/null
+)
+printf '\nworkflow drift\n' >>"$identity_repo/docs/workflow.md"
+(
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot" >/dev/null
+)
+if (
+  cd "$identity_repo"
+  "$PROVENANCE" verify
+) >"$flat_dir/workflow-drift.out" 2>"$flat_dir/workflow-drift.err"; then
+  fail 'continuation accepted selected-workflow drift'
+fi
+[[ ! -s "$flat_dir/workflow-drift.out" ]]
+grep -Fqx 'workflow provenance: workflow instructions changed since capture' \
+  "$flat_dir/workflow-drift.err"
+git -C "$identity_repo" restore docs/workflow.md
+echo "ok - selected-workflow drift cannot reuse the frozen manifest"
 
 snapshot_digest="$(sha256sum <"$snapshot" | cut -d' ' -f1)"
 base_sha="$(git -C "$identity_repo" rev-parse HEAD)"

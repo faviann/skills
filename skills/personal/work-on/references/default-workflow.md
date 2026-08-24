@@ -25,10 +25,20 @@ into implementation for the closure gate to discover.
 ## Validation-surface manifest custody
 
 The manifest frozen by `references/closability-gate.md` is this run's complete
-direct-evidence obligation. At the start of every continuation or resume,
-rebuild the exact source-labelled trusted-snapshot bytes and, from the target
-repository, run this skill's identity helper before reuse; the path below is
-relative to the skill root:
+direct-evidence obligation. At the start of every continuation or resume, verify
+it before reuse. Before delegation, first run this skill's
+`scripts/workflow-provenance.sh verify` from the target repository. Reuse is
+available only when it succeeds: because manifest freeze removes the previous
+ledger, success proves provenance was captured after this manifest froze and
+that the selected workflow has not changed. If provenance was not captured
+after this manifest froze because the interruption preceded capture, or
+verification reports drift, discard the manifest and take the gate's settled
+complete preflight/manifest recomputation path.
+
+Whether before or after delegation, reconstruct the trusted-snapshot bytes
+through the gate's canonical `manifest-identity.sh snapshot` command and, from
+the target repository, run this skill's identity helper before reuse; the path
+below is relative to the skill root:
 
 ```bash
 pre_implementation_base="$(scripts/manifest-identity.sh verify \

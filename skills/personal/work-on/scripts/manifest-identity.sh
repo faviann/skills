@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export LC_ALL=C
 
-# Bind an already-materialized manifest to its exact trusted-snapshot bytes and
-# pre-implementation commit, then verify that binding before reuse.
+# Canonicalize trusted sources, bind a materialized manifest to those exact
+# snapshot bytes and its pre-implementation commit, then verify before reuse.
 
 staged=""
 cleanup() {
@@ -16,12 +17,18 @@ fail() {
 }
 
 usage() {
-  fail 'usage: manifest-identity.sh freeze --manifest FILE --snapshot FILE --base REF | verify --manifest FILE --snapshot FILE'
+  fail 'usage: manifest-identity.sh snapshot --input FILE --output FILE | freeze --manifest FILE --snapshot FILE --base REF | verify --manifest FILE --snapshot FILE'
 }
 
 subcommand="${1:-}"
 shift || true
 case "$subcommand" in
+  snapshot)
+    (( $# == 4 )) && [[ "$1" == --input && "$3" == --output ]] \
+      || usage
+    sources="$2"
+    output="$4"
+    ;;
   freeze)
     (( $# == 6 )) \
       && [[ "$1" == --manifest && "$3" == --snapshot && "$5" == --base ]] \
@@ -39,7 +46,42 @@ case "$subcommand" in
   *) usage ;;
 esac
 
+if [[ "$subcommand" == snapshot ]]; then
+  command -v jq >/dev/null 2>&1 || fail 'snapshot creation requires jq'
+  [[ -f "$sources" && ! -L "$sources" && -r "$sources" ]] \
+    || fail 'trusted sources are missing or unsafe'
+  [[ ! -L "$output" ]] || fail 'trusted snapshot output is unsafe'
+  output_dir="$(dirname -- "$output")"
+  [[ -d "$output_dir" && ! -L "$output_dir" ]] \
+    || fail 'trusted snapshot directory is missing or unsafe'
+  output_dir="$(cd -P -- "$output_dir" && pwd -P)"
+  staged="$(umask 077 && mktemp "$output_dir/.trusted-snapshot.XXXXXX")"
+  if ! jq -ce '
+    . as $records
+    | if (
+        type == "array" and length > 0
+        and all(.[];
+          type == "object"
+          and keys == ["body", "source"]
+          and (.source | type == "string" and length > 0)
+          and (.body | type == "string"))
+        and ([.[].source] | unique | length) == ($records | length)
+      )
+      then sort_by(.source)[] | {source: .source, body: .body}
+      else error("trusted sources must be unique source/body string records")
+      end
+  ' "$sources" >"$staged" 2>/dev/null; then
+    fail 'trusted sources are invalid'
+  fi
+  chmod 600 "$staged"
+  mv -f -- "$staged" "$output"
+  staged=""
+  exit 0
+fi
+
 common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+  || fail 'run from the target Git repository'
+git_dir="$(git rev-parse --path-format=absolute --absolute-git-dir 2>/dev/null)" \
   || fail 'run from the target Git repository'
 manifest_dir="$(dirname -- "$manifest")"
 [[ -d "$manifest_dir" && ! -L "$manifest_dir" ]] \
@@ -83,6 +125,7 @@ if [[ "$subcommand" == freeze ]]; then
     cat -- "$manifest"
   } >"$staged"
   chmod 600 "$staged"
+  rm -f -- "$git_dir/work-on-provenance.json"
   mv -f -- "$staged" "$manifest"
   staged=""
   exit 0

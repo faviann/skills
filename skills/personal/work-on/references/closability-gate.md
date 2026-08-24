@@ -143,15 +143,24 @@ pre-implementation base it was materialized from. The selected workflow remains
 an invalidation input below; Workflow provenance owns its instruction-version
 identity rather than duplicating it in the manifest.
 
-Before applying the gate, serialize the exact trusted snapshot it will read as
-source-labelled UTF-8 JSON Lines: one compact object with only `source` and
-`body`, in that key order, for the issue body, each trusted comment, and each
-referenced contract source. Use a stable source locator, preserve each source
-body exactly, reject duplicate locators, and order the records by locator under
-the C locale. This owner-only temporary file is the digest input, not a summary
-or a second durable snapshot store; rebuild the same bytes from the trusted
-sources on resume. Record the committed base before the gate as
-`pre_implementation_base="$(git rev-parse HEAD)"`.
+Before applying the gate, put the exact trusted sources it will read in an
+owner-only JSON array whose members contain only string `source` and `body`
+values. Use a stable source locator and preserve each source body exactly. Then
+run this skill's identity helper; the path below is relative to the skill root:
+
+```bash
+scripts/manifest-identity.sh snapshot \
+  --input "$trusted_sources_file" \
+  --output "$trusted_snapshot_file"
+```
+
+The helper rejects duplicate locators and invalid members, sorts the semantic
+records by locator, and emits the one compact UTF-8 JSON Lines representation
+the identity step accepts. Thus input JSON whitespace, member order, key order,
+and equivalent JSON escapes cannot change the digest bytes. This owner-only
+temporary file is the digest input, not a summary or a second durable snapshot
+store; reconstruct it through the same command on resume. Record the committed
+base before the gate as `pre_implementation_base="$(git rev-parse HEAD)"`.
 
 Write it to one untracked run-local file in the target repository's Git common
 directory:
@@ -198,11 +207,13 @@ scripts/manifest-identity.sh freeze \
 
 The command prepends the full base SHA, the snapshot's SHA-256 digest, and one
 binding digest over both identities plus the manifest body. It atomically
-replaces the file at `0600`; the binding makes malformed identity fields or a
-changed manifest body fail verification. The temporary snapshot file may then
-be removed: the manifest is the durable run-specific binding, while the trusted
-sources re-establish the comparison input. A run's record of a workstation's
-work is not group- or world-readable.
+replaces the file at `0600`; immediately before replacement, it removes the
+target worktree's previous Workflow provenance ledger, so only a capture after
+this freeze can authorize reuse. The binding makes malformed identity fields or
+a changed manifest body fail verification. The temporary snapshot file may
+then be removed: the manifest is the durable run-specific binding, while the
+trusted sources re-establish the comparison input. A run's record of a
+workstation's work is not group- or world-readable.
 
 The selected workflow supplies the manifest to the implementation delegate and
 to the readiness, Standards, Spec, and closure contexts, and keeps it available
