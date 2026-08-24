@@ -90,6 +90,8 @@ has "$GATE" 'complete concrete list for the trusted snapshot' \
   'materialization produces the complete concrete list for the trusted snapshot'
 has "$GATE" 'whatever implementation touches' \
   'the gate names an interpretive rule that fails the test'
+has "$GATE" 'the one list any later execution against that same snapshot would also produce' \
+  'a rule must be reproducible, not merely terminating'
 has "$GATE" 'passes only when all six hold' \
   'the gate has a sixth condition'
 has "$GATE" 'Validation surface is finite and materialized here' \
@@ -130,6 +132,10 @@ has "$GATE" 'every supported continuation or resume' \
   'the manifest survives the run continuation and resume lifetime'
 has "$GATE" 'not telemetry, not Workflow provenance, and never a tracked' \
   'the manifest is neither telemetry, provenance, nor a tracked artifact'
+has "$GATE" 'for their owner only — `0700` and `0600`' \
+  'the manifest directory and file are owner-only'
+has "$GATE" 'umask 077. in a subshell before creating each, then `chmod` it' \
+  'the umask-then-chmod idiom closes the creation-to-chmod window'
 lacks "$skill_dir/references/run-telemetry.md" 'validation-surface manifest' \
   'the telemetry sink does not carry the manifest'
 lacks "$skill_dir/references/run-registry.md" 'validation-surface manifest' \
@@ -179,6 +185,8 @@ has "$GATE" 'discard the manifest, rebuild the affected trusted preflight state'
   'invalidation rebuilds the trusted preflight state'
 has "$GATE" 'rerun the complete gate over it' \
   'invalidation reruns the complete gate'
+has "$GATE" 'not a second gate: the run passes one complete gate' \
+  'a rerun after invalidation is still the run.s one gate'
 has "$GATE" 'Never patch one entry in place' \
   'an entry-level patch is forbidden'
 has "$GATE" 'no valid replacement can be established, abort' \

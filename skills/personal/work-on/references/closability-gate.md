@@ -57,10 +57,11 @@ Materialize every surface here, in one of two forms:
 - a deterministic, non-interpretive finite selection rule.
 
 Either form must actually be evaluated during this preflight and produce the
-complete concrete list for the trusted snapshot. `all relevant authority` and
-`whatever implementation touches` fail, because later judgement can grow their
-population. A deterministic traversal or tracked-path rule passes only when
-executing it here yields the finite list.
+complete concrete list for the trusted snapshot — the one list any later
+execution against that same snapshot would also produce. `all relevant
+authority` and `whatever implementation touches` fail, because later judgement
+can grow their population. A deterministic traversal or tracked-path rule passes
+only when executing it here yields that list.
 
 A surface may name an exact artifact this issue authorizes creating, but only
 when its identity, location, and criterion role are already determinable from
@@ -153,6 +154,12 @@ state: not telemetry, not Workflow provenance, and never a tracked repository
 artifact. Provenance fingerprints the instructions this run read; it does not
 carry this run's manifest.
 
+Create the directory and the file for their owner only — `0700` and `0600`. Set
+`umask 077` in a subshell before creating each, then `chmod` it: the umask
+closes the window between creation and the chmod, and the chmod also tightens a
+directory an earlier run left readable. A run's record of a workstation's work
+is not group- or world-readable.
+
 The selected workflow supplies the manifest to the implementation delegate and
 to the readiness, Standards, Spec, and closure contexts, and keeps it available
 to the primary for adjudication. It is contract input, not a prior review
@@ -167,8 +174,10 @@ its inputs.
 
 While no implementation delegate has launched and no implementation work has
 begun, discard the manifest, rebuild the affected trusted preflight state, and
-rerun the complete gate over it. Never patch one entry in place. If no valid
-replacement can be established, abort as below.
+rerun the complete gate over it. Rerunning it is not a second gate: the run
+passes one complete gate, over whichever trusted preflight state it finally
+delegates from. Never patch one entry in place. If no valid replacement can be
+established, abort as below.
 
 After implementation is delegated the manifest is immutable for this run, and
 the selected workflow owns what happens when a trusted criterion turns out to
