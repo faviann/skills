@@ -51,10 +51,15 @@ requires_contract() {
 forbids_contract() {
   local source="$1" description="$2"
   shift 2
-  local pattern
+  local pattern status
   for pattern in "$@"; do
-    if grep -Eqi -- "$pattern" "$(flatten "$source")"; then
+    status=0
+    grep -Eqi -- "$pattern" "$(flatten "$source")" || status=$?
+    if (( status == 0 )); then
       fail "$description (unexpected in ${source#"$skill_dir/"}: $pattern)"
+      return
+    elif (( status > 1 )); then
+      fail "every forbidden pattern compiles here (unusable pattern: $pattern)"
       return
     fi
   done
@@ -126,8 +131,8 @@ requires_contract "$POLICY" \
   'this policy decides whether qualifying evidence.*must be executed again'
 requires_contract "$WORKFLOW" \
   'both primary focused-check sites and closeout follow candidate/check identity' \
-  'Inspect the worktree and, unless qualifying evidence for the exact current candidate and check identity already settles their assurance question, run affected focused checks' \
-  'Run affected focused checks under the same candidate and check identity rule, applying .references/validation-evidence.md' \
+  'Inspect the worktree and, unless qualifying evidence for the exact current Candidate and Validation identity already settles their assurance question, run affected focused checks' \
+  'Run affected focused checks under the same Candidate and Validation identity rule, applying .references/validation-evidence.md' \
   'At Closeout, reuse qualifying full-regression evidence for the exact final Candidate and Validation identity.*otherwise execute the full regression there' \
   'Never pre-produce it earlier to be reused'
 forbids_contract "$CLOSEOUT" \
@@ -171,15 +176,32 @@ requires_contract "$POLICY" \
 # policy, so a cost predicate cannot re-enter through a neighbouring file.
 cost_predicates=(
   'expensive deterministic|additional expensive execution|expensive duplicate'
-  '(materially costly|expensive|costly)[^.]{0,160}(is the default|at most one|once per|requires a (recorded )?distinct assurance)'
-  '(one|a single) qualifying execution[^.]{0,160}(default|per (identity|candidate))'
-  '(materially costly|expensive|costly|slow)[^.]{0,120}(skip|omit|forgo|bypass|waive)'
-  '(skip|omit|forgo|bypass|waive)[^.]{0,120}(materially costly|expensive|costly|slow)'
-  '(classif|decid|determin|judg)[^.]{0,120}(from|using|based on) [^.]{0,60}(recorded|prior|measured|historical|telemetr)[^.]{0,60}(duration|runtime|timing|cost)'
-  '(duration|runtime|timing|telemetr)[^.]{0,120}(decide|determine|classify)[^.]{0,80}(required|skip|reuse|materially costly)'
+  '(materially costly|expensive|costly)[^.]{0,120}(is the default|at most one|once per)'
+  '(one|a single) qualifying execution[^.]{0,120}default'
+  '(materially costly|expensive|costly|slow)[^.]{0,100}(skip|omit|forgo|bypass|waive)'
+  '(skip|omit|forgo|bypass|waive)[^.]{0,100}(materially costly|expensive|costly|slow)'
+  '(classify|decide|determine)[^.]{0,80}(recorded|prior|measured|telemetry)'
+  '(duration|telemetry)[^.]{0,60}(decides whether|determines whether|classifies)'
+  '(recorded|prior|measured) (duration|runtime|run time)[^.]{0,60}(decid|determin|classif)'
+  '(over|under|exceeds|exceeding|more than|less than|longer than) (a|an|one|[0-9]+) (minute|minutes|second|seconds|ms|millisecond)'
 )
 
-for surface in "$POLICY" "$SKILL" "$WORKFLOW" "$CLOSEOUT"; do
+# The surfaces that can impose, override, or contradict re-execution. Telemetry
+# and the registry are excluded on their own terms — each records the run and
+# never decides what it does — and they are where sanctioned duration
+# measurement legitimately lives.
+governing_surfaces=(
+  "$SKILL"
+  "$POLICY"
+  "$WORKFLOW"
+  "$CLOSEOUT"
+  "$skill_dir/references/closability-gate.md"
+)
+for surface in "${governing_surfaces[@]}"; do
+  if [[ ! -f "$surface" ]]; then
+    fail "every governing surface is present to guard (missing: ${surface#"$skill_dir/"})"
+    continue
+  fi
   forbids_contract "$surface" \
     'no runtime predicate decides validation from cost, duration, or telemetry' \
     "${cost_predicates[@]}"
@@ -205,7 +227,7 @@ done
 
 # The guard has teeth only if the rule #122 rejects actually trips it: skipping
 # unresolved required validation because prior telemetry called it costly.
-counterfactual="$flat_dir/rejected-cost-rule.md"
+counterfactual="$flat_dir/../rejected-cost-rule.md"
 cat >"$counterfactual" <<'REJECTED'
 ## Cost exemption
 

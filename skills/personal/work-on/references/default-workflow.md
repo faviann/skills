@@ -154,8 +154,8 @@ adjudications, or dispositions.
 ## 3. Primary checkpoint
 
 Inspect the worktree and, unless qualifying evidence for the exact current
-candidate and check identity already settles their assurance question, run
-affected focused checks. Before the first commit, delegate one fresh
+Candidate and Validation identity already settles their assurance question,
+run affected focused checks. Before the first commit, delegate one fresh
 raw-artifact readiness sweep; adjudicate it once and batch
 all blockers back to the initial implementation delegate through the harness's
 supported continuation mechanism, applying the implementation-owner fallback
@@ -207,9 +207,9 @@ Batch all blockers from one combined gate back to the initial implementation
 delegate through the harness's supported continuation mechanism, applying the
 implementation-owner fallback in `SKILL.md`'s authority invariants when
 continuation is unavailable. Run affected focused checks under the same
-candidate and check identity rule, applying `references/validation-evidence.md`,
-then commit and rerun the
-gate with fresh reviewers until clean; do not show later reviewers prior
+Candidate and Validation identity rule, applying
+`references/validation-evidence.md`, then commit and rerun the gate with fresh
+reviewers until clean; do not show later reviewers prior
 reports, adjudications, or the ledger, and do not run the full regression suite
 in this loop.
 

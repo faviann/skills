@@ -2,11 +2,11 @@
 
 ## Adversarial closure gate
 
-Independently inspect the contract, production paths, diff, and evidence, then
-build this table:
-
 Apply `validation-evidence.md` to reuse qualifying evidence and to decide when
 the closure context owes the narrowest Independent execution.
+
+Independently inspect the contract, production paths, diff, and evidence, then
+build this table:
 
 | Acceptance criterion | Production path | Exact artifact/mode/seam | Evidence | Status |
 |---|---|---|---|---|
