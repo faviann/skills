@@ -67,8 +67,23 @@ has "$SKILL" 'Apply `references/review-state-machine.md` to every selected workf
 
 ## One frozen governing state and one exact candidate per gate
 has "$STATE" \
-  'freeze.*comparison base.*trusted (contract )?snapshot.*binding standards.*accepted full review contract.*Validation-surface manifest' \
+  'freeze.*comparison base.*trusted (contract )?snapshot.*complete Standards input.*accepted full review contract.*Validation-surface manifest' \
   'one review chain freezes every governing input'
+has "$STATE" \
+  'Before the initial gate.*materialize.*complete frozen Standards input' \
+  'the review chain materializes the Standards input before review'
+has "$STATE" \
+  'applicable repository standards source.*source-labelled path.*exact content' \
+  'the frozen Standards input includes repository standards sources and content'
+has "$STATE" \
+  'complete Fowler smell baseline.*code-review/SKILL.md' \
+  'the frozen Standards input includes code-review.s full Fowler baseline'
+has "$STATE" \
+  'repo overrides.*judgement call.*frozen Standards input' \
+  'the frozen Standards input preserves the baseline semantics'
+has "$STATE" \
+  'reuse.*exact frozen Standards input.*cumulative.*delta.*never rediscover' \
+  'every review gate reuses one Standards input instead of live discovery'
 has "$STATE" \
   'initial.*cumulative.*Standards.*Spec.*closure.*same exact Candidate identity' \
   'the initial cumulative gate binds all three axes to one candidate'
@@ -85,7 +100,7 @@ for required in \
   'Exact current Candidate identity' \
   'Mechanically exact cumulative diff' \
   'Full trusted contract' \
-  'Binding standards' \
+  'Binding Standards input' \
   'Validation-surface manifest' \
   'Qualifying raw validation evidence'; do
   grep -Fqi -- "$required" "$cumulative_package" \
@@ -125,7 +140,7 @@ for required in \
   'Exact current Candidate identity' \
   'Mechanically exact delta' \
   'Full trusted contract' \
-  'Binding standards' \
+  'Binding Standards input' \
   'Qualifying raw validation evidence' \
   'Review scope'; do
   grep -Fqi -- "$required" "$package" \
@@ -153,6 +168,9 @@ has "$REVIEW_ADAPTER" \
 has "$REVIEW_ADAPTER" \
   'Construct each prompt from exactly two inputs' \
   'the composed delta prompt contains no convenience inputs'
+has "$REVIEW_ADAPTER" \
+  'Standards.*complete frozen Standards input.*repository standards.*Fowler smell baseline.*repo-overrides.*judgement-call' \
+  'the Standards package preserves its complete existing contract'
 
 prompt_template="$fixture_dir/work-on-prompt-template.txt"
 code_block_after "$REVIEW_ADAPTER" '## Prompt composition' "$prompt_template"
@@ -168,6 +186,14 @@ for axis in "${!axis_briefs[@]}"; do
     'remediation rationale|prior finding|prior report|accepted directive|adjudication|disposition|ledger|commit list|issue reference' \
     "composed delta axis $axis contains only neutral permitted inputs"
 done
+standards_composed="$fixture_dir/composed-standards.txt"
+{ cat "$package"; printf '%s\n' "${axis_briefs[0]}"; } >"$standards_composed"
+grep -Eqi -- 'Binding Standards input.*repository standards.*exact.*content' \
+  "$(flatten "$standards_composed")" \
+  || fail 'the composed Standards prompt carries exact repository standards content'
+grep -Eqi -- 'Binding Standards input.*Fowler smell baseline.*repo[- ]overrides.*judgement[- ]call' \
+  "$(flatten "$standards_composed")" \
+  || fail 'the composed Standards prompt carries the Fowler baseline and semantics'
 has "$CLOSEOUT" \
   'delta axis receives.*identical neutral delta-review package.*Neither receives the ledger or anyone.s conclusions' \
   'the closure delta axis receives the same blind package'

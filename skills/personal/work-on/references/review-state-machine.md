@@ -9,12 +9,30 @@ these gates; `github-closeout.md` owns closure judgments;
 ## Frozen governing state
 
 Before the initial cumulative gate, freeze one review chain's comparison base,
-trusted contract snapshot, binding standards snapshot, accepted full review
+trusted contract snapshot, complete Standards input, accepted full review
 contract, and finite Validation-surface manifest. The accepted full review
 contract is the complete Standards, Spec, and closure assignment, including the
 same-mechanism brief and validation-evidence policy. Retain exact identities for
 those inputs and verify them before every review transition. They govern one
 chain; an old Reviewed anchor never crosses to a different governing state.
+
+### Frozen Standards input
+
+Before the initial gate, materialize the complete frozen Standards input:
+
+1. Enumerate every applicable repository standards source under
+   `code-review/SKILL.md`'s existing Standards-source rule. Record each source
+   with its source-labelled path and exact content; record explicitly when the
+   repository has no such source.
+2. Append the complete Fowler smell baseline from `code-review/SKILL.md`,
+   including its existing repo-overrides and judgement-call semantics and its
+   rule to skip anything tooling already enforces.
+
+Freeze the combined input and its exact identity with the other governing
+inputs. The repo overrides and every smell remains a judgement call inside this
+frozen Standards input. Reuse the exact frozen Standards input verbatim in
+every cumulative and delta package; never rediscover repository standards or
+reconstruct the baseline during the review chain.
 
 ### Cumulative-review package
 
@@ -29,7 +47,9 @@ candidate against the full accepted review contract.
 - Exact current Candidate identity: <full exact identity>
 - Mechanically exact cumulative diff: <git diff comparison-base...candidate>
 - Full trusted contract: <the frozen trusted snapshot and referenced contracts>
-- Binding standards: <the frozen standards snapshot>
+- Binding Standards input: <applicable repository standards source-labelled
+  paths and exact content, followed by the complete frozen Fowler smell
+  baseline with its repo-overrides and judgement-call semantics>
 - Validation-surface manifest: <the frozen complete direct-evidence population>
 - Qualifying raw validation evidence: <evidence tied to the current candidate,
   with safe provenance locators under references/validation-evidence.md>
@@ -79,7 +99,9 @@ the full accepted review contract.
 - Exact current Candidate identity: <full exact identity>
 - Mechanically exact delta: <git diff previous-anchor...current-candidate>
 - Full trusted contract: <the frozen trusted snapshot and referenced contracts>
-- Binding standards: <the frozen standards snapshot>
+- Binding Standards input: <applicable repository standards source-labelled
+  paths and exact content, followed by the complete frozen Fowler smell
+  baseline with its repo-overrides and judgement-call semantics>
 - Validation-surface manifest: <the frozen complete direct-evidence population>
 - Qualifying raw validation evidence: <evidence tied to the current candidate,
   with safe provenance locators under references/validation-evidence.md>

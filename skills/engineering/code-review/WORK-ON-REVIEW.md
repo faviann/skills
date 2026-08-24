@@ -29,3 +29,9 @@ packages, send the same exact package to Standards and Spec. A cumulative review
 begins at its full cumulative subject. A delta review begins at its correction
 delta and follows the package's bounded unchanged-context and same-mechanism
 rules. After both axes return, continue at `SKILL.md` step 5.
+
+For Standards, the package's complete frozen Standards input supplies both the
+source-labelled exact content of every applicable repository standards source
+and the complete Fowler smell baseline from `SKILL.md`. Preserve the baseline's
+repo-overrides and judgement-call semantics and its tooling-enforcement
+exclusion. Pass that input verbatim; step 3 does not rediscover any part of it.
