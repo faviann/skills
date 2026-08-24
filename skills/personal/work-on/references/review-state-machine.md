@@ -60,6 +60,13 @@ the full accepted review contract.
 - Validation-surface manifest: <the frozen complete direct-evidence population>
 - Qualifying raw validation evidence: <evidence tied to the current candidate,
   with safe provenance locators under references/validation-evidence.md>
+- Review scope: Begin at the exact correction delta. Inspect unchanged context
+  only for a recorded concrete contract question, changed-mechanism question,
+  reproduced finding or seed, or #62 same-mechanism neighborhood investigation.
+  For #62, stay inside the same mechanism, governing criterion, and public flow;
+  stop before another criterion, subsystem, external boundary, or speculative
+  defense. Do not routinely reconstruct, repackage, or reread the full
+  cumulative candidate.
 ```
 
 The package is the review input. Separately enforce its blindness: describe the
@@ -74,14 +81,9 @@ exact current candidate and unchanged governing inputs. Invoke `code-review` in
 its delta-package mode for Standards and Spec; give the closure axis that
 identical package and its closure brief.
 
-The correction delta is the initial review search surface. A reviewer may
-inspect unchanged context only for a recorded concrete contract question,
-changed-mechanism question, reproduced finding or seed, or #62 same-mechanism
-neighborhood investigation. For #62, stay inside the same mechanism, governing
-criterion and public flow, then apply the existing stop boundary before another
-criterion, subsystem, external boundary, or speculative defense. This access
-does not license routine reconstruction, repackaging, or rereading of the full
-cumulative candidate.
+Apply the package's Review scope exactly. It makes the correction delta the
+initial review search surface while keeping concrete unchanged-context access
+and #62's same-mechanism investigation and stop boundaries reachable.
 
 Advance the Reviewed anchor only after all three required delta axes complete
 against the same exact candidate under unchanged governing inputs. Advance it

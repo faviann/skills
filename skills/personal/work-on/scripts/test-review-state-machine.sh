@@ -106,13 +106,18 @@ for required in \
   'Mechanically exact delta' \
   'Full trusted contract' \
   'Binding standards' \
-  'Qualifying raw validation evidence'; do
+  'Qualifying raw validation evidence' \
+  'Review scope'; do
   grep -Fqi -- "$required" "$package" \
     || fail "delta-review package includes $required"
 done
 lacks "$package" \
   'remediation rationale|prior finding|prior report|accepted directive|adjudication|disposition|ledger|fixes [A-Z0-9#]' \
   'the delta-review package is blind to prior conclusions and repair rationale'
+grep -Eqi -- \
+  'exact correction delta.*unchanged context.*concrete contract question.*changed-mechanism question.*reproduced finding.*#62.*same mechanism.*governing criterion.*public flow.*stop before another criterion.*subsystem.*external boundary.*speculative defense.*not routinely reconstruct.*full cumulative candidate' \
+  "$(flatten "$package")" \
+  || fail 'the transported package carries bounded unchanged-context and #62 rules'
 has "$REVIEW" \
   'both Standards and Spec.*only the exact package.*verbatim' \
   'code-review carries the exact delta package to both independent axes'
@@ -129,7 +134,7 @@ echo 'ok - delta reviewers receive the exact neutral package and no prior conclu
 
 ## Delta is the initial surface; concrete reasons bound context expansion
 has "$STATE" \
-  'delta is the initial (review )?search surface' \
+  'correction delta.*initial review search surface' \
   'delta review starts at the correction rather than reconstructing the candidate'
 has "$STATE" \
   'unchanged context.*concrete.*contract question.*changed-mechanism question.*reproduced finding.*#62' \
@@ -138,7 +143,7 @@ has "$STATE" \
   '#62.*same-mechanism.*same.*criterion.*public flow.*stop.*another criterion.*subsystem.*external boundary.*speculative' \
   '#62 remains reachable with its bounded stop rules'
 has "$STATE" \
-  'does not.*routine.*(reconstruct|repackage|reread).*full cumulative candidate' \
+  'not routin.*(reconstruct|repackage|reread).*full cumulative candidate' \
   'context expansion cannot become a routine cumulative reread'
 echo 'ok - delta scope preserves bounded unchanged-context and #62 investigation'
 
