@@ -15,6 +15,7 @@ SKILL="$skill_dir/SKILL.md"
 CLOSEOUT="$skill_dir/references/github-closeout.md"
 TELEMETRY="$skill_dir/references/run-telemetry.md"
 REVIEW="$skill_dir/../../engineering/code-review/SKILL.md"
+REVIEW_ADAPTER="$skill_dir/../../engineering/code-review/WORK-ON-REVIEW.md"
 EVIDENCE="$skill_dir/references/validation-evidence.md"
 
 failures=0
@@ -50,13 +51,13 @@ lacks() {
 }
 
 code_block_after() {
-  local heading="$1" output="$2"
+  local source="$1" heading="$2" output="$3"
   awk -v heading="$heading" '
     $0 == heading { section = 1; next }
     section && $0 == "```text" { inside = 1; next }
     inside && $0 == "```" { exit }
     inside { print }
-  ' "$STATE" >"$output"
+  ' "$source" >"$output"
 }
 
 has "$WORKFLOW" 'references/review-state-machine.md' \
@@ -77,6 +78,25 @@ has "$STATE" \
 has "$STATE" \
   'clean.*initial cumulative gate.*unchanged.*satisfies.*fresh blind cumulative confirmation.*no second' \
   'a clean unchanged initial gate is not duplicated at closeout'
+cumulative_package="$fixture_dir/cumulative-package.txt"
+code_block_after "$STATE" '### Cumulative-review package' "$cumulative_package"
+for required in \
+  'Comparison-base identity' \
+  'Exact current Candidate identity' \
+  'Mechanically exact cumulative diff' \
+  'Full trusted contract' \
+  'Binding standards' \
+  'Validation-surface manifest' \
+  'Qualifying raw validation evidence'; do
+  grep -Fqi -- "$required" "$cumulative_package" \
+    || fail "cumulative-review package includes $required"
+done
+has "$STATE" \
+  'same exact package to Standards, Spec, and closure' \
+  'every cumulative axis receives one frozen package without live discovery'
+has "$STATE" \
+  'package is authoritative.*no axis refetches or rediscovers a governing input' \
+  'cumulative package mode preserves frozen governing inputs'
 echo 'ok - the initial cumulative gate establishes one exact reviewed anchor and confirmation'
 
 ## Remediation always takes the delta leg
@@ -99,7 +119,7 @@ echo 'ok - remediation enters a three-axis exact-delta gate before advancing the
 
 ## The reviewer package is exact and blind
 package="$fixture_dir/delta-package.txt"
-code_block_after '### Delta-review package' "$package"
+code_block_after "$STATE" '### Delta-review package' "$package"
 for required in \
   'Previous Reviewed-anchor identity' \
   'Exact current Candidate identity' \
@@ -119,17 +139,38 @@ grep -Eqi -- \
   "$(flatten "$package")" \
   || fail 'the transported package carries bounded unchanged-context and #62 rules'
 has "$REVIEW" \
-  'both Standards and Spec.*only the exact package.*verbatim' \
-  'code-review carries the exact delta package to both independent axes'
-has "$REVIEW" \
-  'delta-review package replaces steps 1 through 3' \
-  'delta mode replaces generic cumulative discovery'
-has "$REVIEW" \
-  'identities and frozen sources are authoritative.*never resolve an independent `HEAD`.*build or pass a commit list.*discover or refetch a spec.*discover live standards' \
-  'delta mode cannot leak commit rationale or substitute live governing inputs'
-has "$REVIEW" \
-  'prompt from only the exact package verbatim and the corresponding axis brief' \
+  'WORK-ON-REVIEW.md.*instead of the ordinary input discovery' \
+  'the inherited skill routes work-on packages to their separate adapter'
+lacks "$REVIEW" \
+  'Delta-package mode|delta-review package replaces steps|never resolve an independent `HEAD`' \
+  'the upstream-derived skill does not inline its work-on exception'
+has "$REVIEW_ADAPTER" \
+  'replaces `SKILL.md` steps 1 through 3 and the generic input bullets in step 4' \
+  'work-on package mode replaces generic cumulative discovery'
+has "$REVIEW_ADAPTER" \
+  'Candidate identity and frozen sources are authoritative.*never resolve an independent `HEAD`.*build or pass a commit list.*discover or refetch a spec.*discover live standards' \
+  'package mode cannot leak commit rationale or substitute live governing inputs'
+has "$REVIEW_ADAPTER" \
+  'Construct each prompt from exactly two inputs' \
   'the composed delta prompt contains no convenience inputs'
+
+prompt_template="$fixture_dir/work-on-prompt-template.txt"
+code_block_after "$REVIEW_ADAPTER" '## Prompt composition' "$prompt_template"
+[[ "$(grep -cve '^[[:space:]]*$' "$prompt_template")" == 2 ]] \
+  || fail 'the work-on review adapter permits exactly package plus axis brief'
+mapfile -t axis_briefs < <(sed -n 's/^- The brief: "\(.*\)"$/\1/p' "$REVIEW")
+[[ "${#axis_briefs[@]}" == 2 ]] \
+  || fail 'both code-review axis briefs are mechanically identifiable'
+for axis in "${!axis_briefs[@]}"; do
+  composed="$fixture_dir/composed-$axis.txt"
+  { cat "$package"; printf '%s\n' "${axis_briefs[$axis]}"; } >"$composed"
+  lacks "$composed" \
+    'remediation rationale|prior finding|prior report|accepted directive|adjudication|disposition|ledger|commit list|issue reference' \
+    "composed delta axis $axis contains only neutral permitted inputs"
+done
+has "$CLOSEOUT" \
+  'delta axis receives.*identical neutral delta-review package.*Neither receives the ledger or anyone.s conclusions' \
+  'the closure delta axis receives the same blind package'
 echo 'ok - delta reviewers receive the exact neutral package and no prior conclusions'
 
 ## Delta is the initial surface; concrete reasons bound context expansion

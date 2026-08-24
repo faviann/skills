@@ -16,14 +16,37 @@ same-mechanism brief and validation-evidence policy. Retain exact identities for
 those inputs and verify them before every review transition. They govern one
 chain; an old Reviewed anchor never crosses to a different governing state.
 
+### Cumulative-review package
+
+For every initial or final cumulative gate, populate one neutral package from
+the frozen governing state and exact current artifacts, and give that same exact
+package to Standards, Spec, and closure:
+
+```text
+Cumulative review assignment: independently review the exact cumulative
+candidate against the full accepted review contract.
+- Comparison-base identity: <full exact identity>
+- Exact current Candidate identity: <full exact identity>
+- Mechanically exact cumulative diff: <git diff comparison-base...candidate>
+- Full trusted contract: <the frozen trusted snapshot and referenced contracts>
+- Binding standards: <the frozen standards snapshot>
+- Validation-surface manifest: <the frozen complete direct-evidence population>
+- Qualifying raw validation evidence: <evidence tied to the current candidate,
+  with safe provenance locators under references/validation-evidence.md>
+```
+
+Invoke `code-review` in its frozen work-on-package mode for Standards and Spec;
+give closure the identical package and its closure brief. The package is
+authoritative, so no axis refetches or rediscovers a governing input. Keep the
+assignment blind: add no implementation context, prior reviewer conclusion,
+adjudication, disposition, or convenience summary.
+
 ## Initial cumulative gate
 
 After the first committed candidate, capture its exact Candidate identity as
 `C0`. The initial cumulative gate runs fresh Standards, Spec, and closure axes
 against the same exact Candidate identity and frozen governing inputs. Give
-each the full cumulative `<base>...C0` subject, trusted inputs, frozen
-Validation-surface manifest, and qualifying raw evidence, but no prior
-conclusion.
+each the same exact cumulative-review package for `C0`.
 
 `C0` becomes the Reviewed anchor only after fresh Standards, Spec, and closure
 complete against the same exact candidate under unchanged governing inputs. A
@@ -78,8 +101,8 @@ ledger. Add no convenience summary of why the correction exists.
 
 Start fresh Standards, Spec, and closure delta axes together against the same
 exact current candidate and unchanged governing inputs. Invoke `code-review` in
-its delta-package mode for Standards and Spec; give the closure axis that
-identical package and its closure brief.
+its frozen work-on-package mode for Standards and Spec; give the closure axis
+that identical package and its closure brief.
 
 Apply the package's Review scope exactly. It makes the correction delta the
 initial review search surface while keeping concrete unchanged-context access
@@ -95,9 +118,9 @@ blocker and allowed correction repeats this loop from the newly advanced anchor.
 
 After a clean delta gate, give the exact current candidate a new fresh blind
 cumulative Standards, Spec, and closure confirmation against the full accepted
-review contract. Use fresh reviewers, the full `<base>...current-candidate`
-subject, frozen governing inputs, and qualifying raw evidence; expose none of
-the delta reports or their adjudication.
+review contract. Use fresh reviewers and a newly populated cumulative-review
+package for the exact current candidate; expose none of the delta reports or
+their adjudication.
 
 If that cumulative confirmation is clean and its candidate and governing inputs
 stay unchanged, it is the confirmation Closeout consumes. If a blocker from the

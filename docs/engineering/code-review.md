@@ -4,7 +4,7 @@
 
 The two axes are never merged and never re-ranked. The report ends with a worst issue *per axis* and refuses to name a single winner across them, because a change can pass one axis and fail the other: code that follows every convention while implementing the wrong thing passes Standards and fails Spec; code that does exactly what the [ticket](https://www.aihero.dev/ai-coding-dictionary/ticket) asked while breaking the repo's conventions does the reverse. A blended verdict lets the passing axis hide the failing one. Each reviewer currently reports in under 600 words; that limit is an interim setting pending a separate evidence-backed reassessment, not a settled optimum.
 
-An orchestrator can also supply a blind delta-review package. In that mode the package replaces normal fixed-point, commit-message, spec, and standards discovery, so both axes receive the same exact anchor, current candidate, mechanical delta, frozen contract, binding standards, and qualifying raw evidence without remediation context leaking in beside it. The delta is where inspection begins; a concrete contract or same-mechanism reason can lead into unchanged context without turning every correction into another full-candidate reread.
+The `work-on` orchestrator can instead supply a frozen cumulative- or blind delta-review package. In that mode the package replaces normal fixed-point, commit-message, spec, and standards discovery, so both axes receive the same exact candidate and governing inputs without live sources or remediation context leaking in beside them. A delta package also supplies its exact anchor and mechanical correction delta; that delta is where inspection begins, while a concrete contract or same-mechanism reason can lead into unchanged context without turning every correction into another full-candidate reread.
 
 ## When to reach for it
 
@@ -19,7 +19,7 @@ Type `/code-review`, or the agent reaches for it automatically when you ask to r
 | The whole codebase has drifted, not one diff | [improve-codebase-architecture](https://aihero.dev/skills-improve-codebase-architecture) |
 | Something is broken and you do not know why | [diagnosing-bugs](https://aihero.dev/skills-diagnosing-bugs) |
 
-You must supply the fixed point. If you do not, the skill asks for one rather than guessing; it resolves the current candidate to an exact SHA, then checks the ref resolves and the diff is non-empty before spawning anything, so a typo'd branch name fails in front of you instead of inside two sub-agents.
+In normal mode, you must supply the fixed point. If you do not, the skill asks for one rather than guessing; it then checks the ref resolves and the diff is non-empty before spawning anything, so a typo'd branch name fails in front of you instead of inside two sub-agents. In `work-on` package mode, the orchestrator supplies and freezes the comparison identities instead.
 
 ## Prerequisites
 

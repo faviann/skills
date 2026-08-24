@@ -30,7 +30,10 @@ tdd_inputs=(
   skills/engineering/tdd/mocking.md
   skills/engineering/tdd/tests.md
 )
-review_inputs=(skills/engineering/code-review/SKILL.md)
+review_inputs=(
+  skills/engineering/code-review/SKILL.md
+  skills/engineering/code-review/WORK-ON-REVIEW.md
+)
 
 # A failed capture must not leave the previous run's ledger behind: a later
 # verify would read it as this run's frozen value. Verification failures only
