@@ -155,58 +155,52 @@ comparison input for the post-freeze capture. Losing it before capture
 invalidates the not-yet-delegated manifest and takes complete recomputation;
 identifying the workflow again cannot authorize a manifest already derived.
 
-Also put the exact trusted sources the gate will read in an owner-only JSON
-array whose members contain only string `source` and `body` values. Use a stable
-source locator and preserve each source body exactly. Then run this skill's
-identity helper:
+Before applying the gate, retain the exact source-labelled trusted snapshot it
+will read. Preserve each trusted source's attribution and body in that one
+snapshot; it is the run's contract, not a serialization a later context must
+recreate. Record the committed base before the gate as
+`pre_implementation_base="$(git rev-parse HEAD)"`.
 
-```bash
-scripts/manifest-identity.sh snapshot \
-  --input "$trusted_sources_file" \
-  --output "$trusted_snapshot_file"
-```
-
-The helper rejects duplicate locators and invalid members, sorts the semantic
-records by locator, and emits the one compact UTF-8 JSON Lines representation
-the identity step accepts. Thus input JSON whitespace, member order, key order,
-and equivalent JSON escapes cannot change the digest bytes. This owner-only
-temporary file is the digest input, not a summary or a second durable snapshot
-store; reconstruct it through the same command on resume. Record the committed
-base before the gate as `pre_implementation_base="$(git rev-parse HEAD)"`.
-
-Write it to one untracked run-local file in the target repository's Git common
-directory:
+Keep that snapshot and the manifest in two untracked run-local files in the
+target repository's Git common directory:
 
 ```text
 $(git rev-parse --path-format=absolute --git-common-dir)/work-on-manifest/
-  <run-id>.md      # the bare run id from "$RUN_HANDLE", before its "@"
+  <run-id>.trusted-snapshot.json
+  <run-id>.md
 ```
 
-so it survives a branch switch and every supported continuation or resume of the
-run, and never reaches a published artifact. It is run-local semantic contract
-state: not telemetry, not Workflow provenance, and never a tracked repository
-artifact. Provenance fingerprints the instructions this run read; it does not
-carry this run's manifest.
+using the bare run id from `$RUN_HANDLE`, before its `@`. Both survive a branch
+switch and every supported continuation or resume of the run, and never reach a
+published artifact. They are run-local semantic contract state: not telemetry,
+not Workflow provenance, not Run registry state, and never tracked repository
+artifacts. Provenance fingerprints the instructions this run read; it carries
+neither object.
 
-Create the directory and the file for their owner only — `0700` and `0600`.
+Create the directory and both files for their owner only — `0700` and `0600`.
 Create each in the shell first, guarded so re-running this step never truncates
 what a resume still needs:
 
 ```bash
 manifest_dir="$(git rev-parse --path-format=absolute --git-common-dir)/work-on-manifest"
-manifest_file="$manifest_dir/${RUN_HANDLE%%@*}.md"
+run_id="${RUN_HANDLE%%@*}"
+trusted_snapshot_file="$manifest_dir/$run_id.trusted-snapshot.json"
+manifest_file="$manifest_dir/$run_id.md"
 [[ -d "$manifest_dir" ]] || (umask 077 && mkdir -p "$manifest_dir")
 chmod 700 "$manifest_dir"
+[[ -e "$trusted_snapshot_file" ]] || (umask 077 && : >"$trusted_snapshot_file")
 [[ -e "$manifest_file" ]] || (umask 077 && : >"$manifest_file")
+chmod 600 "$trusted_snapshot_file"
 chmod 600 "$manifest_file"
 ```
 
-The guard protects a manifest a resume still needs from a repeated creation
-step; a rebuild before delegation still overwrites this same path's contents
-outright, as invalidation requires. The umask only closes the creation-to-chmod
-window for a file the shell itself creates; a tool that writes the manifest
-directly lands it at that tool's default mode, so create the empty file this way
-before writing the materialized surfaces into it. Then, from the target
+The guards protect frozen state a resume still needs from a repeated creation
+step; a rebuild before delegation still overwrites both paths' contents
+outright, as invalidation requires. Create each file in the shell before writing
+it, then reapply `0600`: the umask closes the creation-to-chmod window only for
+shell-created files, while an editor may replace an inode at its default mode.
+Write the exact source-labelled snapshot before applying the gate, and write the
+materialized manifest when the complete gate passes. Then, from the target
 repository, run this skill's identity helper; the path below is relative to the
 skill root:
 
@@ -218,17 +212,18 @@ scripts/manifest-identity.sh freeze \
   --workflow-identity "$selected_workflow_identity"
 ```
 
-The command prepends the full base SHA, the snapshot's SHA-256 digest, and one
-binding digest over both identities plus the manifest body. It atomically
-replaces the file at `0600`; immediately before replacement, it removes the
+The command requires both frozen files to be owner-only, prepends the full base
+SHA, the snapshot's SHA-256 digest, and one binding digest over both identities
+plus the manifest body, and atomically replaces the manifest at `0600`.
+Immediately before replacement, it removes the
 target worktree's previous Workflow provenance ledger, so only a capture after
 this freeze can authorize reuse. It also seals the retained workflow identity
 in Workflow provenance's owner-only sidecar, not in the manifest; a later
 identity cannot be substituted for it during capture. The binding makes
-malformed identity fields or a changed manifest body fail verification. The
-temporary snapshot file may then be removed: the manifest is the durable
-run-specific binding, while the trusted sources re-establish the comparison
-input. A run's record of a workstation's work is not group- or world-readable.
+malformed identity fields, a changed manifest body, or a missing, replaced, or
+changed snapshot fail verification. Retain both files for the run's supported
+continuation/resume lifetime. A run's record of a workstation's work is not
+group- or world-readable.
 
 After the freeze, return to the procedure with the retained identity. The later
 capture in `SKILL.md` step 7 compares the current selected workflow with that

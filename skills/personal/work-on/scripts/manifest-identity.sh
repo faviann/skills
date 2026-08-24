@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export LC_ALL=C
 
-# Canonicalize trusted sources, bind a materialized manifest to those exact
-# snapshot bytes and its pre-implementation commit, then verify before reuse.
+# Bind a materialized manifest to the retained trusted-snapshot bytes and its
+# pre-implementation commit, then verify both frozen files before reuse.
 
 staged=""
 workflow_staged=""
@@ -19,18 +18,12 @@ fail() {
 }
 
 usage() {
-  fail 'usage: manifest-identity.sh snapshot --input FILE --output FILE | freeze --manifest FILE --snapshot FILE --base REF --workflow-identity SHA256 | verify --manifest FILE --snapshot FILE'
+  fail 'usage: manifest-identity.sh freeze --manifest FILE --snapshot FILE --base REF --workflow-identity SHA256 | verify --manifest FILE --snapshot FILE'
 }
 
 subcommand="${1:-}"
 shift || true
 case "$subcommand" in
-  snapshot)
-    (( $# == 4 )) && [[ "$1" == --input && "$3" == --output ]] \
-      || usage
-    sources="$2"
-    output="$4"
-    ;;
   freeze)
     (( $# == 8 )) \
       && [[ "$1" == --manifest && "$3" == --snapshot && "$5" == --base \
@@ -50,39 +43,6 @@ case "$subcommand" in
   *) usage ;;
 esac
 
-if [[ "$subcommand" == snapshot ]]; then
-  command -v jq >/dev/null 2>&1 || fail 'snapshot creation requires jq'
-  [[ -f "$sources" && ! -L "$sources" && -r "$sources" ]] \
-    || fail 'trusted sources are missing or unsafe'
-  [[ ! -L "$output" ]] || fail 'trusted snapshot output is unsafe'
-  output_dir="$(dirname -- "$output")"
-  [[ -d "$output_dir" && ! -L "$output_dir" ]] \
-    || fail 'trusted snapshot directory is missing or unsafe'
-  output_dir="$(cd -P -- "$output_dir" && pwd -P)"
-  staged="$(umask 077 && mktemp "$output_dir/.trusted-snapshot.XXXXXX")"
-  if ! jq -ce '
-    . as $records
-    | if (
-        type == "array" and length > 0
-        and all(.[];
-          type == "object"
-          and keys == ["body", "source"]
-          and (.source | type == "string" and length > 0)
-          and (.body | type == "string"))
-        and ([.[].source] | unique | length) == ($records | length)
-      )
-      then sort_by(.source)[] | {source: .source, body: .body}
-      else error("trusted sources must be unique source/body string records")
-      end
-  ' "$sources" >"$staged" 2>/dev/null; then
-    fail 'trusted sources are invalid'
-  fi
-  chmod 600 "$staged"
-  mv -f -- "$staged" "$output"
-  staged=""
-  exit 0
-fi
-
 common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
   || fail 'run from the target Git repository'
 git_dir="$(git rev-parse --path-format=absolute --absolute-git-dir 2>/dev/null)" \
@@ -93,10 +53,25 @@ manifest_dir="$(dirname -- "$manifest")"
 manifest_dir="$(cd -P -- "$manifest_dir" && pwd -P)"
 [[ "$manifest_dir" == "$common_dir/work-on-manifest" ]] \
   || fail 'manifest must be in the target repository Git common directory'
+snapshot_dir="$(dirname -- "$snapshot")"
+[[ -d "$snapshot_dir" && ! -L "$snapshot_dir" ]] \
+  || fail 'trusted snapshot directory is missing or unsafe'
+snapshot_dir="$(cd -P -- "$snapshot_dir" && pwd -P)"
+[[ "$snapshot_dir" == "$manifest_dir" ]] \
+  || fail 'trusted snapshot must be alongside the manifest'
+run_id="$(basename -- "$manifest" .md)"
+[[ "$run_id" != "$(basename -- "$manifest")" \
+  && "$(basename -- "$snapshot")" == "$run_id.trusted-snapshot.json" ]] \
+  || fail 'trusted snapshot and manifest do not identify the same run'
 [[ -f "$manifest" && ! -L "$manifest" && -r "$manifest" ]] \
   || fail 'manifest is missing or unsafe'
 [[ -f "$snapshot" && ! -L "$snapshot" && -r "$snapshot" ]] \
   || fail 'trusted snapshot is missing or unsafe'
+[[ -s "$snapshot" ]] || fail 'trusted snapshot is empty'
+[[ "$(stat -c '%a' "$manifest_dir")" == 700 \
+  && "$(stat -c '%a' "$manifest")" == 600 \
+  && "$(stat -c '%a' "$snapshot")" == 600 ]] \
+  || fail 'frozen state is not owner-only'
 
 snapshot_digest="$(sha256sum <"$snapshot" | cut -d' ' -f1)"
 [[ "$snapshot_digest" =~ ^[0-9a-f]{64}$ ]] \

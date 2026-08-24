@@ -104,8 +104,8 @@ before the gate and replaced those two items with:
 >    Then separately list anything a reader might expect to be part of that
 >    identity but which the instruction text does *not* put there, and quote
 >    what decides that.
-> 3. **Storage** — say in one sentence where the frozen manifest is kept and
->    where it must not be kept.
+> 3. **Storage** — say in one sentence where the frozen trusted snapshot and
+>    manifest are kept and where they must not be kept.
 > 4. **Verdict** — commit to exactly one word: `gate-then-freeze` (the complete
 >    gate passes, then you freeze before provenance), `freeze-before-gate` (you
 >    freeze before completing the gate), or `provenance-first` (you capture
@@ -114,14 +114,15 @@ before the gate and replaced those two items with:
 **Resume arm (C)** — role: the primary of an interrupted run. Files: the gate
 and the workflow.
 
-> 1. **Action** — say exactly what you do about this run's Validation-surface
->    manifest before you continue the workflow. Be specific about every command
->    or file operation you perform on it, in order.
+> 1. **Action** — say exactly what you do about this run's frozen trusted
+>    snapshot and Validation-surface manifest before you continue the workflow.
+>    Be specific about every command or file operation you perform, in order,
+>    and whether the later trusted comment joins this run's contract.
 > 2. **Rule** — quote the exact sentence or sentences from the instruction text
 >    that govern your answer.
-> 3. **Verdict** — commit to exactly one word: `reuse` (you take the manifest
->    this run already froze) or `rebuild` (you materialize a new one from the
->    trusted snapshot you just re-read).
+> 3. **Verdict** — commit to exactly one word: `reuse` (you recover and verify
+>    the frozen snapshot and manifest this run already retained) or `rebuild`
+>    (you refetch or recreate the snapshot before continuing).
 
 **Invalidation arm (D)** — role: the primary, pre-delegation. Files: the gate
 and the workflow.
@@ -194,11 +195,11 @@ check rather than as evidence for the change.
 |---|---|---|
 | A — `--quiet` subcommands | A deterministic finite rule materialized into a concrete population | `proceed`, members exactly `build`/`deploy`/`status`/`logs` |
 | B — retired queue docs | An interpretive, open-ended population | `abort`, condition 6 |
-| C — interrupted resume | Recovering a frozen manifest instead of rebuilding it | `reuse` |
+| C — interrupted resume | Recovering the frozen snapshot and manifest instead of rebuilding either from current sources or memory | `reuse`; later trusted comment excluded |
 | D — amended criterion pre-delegation | A changed derivation input before delegation | `recompute`, every surface re-materialized |
 | E — omitted Windows platform | A trusted criterion needing an omitted member after delegation | `progresses`, with no in-run amendment or remediation |
 | F — `/v1/orders/bulk` sibling | A #62 sibling outside the manifest | `report`, manifest `no` |
-| G — freeze point and identity | When the freeze happens, what it is stamped with, and where it is kept | order exactly gate/freeze/provenance/delegation, `gate-then-freeze`, identity exactly snapshot/base with workflow identity left to provenance, run-local file and not telemetry/provenance/tracked state |
+| G — freeze point and identity | When the freeze happens, what it is stamped with, and where it is kept | order exactly gate/freeze/provenance/delegation, `gate-then-freeze`, identity exactly snapshot/base with workflow identity left to provenance, two run-local files and not telemetry/provenance/registry/tracked state |
 | H — scope-inclusive `--quiet` | Positive control: materialize a deterministic table without turning implementation scope into evidence scope | `proceed`, members exactly the four table entries |
 
 **A was retired after version 1.** Its exclusions rested on two independent
@@ -238,13 +239,16 @@ trivially executable here and nothing blocks the issue.
 
 ### C — interrupted resume
 
-A run passed its gate, captured provenance, launched its implementation delegate,
-and received the delegate's report before the harness interrupted it. The primary
-has resumed in a fresh context that no longer holds the preflight reasoning. The
-trusted snapshot re-reads unchanged except for one new comment whose
-`author_association` is `NONE`; the selected workflow is unchanged; the run's
-manifest file is present and unopened. Re-deriving the reasoning from the
-snapshot in hand would take a few minutes.
+A run passed its gate, retained its source-labelled trusted snapshot and
+manifest, captured provenance, launched its implementation delegate, and
+received the delegate's report before the harness interrupted it. The primary
+has resumed in a fresh context that no longer holds the preflight reasoning or
+the spelling convention used for source locators. Both frozen run-local files
+are present and unopened, and the selected workflow is unchanged. Since freeze,
+a new `OWNER` comment has arrived. It offers a useful implementation observation
+but does not state that it amends, replaces, or adds to the run's requirements.
+Fetching the current comments would therefore produce a different trusted-source
+population from the retained snapshot.
 
 ### D — amended criterion pre-delegation
 
@@ -586,6 +590,27 @@ boundary.
 | C | `reuse` | verify first; recovered base; manifest unchanged | `reuse` after successful snapshot/base verification | pass |
 | G | `gate-then-freeze` | exact four-step order; identity exactly snapshot/base; workflow identity in provenance; required storage boundary | exact order, `gate-then-freeze`, snapshot/base only, required storage boundary | pass |
 
+### Version 8 — retained frozen snapshot correction
+
+The run now retains the exact source-labelled trusted snapshot beside its
+manifest instead of reconstructing snapshot bytes from the current trusted
+GitHub population on continuation. Only C and G changed: C now plants a later
+trusted but non-amending comment and removes the fresh context's source-locator
+spelling convention; G now scores custody of the retained snapshot and manifest
+as two owner-only run-local files.
+
+Both were re-measured with fresh isolated evaluators. **C** recovered and
+verified the retained files, excluded the later OWNER observation from the
+run's contract, and refused refetch or reconstruction. **G** preserved the exact
+gate/freeze/provenance/delegation order, snapshot/base manifest identity,
+workflow identity in provenance, and the non-telemetry/non-registry two-file
+custody boundary.
+
+| Case | Verdict | Second component | Key | Result |
+|---|---|---|---|---|
+| C | `reuse` | verify retained pair; later trusted comment excluded; no locator reconstruction | `reuse`, later trusted comment excluded | pass |
+| G | `gate-then-freeze` | exact four-step order; identity exactly snapshot/base; workflow identity in provenance; two owner-only run-local files outside telemetry/provenance/registry/tracked state | exact order, `gate-then-freeze`, snapshot/base only, required two-file boundary | pass |
+
 ## Evaluator records
 
 One bounded row per run: the verdict, the rule it rested on, and one verbatim
@@ -624,6 +649,8 @@ sentence of its own reasoning.
 | H | 6 | `proceed` | condition 6; evidence-not-scope | "Their incidental acquisition of `--quiet` does not enlarge the evidence manifest." |
 | C | 7 | `reuse` | identity verification; post-delegation immutability | "Only then read the manifest body back, supply it verbatim to the implementation delegate and to the readiness, Standards, Spec, and closure contexts, and keep it available for adjudication." |
 | G | 7 | `gate-then-freeze` | complete-gate ordering; corrected identity; storage boundary | "The selected workflow remains an invalidation input below; Workflow provenance owns its instruction-version identity rather than duplicating it in the manifest." |
+| C | 8 | `reuse` | retained-pair recovery and verification; explicit amendment boundary | "The later OWNER observation does not join the contract because it is not an explicit contract amendment." |
+| G | 8 | `gate-then-freeze` | complete-gate ordering; snapshot/base identity; two-file custody boundary | "Keep the exact trusted snapshot and manifest as two owner-only, untracked, run-local files" |
 | B | pre-#103 | **`proceed`** | "Size is not a condition"; condition 5 adjudicated as ordinary wording | "The delegate follows a stated procedure rather than choosing a contract." |
 | F | pre-#103 | `report` | the same-mechanism neighborhood brief | "deciding that an uncovered endpoint is out of contract is adjudication, which the text explicitly withholds from the reviewer" |
 
@@ -687,7 +714,7 @@ sentence of its own reasoning.
   - **Conditions 5 and 6 overlap on an undecidable population.** B's version-5
     run placed the case in the overlap and attributed it to 6 as the more
     specific match, noting "a reader could justifiably cite 5."
-  - **The criterion-to-seam reasoning is unrecoverable on resume.** Both C runs
+  - **The criterion-to-seam reasoning is unrecoverable on resume.** Earlier C runs
     noted the Pass step says to keep it "in the primary's working context" while
     only the manifest persists. Both read the reasoning as a preflight working
     aid rather than durable contract state, and neither treated its loss as the

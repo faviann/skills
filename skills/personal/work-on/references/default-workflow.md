@@ -34,10 +34,11 @@ that the selected workflow has not changed. If provenance was not captured
 after this manifest froze because the interruption preceded capture, or
 verification reports drift, the manifest cannot be reused.
 
-Whether before or after delegation, reconstruct the trusted-snapshot bytes
-through the gate's canonical `manifest-identity.sh snapshot` command and, from
-the target repository, run this skill's identity helper before reuse; the path
-below is relative to the skill root:
+Whether before or after delegation, recover the retained trusted-snapshot and
+manifest files for this run from the gate's custody location. Do not refetch
+current trusted GitHub comments or recreate either file from conversational
+memory. From the target repository, run this skill's identity helper before
+reuse; the path below is relative to the skill root:
 
 ```bash
 pre_implementation_base="$(scripts/manifest-identity.sh verify \
@@ -45,19 +46,24 @@ pre_implementation_base="$(scripts/manifest-identity.sh verify \
   --snapshot "$trusted_snapshot_file")"
 ```
 
-A successful verification proves that the current trusted snapshot matches the
-frozen snapshot digest, the recorded full base SHA still names a commit, and the
-snapshot/base/body binding is intact; it prints that base SHA for the resumed
-workflow. Only then read the manifest body back, supply it verbatim to the
-implementation delegate and to the readiness, Standards, Spec, and closure
-contexts, and keep it available for adjudication.
+A successful verification proves that the retained frozen snapshot matches the
+manifest's snapshot digest, the recorded full base SHA still names a commit,
+both files remain owner-only run-local state, and the snapshot/base/body binding
+is intact; it prints that base SHA for the resumed workflow. A newly arrived
+trusted comment does not join this frozen snapshot or invalidate it merely by
+existing. Only an explicit trusted-maintainer contract change takes the
+invalidation path below. Only after verification read the same snapshot and
+manifest back, supply them verbatim to the implementation delegate and to the
+readiness, Standards, Spec, and closure contexts, and keep them available for
+adjudication.
 
 Before delegation, a missing or failing Workflow provenance ledger or a missing,
-malformed, corrupt, or mismatched manifest is an invalid manifest input: discard
-the manifest and take the gate's settled complete preflight/manifest
-recomputation path. After delegation, either Workflow provenance or manifest
-verification failure takes the fail-closed hand-back below because the manifest
-is immutable; do not rebuild, patch, or silently reuse it.
+malformed, corrupt, replaced, or mismatched frozen snapshot or manifest is
+invalid frozen preflight state: discard both files and take the gate's settled
+complete trusted-snapshot/Closability/manifest recomputation path. After
+delegation, either Workflow provenance or frozen-state verification failure
+takes the fail-closed hand-back below because the run's contract is immutable;
+do not rebuild, patch, or silently reuse it.
 
 It bounds evidence, not scope. Implementation may touch any other artifact this
 issue authorizes; readiness, both `code-review` axes, and the closure sweep may
@@ -82,9 +88,9 @@ at an omitted instance invalidates it. Then:
 - hand back as `Progresses` when ordinary closeout permits a safe,
   independently useful partial candidate, and as `failed` when it does not.
 
-A manifest that can no longer be recovered or verified after delegation takes
-the same hand-back. A later attempt builds a fresh trusted snapshot and a fresh
-manifest; it never inherits this one.
+Frozen snapshot or manifest state that can no longer be recovered or verified
+after delegation takes the same hand-back. A later attempt builds a fresh
+trusted snapshot and a fresh manifest; it never inherits these objects.
 
 ## 2. Delegate implementation
 

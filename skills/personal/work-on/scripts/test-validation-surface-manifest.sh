@@ -151,12 +151,18 @@ has "$GATE" 'work-on-manifest' \
   'the manifest has its own run-local location'
 has "$GATE" 'every supported continuation or resume' \
   'the manifest survives the run continuation and resume lifetime'
-has "$GATE" 'not telemetry, not Workflow provenance, and never a tracked' \
-  'the manifest is neither telemetry, provenance, nor a tracked artifact'
+has "$GATE" 'not telemetry, not Workflow provenance, not Run registry state, and never tracked' \
+  'the frozen files are neither telemetry, provenance, registry state, nor tracked artifacts'
 has "$GATE" 'for their owner only — `0700` and `0600`' \
   'the manifest directory and file are owner-only'
-has_fixed "$GATE" 'manifest_file="$manifest_dir/${RUN_HANDLE%%@*}.md"' \
-  'the manifest file resolves the bare run id from the bound run handle'
+has_fixed "$GATE" 'run_id="${RUN_HANDLE%%@*}"' \
+  'the frozen files resolve the bare run id from the bound run handle'
+has_fixed "$GATE" 'trusted_snapshot_file="$manifest_dir/$run_id.trusted-snapshot.json"' \
+  'the retained snapshot has a run-owned sibling path'
+has_fixed "$GATE" 'manifest_file="$manifest_dir/$run_id.md"' \
+  'the manifest has a run-owned sibling path'
+has_fixed "$GATE" '[[ -e "$trusted_snapshot_file" ]] || (umask 077 && : >"$trusted_snapshot_file")' \
+  'creating the snapshot is guarded so a resume cannot truncate it'
 has_fixed "$GATE" '[[ -e "$manifest_file" ]] || (umask 077 && : >"$manifest_file")' \
   'creating the manifest file is guarded so a re-run cannot truncate it'
 has_fixed "$GATE" '[[ -d "$manifest_dir" ]] || (umask 077 && mkdir -p "$manifest_dir")' \
@@ -165,13 +171,15 @@ has_fixed "$GATE" 'chmod 700 "$manifest_dir"' \
   'the manifest directory is tightened with an explicit operand'
 has_fixed "$GATE" 'chmod 600 "$manifest_file"' \
   'the manifest file is tightened with an explicit operand'
+has_fixed "$GATE" 'chmod 600 "$trusted_snapshot_file"' \
+  'the snapshot file is tightened with an explicit operand'
 has "$GATE" 'manifest-identity.sh freeze' \
   'the frozen manifest is bound to its snapshot and base identities'
-has "$GATE" 'only closes the creation-to-chmod window for a file the shell itself creates' \
+has "$GATE" 'umask closes the creation-to-chmod window only for shell-created files' \
   'the umask is scoped to shell-created files, not tool-written ones'
-has "$GATE" 'before writing the materialized surfaces into it' \
-  'a tool-written manifest is created in the shell first'
-has "$GATE" 'atomically replaces the file at `0600`' \
+has "$GATE" 'Write the exact source-labelled snapshot before applying the gate' \
+  'the retained snapshot is established before Closability'
+has "$GATE" 'atomically replaces the manifest at `0600`' \
   'the identity writer replaces and re-tightens the manifest'
 lacks "$skill_dir/references/run-telemetry.md" 'validation-surface manifest' \
   'the telemetry sink does not carry the manifest'
@@ -179,6 +187,14 @@ lacks "$skill_dir/references/run-registry.md" 'validation-surface manifest' \
   'the run registry does not carry the manifest'
 has "$WORKFLOW" 'At the start of every continuation or resume' \
   'the workflow recovers the manifest on continuation or resume'
+has "$WORKFLOW" 'recover the retained trusted-snapshot and manifest files for this run' \
+  'resume recovers both frozen run-local objects'
+has "$WORKFLOW" 'Do not refetch current trusted GitHub comments or recreate either file from conversational memory' \
+  'resume does not reconstruct the snapshot from live sources or memory'
+has "$WORKFLOW" 'newly arrived trusted comment does not join this frozen snapshot or invalidate it merely by existing' \
+  'a new non-amending trusted comment leaves the frozen run contract unchanged'
+has "$WORKFLOW" 'Only an explicit trusted-maintainer contract change takes the invalidation path' \
+  'requirements change only through the established explicit maintainer path'
 has "$WORKFLOW" 'manifest-identity.sh verify' \
   'resume verifies the manifest identity before reuse'
 has "$WORKFLOW" 'workflow-provenance.sh verify' \
@@ -187,9 +203,9 @@ has "$WORKFLOW" 'before any manifest reuse, whether before or after delegation' 
   'provenance verification governs both sides of the delegation boundary'
 has "$WORKFLOW" 'provenance was not captured after this manifest froze' \
   'an interruption before provenance capture invalidates the old manifest'
-has "$WORKFLOW" 'Before delegation, a missing or failing Workflow provenance ledger or a missing, malformed, corrupt, or mismatched manifest' \
+has "$WORKFLOW" 'Before delegation, a missing or failing Workflow provenance ledger or a missing, malformed, corrupt, replaced, or mismatched frozen snapshot or manifest' \
   'either pre-delegation verification failure takes complete recomputation'
-has "$WORKFLOW" 'After delegation, either Workflow provenance or manifest verification failure takes the fail-closed hand-back' \
+has "$WORKFLOW" 'After delegation, either Workflow provenance or frozen-state verification failure takes the fail-closed hand-back' \
   'either post-delegation verification failure takes fail-closed hand-back'
 has "$WORKFLOW" 'readiness, Standards, Spec, and closure contexts' \
   'the workflow supplies the manifest to every review context'
@@ -240,7 +256,7 @@ has "$GATE" 'Never patch one entry in place' \
   'an entry-level patch is forbidden'
 has "$GATE" 're-materialize every criterion.s surface, including those whose own inputs did not move' \
   'recomputation re-materializes unmoved criteria too'
-has "$GATE" 'a rebuild before delegation still overwrites this same path.s contents' \
+has "$GATE" 'a rebuild before delegation still overwrites both paths. contents' \
   'the anti-truncation guard does not block a rebuild'
 has "$GATE" 'no valid replacement can be established, abort' \
   'an unestablished replacement aborts'
@@ -274,7 +290,7 @@ echo "ok - a post-delegation omission fails closed instead of growing the manife
 ## A later attempt starts fresh
 has "$WORKFLOW" 'fresh trusted snapshot and a fresh manifest' \
   'a later attempt builds a fresh snapshot and manifest'
-has "$WORKFLOW" 'never inherits this one' \
+has "$WORKFLOW" 'never inherits these objects' \
   'a later attempt never inherits the invalidated manifest'
 echo "ok - a later attempt after invalidation starts from a fresh snapshot and manifest"
 
@@ -287,40 +303,21 @@ printf 'base\n' >"$identity_repo/base.txt"
 git -C "$identity_repo" add base.txt
 git -C "$identity_repo" commit -qm 'base'
 
-sources_a="$flat_dir/trusted-sources-a.json"
-sources_b="$flat_dir/trusted-sources-b.json"
-sources_changed="$flat_dir/trusted-sources-changed.json"
-snapshot="$flat_dir/trusted-snapshot.jsonl"
-snapshot_rebuilt="$flat_dir/trusted-snapshot-rebuilt.jsonl"
-snapshot_changed="$flat_dir/trusted-snapshot-changed.jsonl"
 manifest_dir="$identity_repo/.git/work-on-manifest"
 manifest="$manifest_dir/test-run.md"
-mkdir -p "$manifest_dir"
+snapshot="$manifest_dir/test-run.trusted-snapshot.json"
+current_sources="$flat_dir/current-trusted-sources.json"
+(umask 077 && mkdir -p "$manifest_dir")
 printf '%s\n' \
   '[{"body":"trusted contract","source":"issue:example/repo#103:body"},' \
-  ' {"source":"comment:2","body":"line one\nline two"}]' >"$sources_a"
+  ' {"source":"comment:2","body":"line one\nline two"}]' >"$snapshot"
 printf '%s\n' \
-  '[ { "body" : "line one\u000aline two", "source" : "comment:2" },' \
-  ' { "source" : "issue:example/repo#103:body", "body" : "trusted contract" } ]' \
-  >"$sources_b"
-printf '%s\n' \
-  '[{"source":"issue:example/repo#103:body","body":"changed contract"},' \
-  ' {"source":"comment:2","body":"line one\nline two"}]' \
-  >"$sources_changed"
-
-"$IDENTITY" snapshot --input "$sources_a" --output "$snapshot"
-"$IDENTITY" snapshot --input "$sources_b" --output "$snapshot_rebuilt"
-"$IDENTITY" snapshot --input "$sources_changed" --output "$snapshot_changed"
-cmp -s "$snapshot" "$snapshot_rebuilt"
-[[ "$(sha256sum <"$snapshot" | cut -d' ' -f1)" == \
-  "$(sha256sum <"$snapshot_rebuilt" | cut -d' ' -f1)" ]]
-if cmp -s "$snapshot" "$snapshot_changed"; then
-  fail 'canonical snapshot identity ignored an actual trusted-source change'
-fi
-[[ "$(stat -c '%a' "$snapshot")" == 600 ]]
-echo "ok - equivalent trusted sources reconstruct one canonical snapshot identity"
-
+  '[{"body":"trusted contract","source":"issue:example/repo#103:body"},' \
+  ' {"source":"comment:2","body":"line one\nline two"},' \
+  ' {"source":"comment:99","body":"trusted observation, not a contract amendment"}]' \
+  >"$current_sources"
 printf '%s\n' '- criterion 1: cmd/build' >"$manifest"
+chmod 600 "$snapshot" "$manifest"
 
 # A newly frozen manifest cannot inherit a provenance ledger from an older
 # freeze. Until capture succeeds after this freeze, continuation must recompute.
@@ -440,7 +437,107 @@ verified_base="$(
   "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
 )"
 [[ "$verified_base" == "$base_sha" ]]
-echo "ok - an unchanged resume verifies and reuses the frozen identity"
+echo "ok - an unchanged resume verifies and reuses the retained frozen state"
+
+# A fresh context recovers only the run-owned paths. It neither reconstructs
+# source locators nor consults the current trusted-source population, which now
+# contains a later trusted observation that is not a contract amendment.
+fresh_run_id=test-run
+fresh_manifest="$identity_repo/.git/work-on-manifest/$fresh_run_id.md"
+fresh_snapshot="$identity_repo/.git/work-on-manifest/$fresh_run_id.trusted-snapshot.json"
+grep -Fq 'comment:99' "$current_sources"
+if grep -Fq 'comment:99' "$fresh_snapshot"; then
+  fail 'a later trusted comment silently joined the frozen snapshot'
+fi
+fresh_base="$(
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$fresh_manifest" --snapshot "$fresh_snapshot"
+)"
+[[ "$fresh_base" == "$base_sha" ]]
+echo "ok - fresh continuation reuses the retained snapshot despite a later trusted comment"
+
+snapshot_backup="$flat_dir/frozen-snapshot.backup"
+manifest_backup="$flat_dir/frozen-manifest.backup"
+cp -p -- "$snapshot" "$snapshot_backup"
+cp -p -- "$manifest" "$manifest_backup"
+
+mv -- "$snapshot" "$snapshot.missing"
+if (
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
+) >"$flat_dir/missing-snapshot.out" 2>"$flat_dir/missing-snapshot.err"; then
+  fail 'identity verification silently accepted a missing frozen snapshot'
+fi
+[[ ! -s "$flat_dir/missing-snapshot.out" ]]
+grep -Fqx 'manifest identity: trusted snapshot is missing or unsafe' \
+  "$flat_dir/missing-snapshot.err"
+mv -- "$snapshot.missing" "$snapshot"
+
+printf '%s\n' 'truncated frozen snapshot' >>"$snapshot"
+if (
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
+) >"$flat_dir/corrupt-snapshot.out" 2>"$flat_dir/corrupt-snapshot.err"; then
+  fail 'identity verification silently accepted a corrupt frozen snapshot'
+fi
+[[ ! -s "$flat_dir/corrupt-snapshot.out" ]]
+grep -Fqx 'manifest identity: trusted snapshot does not match frozen manifest' \
+  "$flat_dir/corrupt-snapshot.err"
+cp -p -- "$snapshot_backup" "$snapshot"
+
+printf '%s\n' \
+  '[{"source":"comment:replacement","body":"different frozen contract"}]' \
+  >"$snapshot"
+chmod 600 "$snapshot"
+if (
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
+) >"$flat_dir/replaced-snapshot.out" 2>"$flat_dir/replaced-snapshot.err"; then
+  fail 'identity verification silently accepted a replaced frozen snapshot'
+fi
+[[ ! -s "$flat_dir/replaced-snapshot.out" ]]
+grep -Fqx 'manifest identity: trusted snapshot does not match frozen manifest' \
+  "$flat_dir/replaced-snapshot.err"
+cp -p -- "$snapshot_backup" "$snapshot"
+
+chmod 644 "$snapshot"
+if (
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
+) >"$flat_dir/unsafe-mode.out" 2>"$flat_dir/unsafe-mode.err"; then
+  fail 'identity verification silently accepted non-owner-only frozen state'
+fi
+[[ ! -s "$flat_dir/unsafe-mode.out" ]]
+grep -Fqx 'manifest identity: frozen state is not owner-only' \
+  "$flat_dir/unsafe-mode.err"
+chmod 600 "$snapshot"
+
+printf '%s\n' '- corrupt manifest body' >>"$manifest"
+if (
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
+) >"$flat_dir/corrupt-manifest.out" 2>"$flat_dir/corrupt-manifest.err"; then
+  fail 'identity verification silently accepted a corrupt frozen manifest'
+fi
+[[ ! -s "$flat_dir/corrupt-manifest.out" ]]
+grep -Fqx 'manifest identity: frozen manifest is corrupt' \
+  "$flat_dir/corrupt-manifest.err"
+cp -p -- "$manifest_backup" "$manifest"
+
+other_base="$(git -C "$identity_repo" rev-parse HEAD^)"
+sed -i "2cpre-implementation-base $other_base" "$manifest"
+chmod 600 "$manifest"
+if (
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
+) >"$flat_dir/base-mismatch.out" 2>"$flat_dir/base-mismatch.err"; then
+  fail 'identity verification silently accepted a replaced pre-implementation base'
+fi
+[[ ! -s "$flat_dir/base-mismatch.out" ]]
+grep -Fqx 'manifest identity: frozen manifest is corrupt' \
+  "$flat_dir/base-mismatch.err"
+cp -p -- "$manifest_backup" "$manifest"
+echo "ok - missing, replaced, or corrupt frozen state fails closed"
 
 printf '%s\n' \
   '{"source":"issue:example/repo#103:body","body":"changed contract"}' \
@@ -454,7 +551,8 @@ fi
 [[ ! -s "$flat_dir/mismatch.out" ]]
 grep -Fqx 'manifest identity: trusted snapshot does not match frozen manifest' \
   "$flat_dir/mismatch.err"
-echo "ok - a mismatched identity is not silently reused"
+cp -p -- "$snapshot_backup" "$snapshot"
+echo "ok - manifest, retained snapshot, and base binding mismatches are not silently reused"
 
 if (( failures > 0 )); then
   printf '\n%s manifest-contract assertion(s) failed.\n' "$failures" >&2

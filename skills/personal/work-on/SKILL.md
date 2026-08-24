@@ -84,8 +84,8 @@ Procedure:
 4. Build the trusted snapshot through GitHub's REST comments endpoint
    (`gh issue view` omits association). Done when no untrusted body/link is in
    context, the omitted count is reported, every contract source has trusted
-   authority, and the exact source-labelled snapshot bytes are available for
-   the identity step in `references/closability-gate.md`.
+   authority, and the exact source-labelled snapshot bytes are retained under
+   the owner-only run-local custody in `references/closability-gate.md`.
 5. Use `docs/workflow.md` when present and announce it; otherwise use this
    skill's `references/default-workflow.md`. Read the selected source and treat
    it as binding. Retain its full identity with
