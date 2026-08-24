@@ -109,6 +109,8 @@ Scoped implementation contract:
 - Validation seams: <pre-agreed public boundaries and expected observations>
 - Validation-surface manifest: <the frozen instances each criterion owes direct
   evidence about; it bounds evidence, not the authorized scope above>
+- Validation evidence: <qualifying raw evidence and safe provenance locators;
+  apply `references/validation-evidence.md` before deciding what to execute>
 - Required commands: <targeted and baseline checks>
 - Authority: GitHub reads and workspace edits only. Do not refetch issue
   comments, commit, mutate GitHub, or change the contract.
@@ -144,7 +146,10 @@ State the stop boundary and stop before another criterion, subsystem, external
 boundary, or speculative defense. Report reproduced instances only; the
 primary retains adjudication and repair. Supply the frozen Validation-surface
 manifest with this brief: it names the evidence each criterion owes, and never
-limits what the sweep may inspect or report.
+limits what the sweep may inspect or report. Supply readiness, Standards, Spec,
+and closure with qualifying raw validation evidence and
+`references/validation-evidence.md`; never supply prior reviewer conclusions,
+adjudications, or dispositions.
 
 ## 3. Primary checkpoint
 
@@ -206,7 +211,9 @@ in this loop.
 
 ## 6. Closeout
 
-After the combined gate is clean, run the full regression command once and
+At Closeout, evaluate full regression evidence for qualifying reuse under
+`references/validation-evidence.md`; execute the full regression only when
+existing evidence cannot settle its concrete assurance question. Run
 `git diff --check`. Any code change invalidates the gate and validation;
 otherwise finalize the existing closure table and complete
 `references/github-closeout.md`.

@@ -62,6 +62,10 @@ Authority invariants (bind regardless of workflow):
   ordinary review, defect reporting, or same-mechanism investigation — and after
   delegation it is immutable. `references/closability-gate.md` owns its creation
   and validity; the selected workflow owns its custody and post-freeze handling.
+- Apply `references/validation-evidence.md` whenever implementation, readiness,
+  Standards, Spec, or closure contexts produce or adjudicate evidence, and keep
+  the policy available to the primary. It permits reuse without weakening the
+  frozen Validation-surface manifest's direct-evidence population.
 - Register the run's lifecycle before implementation and finalize it on every
   hand-back, following `references/run-registry.md`. Registration may refuse a
   run whose predecessor left an unfinished obligation; it never changes what an

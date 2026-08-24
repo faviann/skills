@@ -5,6 +5,9 @@
 Independently inspect the contract, production paths, diff, and evidence, then
 build this table:
 
+Apply `validation-evidence.md` to reuse qualifying evidence and to decide when
+the closure context owes the narrowest Independent execution.
+
 | Acceptance criterion | Production path | Exact artifact/mode/seam | Evidence | Status |
 |---|---|---|---|---|
 
@@ -23,8 +26,7 @@ Hunt for: the wrong artifact/host/path, internal-surface reads posing as
 public-surface tests, invented exceptions, fail-open validation, untested
 runtime modes, scope drift, tests that stay green when the claimed behavior
 is absent, and machinery whose only consumer is its own test — a seam built
-to make a conversational constraint mechanically checkable. Rerun the
-highest-risk checks yourself.
+to make a conversational constraint mechanically checkable.
 
 Delegate a sweep of the cumulative diff to a fresh subagent given raw
 artifacts only — the diff command, issue snapshot, and binding doc paths;

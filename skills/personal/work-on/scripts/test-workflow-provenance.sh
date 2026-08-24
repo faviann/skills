@@ -120,6 +120,21 @@ grep -Fqx 'workflow provenance: work-on instructions changed since capture' \
 git -C "$skills_checkout" restore \
   skills/personal/work-on/references/github-closeout.md
 
+# The evidence-reuse policy governs every workflow and is part of the frozen
+# work-on instruction identity, not an undeclared neighboring reference.
+printf 'post-capture evidence-policy change\n' \
+  >>"$skills_checkout/skills/personal/work-on/references/validation-evidence.md"
+if verify_in "$skills_checkout" \
+    >"$fixture/evidence-policy.out" 2>"$fixture/evidence-policy.err"; then
+  printf 'FAIL[evidence-policy]: verify accepted changed evidence policy\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/evidence-policy.out" ]]
+grep -Fqx 'workflow provenance: work-on instructions changed since capture' \
+  "$fixture/evidence-policy.err"
+git -C "$skills_checkout" restore \
+  skills/personal/work-on/references/validation-evidence.md
+
 # A missing ledger fails verification without a canonical value.
 mv "$skills_ledger" "$fixture/saved-ledger.json"
 if verify_in "$skills_checkout" \
