@@ -15,7 +15,10 @@ CLOSEOUT="$skill_dir/references/github-closeout.md"
 
 failures=0
 flat_dir="$(mktemp -d)"
-trap 'rm -rf "$flat_dir"' EXIT
+# Fixtures live outside flat_dir so flatten() rewrites them like any other
+# source instead of finding flat == source and skipping the rewrite.
+fixture_dir="$(mktemp -d)"
+trap 'rm -rf "$flat_dir" "$fixture_dir"' EXIT
 
 fail() {
   printf 'not ok - %s\n' "$1" >&2
@@ -227,7 +230,7 @@ done
 
 # The guard has teeth only if the rule #122 rejects actually trips it: skipping
 # unresolved required validation because prior telemetry called it costly.
-counterfactual="$flat_dir/../rejected-cost-rule.md"
+counterfactual="$fixture_dir/rejected-cost-rule.md"
 cat >"$counterfactual" <<'REJECTED'
 ## Cost exemption
 
