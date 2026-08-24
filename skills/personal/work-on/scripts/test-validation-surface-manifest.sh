@@ -55,6 +55,15 @@ lacks() {
   fi
 }
 
+has_fixed() {
+  # has_fixed <file> <literal string> <description> — for shell idioms whose
+  # brackets, pipes, and dollars would otherwise need escaping into noise.
+  if grep -Fq -- "$2" "$(flatten "$1")"; then
+    return 0
+  fi
+  fail "$3 (missing in ${1#"$skill_dir/"}: $2)"
+}
+
 last_line_of() {
   grep -Eni -- "$2" "$1" | tail -n1 | cut -d: -f1
 }
@@ -134,8 +143,16 @@ has "$GATE" 'not telemetry, not Workflow provenance, and never a tracked' \
   'the manifest is neither telemetry, provenance, nor a tracked artifact'
 has "$GATE" 'for their owner only — `0700` and `0600`' \
   'the manifest directory and file are owner-only'
-has "$GATE" 'umask 077. in a subshell before creating each, then `chmod` it' \
-  'the umask-then-chmod idiom closes the creation-to-chmod window'
+has_fixed "$GATE" '[[ -e "$FILE" ]] || (umask 077 && : >"$FILE")' \
+  'creating the manifest file is guarded so a re-run cannot truncate it'
+has_fixed "$GATE" '[[ -d "$DIR" ]] || (umask 077 && mkdir -p "$DIR")' \
+  'creating the manifest directory is guarded the same way'
+has "$GATE" 'only closes the creation-to-chmod window for a file the shell itself creates' \
+  'the umask is scoped to shell-created files, not tool-written ones'
+has "$GATE" 'create the empty file this way before writing into it' \
+  'a tool-written manifest is created in the shell first'
+has "$GATE" '`chmod 600` the file again after every rewrite' \
+  'a rewrite that replaces the inode is re-tightened'
 lacks "$skill_dir/references/run-telemetry.md" 'validation-surface manifest' \
   'the telemetry sink does not carry the manifest'
 lacks "$skill_dir/references/run-registry.md" 'validation-surface manifest' \
@@ -189,6 +206,10 @@ has "$GATE" 'not a second gate: the run passes one complete gate' \
   'a rerun after invalidation is still the run.s one gate'
 has "$GATE" 'Never patch one entry in place' \
   'an entry-level patch is forbidden'
+has "$GATE" 're-materialize every criterion.s surface, including those whose own inputs did not move' \
+  'recomputation re-materializes unmoved criteria too'
+has "$GATE" 'a rebuild before delegation still overwrites this same path.s contents' \
+  'the anti-truncation guard does not block a rebuild'
 has "$GATE" 'no valid replacement can be established, abort' \
   'an unestablished replacement aborts'
 echo "ok - pre-delegation invalidation recomputes completely or ends as preflight-aborted"
@@ -214,6 +235,8 @@ has "$WORKFLOW" 'and as `failed` when it does not' \
   'a determinate invalidation with no partial candidate is failed'
 has "$CLOSEOUT" 'Validation-surface manifest omits' \
   'the closure gate routes an omitted member to the fail-closed hand-back'
+has "$CLOSEOUT" 'an omitted member is not a row a human can confirm' \
+  'human confirmation cannot restore Closes for an omitted member'
 echo "ok - a post-delegation omission fails closed instead of growing the manifest"
 
 ## A later attempt starts fresh

@@ -111,7 +111,8 @@ The gate passes only when all six hold.
    Abort when a criterion's direct-evidence population can be settled only by
    later judgement — an interpretive rule, an open-ended traversal, or a
    population the implementation delegate would have to discover. A criterion
-   whose surface cannot be made finite from the trusted contract takes this
+   whose surface the trusted contract does not make decidable — evaluated
+   against the trusted snapshot and the pre-implementation base — takes this
    abort; it is never rescued by reading the criterion more narrowly than the
    trusted contract states it.
 
@@ -154,11 +155,19 @@ state: not telemetry, not Workflow provenance, and never a tracked repository
 artifact. Provenance fingerprints the instructions this run read; it does not
 carry this run's manifest.
 
-Create the directory and the file for their owner only — `0700` and `0600`. Set
-`umask 077` in a subshell before creating each, then `chmod` it: the umask
-closes the window between creation and the chmod, and the chmod also tightens a
-directory an earlier run left readable. A run's record of a workstation's work
-is not group- or world-readable.
+Create the directory and the file for their owner only — `0700` and `0600`.
+Create each in the shell first, guarded so re-running this step never truncates
+what a resume still needs: `[[ -d "$DIR" ]] || (umask 077 && mkdir -p "$DIR")`
+and `[[ -e "$FILE" ]] || (umask 077 && : >"$FILE")`, then `chmod 700` and
+`chmod 600`. The guard protects a manifest a resume still needs from a repeated
+creation step; a rebuild before delegation still overwrites this same path's
+contents outright, as invalidation requires. The umask only closes the creation-to-chmod window for a file the
+shell itself creates; a tool that writes the manifest directly lands it at that
+tool's default mode, so create the empty file this way before writing into it.
+`chmod 600` the file again after every rewrite — an editor that writes a
+replacement and renames it over the old path installs a new inode at the
+default mode. The chmod also tightens a directory an earlier run left readable.
+A run's record of a workstation's work is not group- or world-readable.
 
 The selected workflow supplies the manifest to the implementation delegate and
 to the readiness, Standards, Spec, and closure contexts, and keeps it available
@@ -176,8 +185,9 @@ While no implementation delegate has launched and no implementation work has
 begun, discard the manifest, rebuild the affected trusted preflight state, and
 rerun the complete gate over it. Rerunning it is not a second gate: the run
 passes one complete gate, over whichever trusted preflight state it finally
-delegates from. Never patch one entry in place. If no valid replacement can be
-established, abort as below.
+delegates from. Never patch one entry in place: re-materialize every criterion's
+surface, including those whose own inputs did not move. If no valid replacement
+can be established, abort as below.
 
 After implementation is delegated the manifest is immutable for this run, and
 the selected workflow owns what happens when a trusted criterion turns out to

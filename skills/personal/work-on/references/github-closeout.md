@@ -51,7 +51,8 @@ Outcome:
 - A trusted criterion requiring direct evidence at an instance the frozen
   Validation-surface manifest omits → `Closes` is unavailable; take the
   selected workflow's post-delegation manifest hand-back; never append the
-  member and re-review in this run.
+  member and re-review in this run. This governs over the `inferred`/
+  `unverified` route above: an omitted member is not a row a human can confirm.
 - A criterion with no seam to observe it → escalate as a missing validation
   seam (blocking tracker issue), never mark it green. Never manufacture a
   seam for a conversational constraint — markers, protocols, or artifacts
