@@ -23,7 +23,7 @@ The default file is `${XDG_CONFIG_HOME:-$HOME/.config}/faviann-skills/artifacts.
 }
 ```
 
-`directory` is the existing filesystem root; `baseUrl` is the HTTP(S) URL that serves the same root. The URL accepts a non-bracketed host authority and optional port, with no query or fragment; bracketed IP literals are not supported in this version. Set `FAVIANN_SKILLS_ARTIFACT_CONFIG` when one session needs a different configuration. Every invocation snapshots its selected file once, and the next invocation sees later changes.
+`directory` is the existing filesystem root; `baseUrl` is the HTTP(S) URL that serves the same root. The URL accepts a hostname or bracketed IPv6 authority and optional port, with no query or fragment. Set `FAVIANN_SKILLS_ARTIFACT_CONFIG` when one session needs a different configuration. Every invocation snapshots its selected file once, and the next invocation sees later changes.
 
 Published files sit beneath readable repository and producer groups, then a UTC timestamp with a random suffix. Linked worktrees share the primary checkout's repository group, so temporary branch and worktree names do not fragment the collection.
 
