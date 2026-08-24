@@ -40,6 +40,10 @@ To (re)link every skill into the local harness skill directories (`~/.claude/ski
 
 ## Agent skills
 
+### Agent-facing writing
+
+Skills, agent instructions, and agent-reached reference docs: use [`writing-for-agents`](./skills/productivity/writing-for-agents/SKILL.md) before creating or changing them.
+
 ### Git worktrees
 
 Linked worktrees, local skill loading, and dependency setup. See [docs/agents/worktrees.md](./docs/agents/worktrees.md).
