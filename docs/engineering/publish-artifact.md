@@ -10,7 +10,7 @@ Type `/publish-artifact`, or the [agent](https://www.aihero.dev/ai-coding-dictio
 
 ## Prerequisites
 
-Publication runs on Linux with Bash and `jq`. The host operator must provide an existing publishing directory and arrange for a web server to expose it. The skill never creates that root or changes its permissions, ownership, access control, or retention.
+Publication runs on Linux with Bash and `jq`; publishing from a linked worktree also requires Git so the primary-checkout group can be derived. Outside Git, the invocation-directory name is used. The host operator must provide an existing publishing directory and arrange for a web server to expose it. The skill never creates that root or changes its permissions, ownership, access control, or retention.
 
 ## One host mapping
 
