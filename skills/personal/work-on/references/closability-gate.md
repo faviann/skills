@@ -143,10 +143,22 @@ pre-implementation base it was materialized from. The selected workflow remains
 an invalidation input below; Workflow provenance owns its instruction-version
 identity rather than duplicating it in the manifest.
 
-Before applying the gate, put the exact trusted sources it will read in an
-owner-only JSON array whose members contain only string `source` and `body`
-values. Use a stable source locator and preserve each source body exactly. Then
-run this skill's identity helper; the path below is relative to the skill root:
+Before applying the gate, retain the exact selected-workflow identity in the
+primary's working context; the path below is relative to the skill root:
+
+```bash
+selected_workflow_identity="$(scripts/workflow-provenance.sh identify-workflow)"
+```
+
+This shell value is not manifest identity or another durable record. It is the
+comparison input for the post-freeze capture. Losing it before capture
+invalidates the not-yet-delegated manifest and takes complete recomputation;
+identifying the workflow again cannot authorize a manifest already derived.
+
+Also put the exact trusted sources the gate will read in an owner-only JSON
+array whose members contain only string `source` and `body` values. Use a stable
+source locator and preserve each source body exactly. Then run this skill's
+identity helper:
 
 ```bash
 scripts/manifest-identity.sh snapshot \
@@ -202,18 +214,33 @@ skill root:
 scripts/manifest-identity.sh freeze \
   --manifest "$manifest_file" \
   --snapshot "$trusted_snapshot_file" \
-  --base "$pre_implementation_base"
+  --base "$pre_implementation_base" \
+  --workflow-identity "$selected_workflow_identity"
 ```
 
 The command prepends the full base SHA, the snapshot's SHA-256 digest, and one
 binding digest over both identities plus the manifest body. It atomically
 replaces the file at `0600`; immediately before replacement, it removes the
 target worktree's previous Workflow provenance ledger, so only a capture after
-this freeze can authorize reuse. The binding makes malformed identity fields or
-a changed manifest body fail verification. The temporary snapshot file may
-then be removed: the manifest is the durable run-specific binding, while the
-trusted sources re-establish the comparison input. A run's record of a
-workstation's work is not group- or world-readable.
+this freeze can authorize reuse. It also seals the retained workflow identity
+in Workflow provenance's owner-only sidecar, not in the manifest; a later
+identity cannot be substituted for it during capture. The binding makes
+malformed identity fields or a changed manifest body fail verification. The
+temporary snapshot file may then be removed: the manifest is the durable
+run-specific binding, while the trusted sources re-establish the comparison
+input. A run's record of a workstation's work is not group- or world-readable.
+
+After the freeze, capture Workflow provenance with the retained identity:
+
+```bash
+scripts/workflow-provenance.sh capture \
+  --expected-workflow "$selected_workflow_identity"
+```
+
+Capture compares the current selected workflow with that retained identity
+before it writes the provenance ledger. A mismatch invalidates the manifest and
+takes complete recomputation before delegation; a later identity obtained from
+the changed workflow cannot authorize the old manifest.
 
 The selected workflow supplies the manifest to the implementation delegate and
 to the readiness, Standards, Spec, and closure contexts, and keeps it available

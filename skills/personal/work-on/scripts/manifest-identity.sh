@@ -6,8 +6,10 @@ export LC_ALL=C
 # snapshot bytes and its pre-implementation commit, then verify before reuse.
 
 staged=""
+workflow_staged=""
 cleanup() {
   [[ -z "$staged" ]] || rm -f -- "$staged"
+  [[ -z "$workflow_staged" ]] || rm -f -- "$workflow_staged"
 }
 trap cleanup EXIT
 
@@ -17,7 +19,7 @@ fail() {
 }
 
 usage() {
-  fail 'usage: manifest-identity.sh snapshot --input FILE --output FILE | freeze --manifest FILE --snapshot FILE --base REF | verify --manifest FILE --snapshot FILE'
+  fail 'usage: manifest-identity.sh snapshot --input FILE --output FILE | freeze --manifest FILE --snapshot FILE --base REF --workflow-identity SHA256 | verify --manifest FILE --snapshot FILE'
 }
 
 subcommand="${1:-}"
@@ -30,12 +32,14 @@ case "$subcommand" in
     output="$4"
     ;;
   freeze)
-    (( $# == 6 )) \
-      && [[ "$1" == --manifest && "$3" == --snapshot && "$5" == --base ]] \
+    (( $# == 8 )) \
+      && [[ "$1" == --manifest && "$3" == --snapshot && "$5" == --base \
+        && "$7" == --workflow-identity ]] \
       || usage
     manifest="$2"
     snapshot="$4"
     base_ref="$6"
+    workflow_identity="$8"
     ;;
   verify)
     (( $# == 4 )) && [[ "$1" == --manifest && "$3" == --snapshot ]] \
@@ -108,6 +112,8 @@ binding_digest() {
 
 if [[ "$subcommand" == freeze ]]; then
   [[ -s "$manifest" ]] || fail 'manifest body is empty'
+  [[ "$workflow_identity" =~ ^[0-9a-f]{64}$ ]] \
+    || fail 'selected workflow identity is malformed'
   [[ ! "$(sed -n '1p' "$manifest")" =~ ^(trusted-snapshot-sha256|pre-implementation-base|manifest-binding-sha256)[[:space:]] ]] \
     || fail 'manifest body already carries identity'
   base_sha="$(git rev-parse --verify "${base_ref}^{commit}" 2>/dev/null)" \
@@ -125,9 +131,19 @@ if [[ "$subcommand" == freeze ]]; then
     cat -- "$manifest"
   } >"$staged"
   chmod 600 "$staged"
+  workflow_boundary="$git_dir/work-on-provenance.workflow-sha256"
+  if [[ -e "$workflow_boundary" || -L "$workflow_boundary" ]]; then
+    [[ -f "$workflow_boundary" && ! -L "$workflow_boundary" ]] \
+      || fail 'workflow provenance boundary is unsafe'
+  fi
+  workflow_staged="$(umask 077 && mktemp "$git_dir/.workflow-boundary.XXXXXX")"
+  printf '%s\n' "$workflow_identity" >"$workflow_staged"
+  chmod 600 "$workflow_staged"
   rm -f -- "$git_dir/work-on-provenance.json"
   mv -f -- "$staged" "$manifest"
   staged=""
+  mv -f -- "$workflow_staged" "$workflow_boundary"
+  workflow_staged=""
   exit 0
 fi
 

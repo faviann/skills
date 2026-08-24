@@ -133,6 +133,10 @@ lacks "$GATE" 'Identify it with the trusted snapshot, the selected workflow' \
   'selected-workflow identity is not duplicated in the manifest'
 has "$GATE" 'selected workflow remains an invalidation input' \
   'workflow identity stays in provenance while workflow changes still invalidate'
+has "$GATE" 'workflow-provenance.sh identify-workflow' \
+  'the selected workflow is fingerprinted before manifest derivation'
+has "$GATE" 'capture compares the current selected workflow with that retained identity' \
+  'post-freeze provenance capture must match the workflow used for derivation'
 precedes "$SKILL" "apply this skill's .references/closability-gate\.md" \
   '`scripts/workflow-provenance\.sh capture`' \
   'the procedure applies the gate before capturing provenance'
@@ -320,16 +324,31 @@ mkdir -p "$identity_repo/docs"
 printf '# Selected workflow\n' >"$identity_repo/docs/workflow.md"
 git -C "$identity_repo" add docs/workflow.md
 git -C "$identity_repo" commit -qm 'selected workflow'
+selected_workflow_identity="$(
+  cd "$identity_repo"
+  "$PROVENANCE" identify-workflow
+)"
+(umask 077 && printf '%s\n' "$selected_workflow_identity" \
+  >"$identity_repo/.git/work-on-provenance.workflow-sha256")
 (
   cd "$identity_repo"
-  "$PROVENANCE" capture
+  "$PROVENANCE" capture --expected-workflow "$selected_workflow_identity"
 )
 [[ -f "$identity_repo/.git/work-on-provenance.json" ]]
 
+selected_workflow_identity="$(
+  cd "$identity_repo"
+  "$PROVENANCE" identify-workflow
+)"
+
 (
   cd "$identity_repo"
-  "$IDENTITY" freeze --manifest "$manifest" --snapshot "$snapshot" --base HEAD
+  "$IDENTITY" freeze --manifest "$manifest" --snapshot "$snapshot" --base HEAD \
+    --workflow-identity "$selected_workflow_identity"
 )
+[[ "$(stat -c '%a' "$identity_repo/.git/work-on-provenance.workflow-sha256")" == 600 ]]
+grep -Fqx "$selected_workflow_identity" \
+  "$identity_repo/.git/work-on-provenance.workflow-sha256"
 
 [[ ! -e "$identity_repo/.git/work-on-provenance.json" ]]
 (
@@ -346,9 +365,40 @@ fi
 grep -Fq 'run ledger is missing' "$flat_dir/pre-capture.err"
 echo "ok - interruption before provenance capture cannot reuse the frozen manifest"
 
+printf '\nworkflow changed before capture\n' >>"$identity_repo/docs/workflow.md"
+if (
+  cd "$identity_repo"
+  "$PROVENANCE" capture --expected-workflow "$selected_workflow_identity"
+) >"$flat_dir/pre-capture-drift.out" 2>"$flat_dir/pre-capture-drift.err"; then
+  fail 'a later provenance capture authorized a manifest derived under another workflow'
+fi
+[[ ! -s "$flat_dir/pre-capture-drift.out" ]]
+[[ ! -e "$identity_repo/.git/work-on-provenance.json" ]]
+grep -Fqx \
+  'workflow provenance: workflow instructions changed since manifest derivation' \
+  "$flat_dir/pre-capture-drift.err"
+
+changed_workflow_identity="$(
+  cd "$identity_repo"
+  "$PROVENANCE" identify-workflow
+)"
+if (
+  cd "$identity_repo"
+  "$PROVENANCE" capture --expected-workflow "$changed_workflow_identity"
+) >"$flat_dir/reidentified-workflow.out" 2>"$flat_dir/reidentified-workflow.err"; then
+  fail 'a newly identified workflow authorized a manifest derived under the old workflow'
+fi
+[[ ! -s "$flat_dir/reidentified-workflow.out" ]]
+[[ ! -e "$identity_repo/.git/work-on-provenance.json" ]]
+grep -Fqx \
+  'workflow provenance: expected workflow identity does not belong to frozen manifest' \
+  "$flat_dir/reidentified-workflow.err"
+git -C "$identity_repo" restore docs/workflow.md
+echo "ok - capture rejects workflow drift between manifest derivation and capture"
+
 (
   cd "$identity_repo"
-  "$PROVENANCE" capture
+  "$PROVENANCE" capture --expected-workflow "$selected_workflow_identity"
   "$PROVENANCE" verify >/dev/null
 )
 printf '\nworkflow drift\n' >>"$identity_repo/docs/workflow.md"

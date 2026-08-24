@@ -23,7 +23,14 @@ telemetry() {
   (cd "$repo" && "$telemetry_script" "$@")
 }
 
-(cd "$repo" && "$script_root/workflow-provenance.sh" capture)
+workflow_identity="$(
+  cd "$repo"
+  "$script_root/workflow-provenance.sh" identify-workflow
+)"
+(umask 077 && printf '%s\n' "$workflow_identity" \
+  >"$repo/.git/work-on-provenance.workflow-sha256")
+(cd "$repo" && "$script_root/workflow-provenance.sh" capture \
+  --expected-workflow "$workflow_identity")
 cat >"$fixture/facts.json" <<'EOF'
 {
   "repository": "example/telemetry",
