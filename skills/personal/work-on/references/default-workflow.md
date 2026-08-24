@@ -109,6 +109,8 @@ Scoped implementation contract:
 - Validation seams: <pre-agreed public boundaries and expected observations>
 - Validation-surface manifest: <the frozen instances each criterion owes direct
   evidence about; it bounds evidence, not the authorized scope above>
+- Validation evidence: <qualifying raw evidence and safe provenance locators;
+  apply `references/validation-evidence.md` before deciding what to execute>
 - Required commands: <targeted and baseline checks>
 - Authority: GitHub reads and workspace edits only. Do not refetch issue
   comments, commit, mutate GitHub, or change the contract.
@@ -144,12 +146,17 @@ State the stop boundary and stop before another criterion, subsystem, external
 boundary, or speculative defense. Report reproduced instances only; the
 primary retains adjudication and repair. Supply the frozen Validation-surface
 manifest with this brief: it names the evidence each criterion owes, and never
-limits what the sweep may inspect or report.
+limits what the sweep may inspect or report. Supply readiness, Standards, Spec,
+and closure with qualifying raw validation evidence and
+`references/validation-evidence.md`; never supply prior reviewer conclusions,
+adjudications, or dispositions.
 
 ## 3. Primary checkpoint
 
-Inspect the worktree and run affected focused checks. Before the first commit,
-delegate one fresh raw-artifact readiness sweep; adjudicate it once and batch
+Inspect the worktree and, unless qualifying evidence for the exact current
+Candidate and Validation identity already settles their assurance question,
+run affected focused checks. Before the first commit, delegate one fresh
+raw-artifact readiness sweep; adjudicate it once and batch
 all blockers back to the initial implementation delegate through the harness's
 supported continuation mechanism, applying the implementation-owner fallback
 in `SKILL.md`'s authority invariants when continuation is unavailable. Re-check
@@ -199,14 +206,19 @@ evidence. Reviewers never see the ledger.
 Batch all blockers from one combined gate back to the initial implementation
 delegate through the harness's supported continuation mechanism, applying the
 implementation-owner fallback in `SKILL.md`'s authority invariants when
-continuation is unavailable. Run affected focused checks, commit, and rerun the
-gate with fresh reviewers until clean; do not show later reviewers prior
+continuation is unavailable. Run affected focused checks under the same
+Candidate and Validation identity rule, applying
+`references/validation-evidence.md`, then commit and rerun the gate with fresh
+reviewers until clean; do not show later reviewers prior
 reports, adjudications, or the ledger, and do not run the full regression suite
 in this loop.
 
 ## 6. Closeout
 
-After the combined gate is clean, run the full regression command once and
+At Closeout, reuse qualifying full-regression evidence for the exact final
+Candidate and Validation identity when it already exists and settles its
+assurance question, under `references/validation-evidence.md`; otherwise execute
+the full regression there. Never pre-produce it earlier to be reused. Run
 `git diff --check`. Any code change invalidates the gate and validation;
 otherwise finalize the existing closure table and complete
 `references/github-closeout.md`.
