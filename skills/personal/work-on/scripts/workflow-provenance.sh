@@ -15,6 +15,7 @@ work_on_inputs=(
   skills/personal/work-on/references/closability-gate.md
   skills/personal/work-on/references/github-closeout.md
   skills/personal/work-on/references/run-telemetry.md
+  skills/personal/work-on/scripts/manifest-identity.sh
 )
 default_workflow_inputs=(
   skills/personal/work-on/references/default-workflow.md

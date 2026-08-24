@@ -14,6 +14,7 @@ SKILL="$skill_dir/SKILL.md"
 GATE="$skill_dir/references/closability-gate.md"
 WORKFLOW="$skill_dir/references/default-workflow.md"
 CLOSEOUT="$skill_dir/references/github-closeout.md"
+IDENTITY="$skill_dir/scripts/manifest-identity.sh"
 
 failures=0
 
@@ -125,8 +126,12 @@ has "$GATE" 'before workflow-provenance capture' \
   'the freeze precedes workflow-provenance capture'
 has "$GATE" 'and implementation delegation' \
   'the freeze precedes implementation delegation'
-has "$GATE" 'trusted snapshot, the selected workflow, and the pre-implementation base' \
-  'the manifest is identified with snapshot, workflow, and base'
+has "$GATE" 'Identify it with the trusted snapshot and the pre-implementation base' \
+  'the manifest is identified with the snapshot and base'
+lacks "$GATE" 'Identify it with the trusted snapshot, the selected workflow' \
+  'selected-workflow identity is not duplicated in the manifest'
+has "$GATE" 'selected workflow remains an invalidation input' \
+  'workflow identity stays in provenance while workflow changes still invalidate'
 precedes "$SKILL" "apply this skill's .references/closability-gate\.md" \
   '`scripts/workflow-provenance\.sh capture`' \
   'the procedure applies the gate before capturing provenance'
@@ -153,18 +158,26 @@ has_fixed "$GATE" 'chmod 700 "$manifest_dir"' \
   'the manifest directory is tightened with an explicit operand'
 has_fixed "$GATE" 'chmod 600 "$manifest_file"' \
   'the manifest file is tightened with an explicit operand'
+has "$GATE" 'manifest-identity.sh freeze' \
+  'the frozen manifest is bound to its snapshot and base identities'
 has "$GATE" 'only closes the creation-to-chmod window for a file the shell itself creates' \
   'the umask is scoped to shell-created files, not tool-written ones'
-has "$GATE" 'create the empty file this way before writing into it' \
+has "$GATE" 'before writing the materialized surfaces into it' \
   'a tool-written manifest is created in the shell first'
-has_fixed "$GATE" 'Run `chmod 600 "$manifest_file"` again after every' \
-  'a rewrite that replaces the inode is re-tightened'
+has "$GATE" 'atomically replaces the file at `0600`' \
+  'the identity writer replaces and re-tightens the manifest'
 lacks "$skill_dir/references/run-telemetry.md" 'validation-surface manifest' \
   'the telemetry sink does not carry the manifest'
 lacks "$skill_dir/references/run-registry.md" 'validation-surface manifest' \
   'the run registry does not carry the manifest'
-has "$WORKFLOW" 'Read it back from its run-local file at the start of' \
+has "$WORKFLOW" 'At the start of every continuation or resume' \
   'the workflow recovers the manifest on continuation or resume'
+has "$WORKFLOW" 'manifest-identity.sh verify' \
+  'resume verifies the manifest identity before reuse'
+has "$WORKFLOW" 'Before delegation, a missing, malformed, corrupt, or mismatched manifest' \
+  'a pre-delegation mismatch takes complete recomputation'
+has "$WORKFLOW" 'After delegation, the frozen manifest is immutable' \
+  'a post-delegation mismatch takes fail-closed hand-back'
 has "$WORKFLOW" 'readiness, Standards, Spec, and closure contexts' \
   'the workflow supplies the manifest to every review context'
 has "$WORKFLOW" 'available for adjudication' \
@@ -251,6 +264,59 @@ has "$WORKFLOW" 'fresh trusted snapshot and a fresh manifest' \
 has "$WORKFLOW" 'never inherits this one' \
   'a later attempt never inherits the invalidated manifest'
 echo "ok - a later attempt after invalidation starts from a fresh snapshot and manifest"
+
+## Runtime identity — the file carries and verifies snapshot + base
+identity_repo="$flat_dir/identity-repo"
+git init -q -b main "$identity_repo"
+git -C "$identity_repo" config user.name 'Manifest Identity Test'
+git -C "$identity_repo" config user.email manifest@example.invalid
+printf 'base\n' >"$identity_repo/base.txt"
+git -C "$identity_repo" add base.txt
+git -C "$identity_repo" commit -qm 'base'
+
+snapshot="$flat_dir/trusted-snapshot.jsonl"
+manifest_dir="$identity_repo/.git/work-on-manifest"
+manifest="$manifest_dir/test-run.md"
+mkdir -p "$manifest_dir"
+printf '%s\n' \
+  '{"source":"issue:example/repo#103:body","body":"trusted contract"}' \
+  >"$snapshot"
+printf '%s\n' '- criterion 1: cmd/build' >"$manifest"
+
+(
+  cd "$identity_repo"
+  "$IDENTITY" freeze --manifest "$manifest" --snapshot "$snapshot" --base HEAD
+)
+
+snapshot_digest="$(sha256sum <"$snapshot" | cut -d' ' -f1)"
+base_sha="$(git -C "$identity_repo" rev-parse HEAD)"
+grep -Fqx "trusted-snapshot-sha256 $snapshot_digest" "$manifest"
+grep -Fqx "pre-implementation-base $base_sha" "$manifest"
+grep -Eq '^manifest-binding-sha256 [0-9a-f]{64}$' "$manifest"
+[[ "$(sed -n '5p' "$manifest")" == '- criterion 1: cmd/build' ]]
+[[ "$(stat -c '%a' "$manifest")" == 600 ]]
+echo "ok - a frozen manifest carries recoverable trusted-snapshot and base identity"
+
+verified_base="$(
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
+)"
+[[ "$verified_base" == "$base_sha" ]]
+echo "ok - an unchanged resume verifies and reuses the frozen identity"
+
+printf '%s\n' \
+  '{"source":"issue:example/repo#103:body","body":"changed contract"}' \
+  >"$snapshot"
+if (
+  cd "$identity_repo"
+  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
+) >"$flat_dir/mismatch.out" 2>"$flat_dir/mismatch.err"; then
+  fail 'identity verification silently reused a mismatched trusted snapshot'
+fi
+[[ ! -s "$flat_dir/mismatch.out" ]]
+grep -Fqx 'manifest identity: trusted snapshot does not match frozen manifest' \
+  "$flat_dir/mismatch.err"
+echo "ok - a mismatched identity is not silently reused"
 
 if (( failures > 0 )); then
   printf '\n%s manifest-contract assertion(s) failed.\n' "$failures" >&2

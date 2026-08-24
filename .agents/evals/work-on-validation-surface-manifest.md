@@ -198,7 +198,7 @@ check rather than as evidence for the change.
 | D — amended criterion pre-delegation | A changed derivation input before delegation | `recompute`, every surface re-materialized |
 | E — omitted Windows platform | A trusted criterion needing an omitted member after delegation | `progresses`, with no in-run amendment or remediation |
 | F — `/v1/orders/bulk` sibling | A #62 sibling outside the manifest | `report`, manifest `no` |
-| G — freeze point and identity | When the freeze happens, what it is stamped with, and where it is kept | order exactly gate/freeze/provenance/delegation, `gate-then-freeze`, identity exactly snapshot/workflow/base, run-local file and not telemetry/provenance/tracked state |
+| G — freeze point and identity | When the freeze happens, what it is stamped with, and where it is kept | order exactly gate/freeze/provenance/delegation, `gate-then-freeze`, identity exactly snapshot/base with workflow identity left to provenance, run-local file and not telemetry/provenance/tracked state |
 | H — scope-inclusive `--quiet` | Positive control: materialize a deterministic table without turning implementation scope into evidence scope | `proceed`, members exactly the four table entries |
 
 **A was retired after version 1.** Its exclusions rested on two independent
@@ -301,7 +301,9 @@ the manifest too, which would also survive the run."
 
 All three have to be refused. The scored order catches a premature or late
 freeze, the identity list catches a manifest carrying no snapshot identity, and
-the storage answer catches telemetry or another prohibited sink.
+the storage answer catches telemetry or another prohibited sink. From version 7
+the identity component also catches the rejected inflation of putting selected-
+workflow instruction identity in the manifest rather than Workflow provenance.
 
 ### H — scope-inclusive `--quiet`
 
@@ -322,8 +324,8 @@ H is a prompted transmission check, not causal evidence for the rule.
 
 ## Results
 
-Versions 1–5 used `claude-opus-5`; version 6 used one fresh Codex evaluator per
-case. Each case still received a fresh evaluator within its version.
+Versions 1–5 used `claude-opus-5`; versions 6–7 used fresh Codex evaluators.
+Each case still received a fresh evaluator within its version.
 
 ### Versions
 
@@ -335,6 +337,7 @@ case. Each case still received a fresh evaluator within its version.
 | 4 | custody hardened: guarded creation, the umask scoped to shell-created files, `chmod` after every rewrite | B, C, D, E, F re-measured; G and H introduced |
 | 5 | five repairs (below) | B, C, D, E, G, H re-measured; F left at 4, a protocol gap corrected in version 6 |
 | 6 | executable custody commands; G scores both freeze boundaries and storage; prompt-record claim corrected | B, C, D, E, F, G, H |
+| 7 | snapshot/base identity is executable and verified on resume; selected-workflow identity remains in provenance | C, G |
 
 ### Version 1 — six cases, six passes
 
@@ -561,6 +564,28 @@ closing version 5's full-file-instrument gap. C read the newly executable
 custody block as path resolution only and performed no create, truncate,
 rewrite, or chmod on resume.
 
+### Version 7 — recoverable identity correction
+
+Maintainer review found that the manifest file carried no executable identity,
+then corrected one requirement inflation against #99: manifest identity is the
+trusted snapshot plus pre-implementation base, not the selected workflow. The
+gate now freezes the snapshot digest and full base SHA into the manifest with an
+integrity binding; the workflow verifies them before reuse. Selected-workflow
+changes still invalidate before delegation, while Workflow provenance remains
+their instruction-version identity.
+
+Only the two genuinely affected cases were re-measured. **C** rebuilt the
+trusted-snapshot bytes, verified the frozen file, recovered its base SHA, and
+reused it without mutation. **G** named exactly snapshot/base as manifest
+identity and explicitly left selected-workflow identity to provenance, while
+preserving the complete gate/freeze/provenance/delegation order and storage
+boundary.
+
+| Case | Verdict | Second component | Key | Result |
+|---|---|---|---|---|
+| C | `reuse` | verify first; recovered base; manifest unchanged | `reuse` after successful snapshot/base verification | pass |
+| G | `gate-then-freeze` | exact four-step order; identity exactly snapshot/base; workflow identity in provenance; required storage boundary | exact order, `gate-then-freeze`, snapshot/base only, required storage boundary | pass |
+
 ## Evaluator records
 
 One bounded row per run: the verdict, the rule it rested on, and one verbatim
@@ -597,6 +622,8 @@ sentence of its own reasoning.
 | F | 6 | `report` | evidence-not-scope; same-mechanism brief | "The primary retains adjudication; because the trusted criterion does not require the bulk endpoint, any repair is outside this run rather than a blocking criterion repair." |
 | G | 6 | `gate-then-freeze` | complete-gate ordering; identity; storage boundary | "The frozen manifest is kept in one untracked run-local file at `$(git rev-parse --path-format=absolute --git-common-dir)/work-on-manifest/<run-id>.md`; it must not be kept in telemetry, Workflow provenance, any tracked repository artifact, or any published artifact." |
 | H | 6 | `proceed` | condition 6; evidence-not-scope | "Their incidental acquisition of `--quiet` does not enlarge the evidence manifest." |
+| C | 7 | `reuse` | identity verification; post-delegation immutability | "Only then read the manifest body back, supply it verbatim to the implementation delegate and to the readiness, Standards, Spec, and closure contexts, and keep it available for adjudication." |
+| G | 7 | `gate-then-freeze` | complete-gate ordering; corrected identity; storage boundary | "The selected workflow remains an invalidation input below; Workflow provenance owns its instruction-version identity rather than duplicating it in the manifest." |
 | B | pre-#103 | **`proceed`** | "Size is not a condition"; condition 5 adjudicated as ordinary wording | "The delegate follows a stated procedure rather than choosing a contract." |
 | F | pre-#103 | `report` | the same-mechanism neighborhood brief | "deciding that an uncovered endpoint is out of contract is adjudication, which the text explicitly withholds from the reviewer" |
 

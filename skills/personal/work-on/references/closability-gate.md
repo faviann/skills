@@ -138,8 +138,20 @@ direct, available validation passes.
 
 The manifest freezes when the complete gate passes — after the trusted snapshot
 and the selected workflow have been read, and before workflow-provenance capture
-and implementation delegation. Identify it with the trusted snapshot, the
-selected workflow, and the pre-implementation base it was materialized from.
+and implementation delegation. Identify it with the trusted snapshot and the
+pre-implementation base it was materialized from. The selected workflow remains
+an invalidation input below; Workflow provenance owns its instruction-version
+identity rather than duplicating it in the manifest.
+
+Before applying the gate, serialize the exact trusted snapshot it will read as
+source-labelled UTF-8 JSON Lines: one compact object with only `source` and
+`body`, in that key order, for the issue body, each trusted comment, and each
+referenced contract source. Use a stable source locator, preserve each source
+body exactly, reject duplicate locators, and order the records by locator under
+the C locale. This owner-only temporary file is the digest input, not a summary
+or a second durable snapshot store; rebuild the same bytes from the trusted
+sources on resume. Record the committed base before the gate as
+`pre_implementation_base="$(git rev-parse HEAD)"`.
 
 Write it to one untracked run-local file in the target repository's Git common
 directory:
@@ -173,11 +185,24 @@ step; a rebuild before delegation still overwrites this same path's contents
 outright, as invalidation requires. The umask only closes the creation-to-chmod
 window for a file the shell itself creates; a tool that writes the manifest
 directly lands it at that tool's default mode, so create the empty file this way
-before writing into it. Run `chmod 600 "$manifest_file"` again after every
-rewrite — an editor that writes a replacement and renames it over the old path
-installs a new inode at the default mode. The chmod also tightens a directory an
-earlier run left readable. A run's record of a workstation's work is not group-
-or world-readable.
+before writing the materialized surfaces into it. Then, from the target
+repository, run this skill's identity helper; the path below is relative to the
+skill root:
+
+```bash
+scripts/manifest-identity.sh freeze \
+  --manifest "$manifest_file" \
+  --snapshot "$trusted_snapshot_file" \
+  --base "$pre_implementation_base"
+```
+
+The command prepends the full base SHA, the snapshot's SHA-256 digest, and one
+binding digest over both identities plus the manifest body. It atomically
+replaces the file at `0600`; the binding makes malformed identity fields or a
+changed manifest body fail verification. The temporary snapshot file may then
+be removed: the manifest is the durable run-specific binding, while the trusted
+sources re-establish the comparison input. A run's record of a workstation's
+work is not group- or world-readable.
 
 The selected workflow supplies the manifest to the implementation delegate and
 to the readiness, Standards, Spec, and closure contexts, and keeps it available

@@ -25,10 +25,29 @@ into implementation for the closure gate to discover.
 ## Validation-surface manifest custody
 
 The manifest frozen by `references/closability-gate.md` is this run's complete
-direct-evidence obligation. Read it back from its run-local file at the start of
-every continuation or resume, supply it verbatim to the implementation delegate
-and to the readiness, Standards, Spec, and closure contexts, and keep it
-available for adjudication.
+direct-evidence obligation. At the start of every continuation or resume,
+rebuild the exact source-labelled trusted-snapshot bytes and, from the target
+repository, run this skill's identity helper before reuse; the path below is
+relative to the skill root:
+
+```bash
+pre_implementation_base="$(scripts/manifest-identity.sh verify \
+  --manifest "$manifest_file" \
+  --snapshot "$trusted_snapshot_file")"
+```
+
+A successful verification proves that the current trusted snapshot matches the
+frozen snapshot digest, the recorded full base SHA still names a commit, and the
+snapshot/base/body binding is intact; it prints that base SHA for the resumed
+workflow. Only then read the manifest body back, supply it verbatim to the
+implementation delegate and to the readiness, Standards, Spec, and closure
+contexts, and keep it available for adjudication.
+
+Before delegation, a missing, malformed, corrupt, or mismatched manifest is an
+invalid manifest input: discard it and take the gate's settled complete
+preflight/manifest recomputation path. After delegation, the frozen manifest is
+immutable; take the fail-closed hand-back below instead of rebuilding, patching,
+or silently reusing it.
 
 It bounds evidence, not scope. Implementation may touch any other artifact this
 issue authorizes; readiness, both `code-review` axes, and the closure sweep may
@@ -53,9 +72,9 @@ at an omitted instance invalidates it. Then:
 - hand back as `Progresses` when ordinary closeout permits a safe,
   independently useful partial candidate, and as `failed` when it does not.
 
-A manifest that can no longer be recovered after delegation takes the same
-hand-back. A later attempt builds a fresh trusted snapshot and a fresh manifest;
-it never inherits this one.
+A manifest that can no longer be recovered or verified after delegation takes
+the same hand-back. A later attempt builds a fresh trusted snapshot and a fresh
+manifest; it never inherits this one.
 
 ## 2. Delegate implementation
 
