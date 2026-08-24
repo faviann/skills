@@ -143,15 +143,21 @@ has "$GATE" 'not telemetry, not Workflow provenance, and never a tracked' \
   'the manifest is neither telemetry, provenance, nor a tracked artifact'
 has "$GATE" 'for their owner only — `0700` and `0600`' \
   'the manifest directory and file are owner-only'
-has_fixed "$GATE" '[[ -e "$FILE" ]] || (umask 077 && : >"$FILE")' \
+has_fixed "$GATE" 'manifest_file="$manifest_dir/${RUN_HANDLE%%@*}.md"' \
+  'the manifest file resolves the bare run id from the bound run handle'
+has_fixed "$GATE" '[[ -e "$manifest_file" ]] || (umask 077 && : >"$manifest_file")' \
   'creating the manifest file is guarded so a re-run cannot truncate it'
-has_fixed "$GATE" '[[ -d "$DIR" ]] || (umask 077 && mkdir -p "$DIR")' \
+has_fixed "$GATE" '[[ -d "$manifest_dir" ]] || (umask 077 && mkdir -p "$manifest_dir")' \
   'creating the manifest directory is guarded the same way'
+has_fixed "$GATE" 'chmod 700 "$manifest_dir"' \
+  'the manifest directory is tightened with an explicit operand'
+has_fixed "$GATE" 'chmod 600 "$manifest_file"' \
+  'the manifest file is tightened with an explicit operand'
 has "$GATE" 'only closes the creation-to-chmod window for a file the shell itself creates' \
   'the umask is scoped to shell-created files, not tool-written ones'
 has "$GATE" 'create the empty file this way before writing into it' \
   'a tool-written manifest is created in the shell first'
-has "$GATE" '`chmod 600` the file again after every rewrite' \
+has_fixed "$GATE" 'Run `chmod 600 "$manifest_file"` again after every' \
   'a rewrite that replaces the inode is re-tightened'
 lacks "$skill_dir/references/run-telemetry.md" 'validation-surface manifest' \
   'the telemetry sink does not carry the manifest'

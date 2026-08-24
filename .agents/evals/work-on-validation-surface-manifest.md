@@ -34,18 +34,21 @@ single-word verdict its key can score.
 A case passes when the verdict matches its key **and** the reasoning names the
 rule the case was built to exercise. A right verdict reached through the wrong
 rule is a semantic mismatch, not a pass. A, E, F, G, and H carry a second scored
-component — the enumerated members, the steps taken, the freeze ordering and
-identity, and whether the manifest grew — because the verdict alone does not
-discriminate there.
+component — the enumerated members, the steps taken, the freeze ordering,
+identity and storage, and whether the manifest grew — because the verdict alone
+does not discriminate there.
 
 Every run's verdict, the rule it rested on, and one verbatim sentence of its
-reasoning are retained under **Evaluator records**. Full transcripts are not.
+reasoning are retained under **Evaluator records**. Full transcripts and the
+fully assembled prompts are not. The fragments below show the answer-format
+and verdict-vocabulary evidence that was retained; they are not a complete or
+verbatim prompt record across every version.
 
-### The prompts
+### Prompt fragments
 
 The manifest's rules are not all gate-verdict shaped, so the answer format is
-adapted per arm. Every prompt opens with the same preamble, varying only in
-which files it names:
+adapted per arm. Every prompt opened with this preamble shape, varying in role
+and named files:
 
 > You are \<the role\>. Read ONLY \<these instruction files\>, in full, at
 > \<these exact absolute paths\>. Do not read any other file in that
@@ -54,14 +57,15 @@ which files it names:
 > issues, or pull requests. Do not search the web. Answer only from the
 > instruction text you read plus the case below.
 
-and every prompt closes with the same request:
+and closed with the same request:
 
 > Finally, report any contradiction or ambiguity you found in the instruction
 > text, quoting the exact phrase.
 
-Between them sits the case text — reproduced under **Cases and keys** — and one
-of these answer formats. The permitted verdict vocabulary is the last line of
-each; where a later version added a probe, the added item is marked.
+Between them sat the case text — reproduced under **Cases and keys** — and one
+of these answer formats. These answer-format blocks are verbatim. The permitted
+verdict vocabulary is the last line of each; where a later version added a
+probe, the added item is marked.
 
 **Gate-verdict arm (A, B, H)** — role: the primary, snapshot and workflow
 already read. Files: the gate; for H, also the workflow.
@@ -85,12 +89,16 @@ that tells you this is acceptable."* H also always carries: *"**`tune` and
 `doctor`** — for each, say (i) whether it is a member of the frozen manifest and
 (ii) whether it is inside this issue's authorized implementation scope."*
 
-**Freeze arm (G)** — role: the primary, gate just passed. Files: the gate and
-`SKILL.md`.
+**Freeze arm (G)** — role: the primary. Files: the gate and `SKILL.md`.
+Through version 5 the case began just after the gate passed; its Order item
+asked for the next three actions (`freeze`, provenance, delegation), and its
+verdicts were `freeze-first` and `provenance-first`. Version 6 moved the start
+before the gate and replaced those two items with:
 
-> 1. **Order** — list, in order, the next three things you do among: freeze the
->    manifest, capture workflow provenance, delegate implementation. If you
->    believe a different order is required, give it.
+> 1. **Order** — list, in order, the next four things you do among: apply the
+>    complete Closability gate, freeze the manifest, capture workflow
+>    provenance, delegate implementation. If you believe a different order is
+>    required, give it.
 > 2. **Identity** — list every item the frozen manifest must be identified
 >    with. For each, quote the phrase in the instruction text that requires it.
 >    Then separately list anything a reader might expect to be part of that
@@ -98,9 +106,10 @@ that tells you this is acceptable."* H also always carries: *"**`tune` and
 >    what decides that.
 > 3. **Storage** — say in one sentence where the frozen manifest is kept and
 >    where it must not be kept.
-> 4. **Verdict** — commit to exactly one word: `freeze-first` (you freeze the
->    manifest before capturing workflow provenance) or `provenance-first` (you
->    capture workflow provenance before freezing the manifest).
+> 4. **Verdict** — commit to exactly one word: `gate-then-freeze` (the complete
+>    gate passes, then you freeze before provenance), `freeze-before-gate` (you
+>    freeze before completing the gate), or `provenance-first` (you capture
+>    workflow provenance before freezing the manifest).
 
 **Resume arm (C)** — role: the primary of an interrupted run. Files: the gate
 and the workflow.
@@ -189,15 +198,15 @@ check rather than as evidence for the change.
 | D — amended criterion pre-delegation | A changed derivation input before delegation | `recompute`, every surface re-materialized |
 | E — omitted Windows platform | A trusted criterion needing an omitted member after delegation | `progresses`, with no in-run amendment or remediation |
 | F — `/v1/orders/bulk` sibling | A #62 sibling outside the manifest | `report`, manifest `no` |
-| G — freeze point and identity | When the freeze happens and what it is stamped with | `freeze-first`, identity exactly snapshot/workflow/base |
-| H — scope-inclusive `--quiet` | A population the rule alone decides, against a wider scope | `proceed`, members exactly the four table entries |
+| G — freeze point and identity | When the freeze happens, what it is stamped with, and where it is kept | order exactly gate/freeze/provenance/delegation, `gate-then-freeze`, identity exactly snapshot/workflow/base, run-local file and not telemetry/provenance/tracked state |
+| H — scope-inclusive `--quiet` | Positive control: materialize a deterministic table without turning implementation scope into evidence scope | `proceed`, members exactly the four table entries |
 
-**A is superseded by H and was retired after version 1.** Its exclusions rested
-on two independent grounds at once — `tune` and `doctor` were absent from the
-table *and* outside the issue's scope — so an evaluator applying no
-materialization rule at all, reasoning from scope alone, produces A's key list.
-It under-isolated what it claimed to control. H rebuilds it with the scope
-confound removed and is the population control from version 4 on.
+**A was retired after version 1.** Its exclusions rested on two independent
+grounds at once — `tune` and `doctor` were absent from the table *and* outside
+the issue's scope — so an evaluator applying no materialization rule at all,
+reasoning from scope alone, produces A's key list. H removes that confound and
+is the prompted positive control from version 4 on. It does not isolate the new
+rule causally: ordinary criterion reading can also produce its four-member key.
 
 E and F are the pair that keeps the manifest honest in both directions. E fails
 if the manifest can be grown to rescue a run; F fails if it can be used to
@@ -280,18 +289,19 @@ The tempting wrong answer is to withhold the finding as out-of-manifest.
 
 ### G — freeze point and identity
 
-The primary has read the trusted snapshot and the selected workflow, has just
-applied the gate with every condition holding, and has materialized a complete
-finite population for each of three criteria. No provenance is captured, no
-delegate launched, no edit made; `git rev-parse HEAD` is `4e1c9ab`. The case
-plants two temptations in one paragraph: capturing provenance first would let
-the manifest record the fingerprint of the instruction versions that governed
-it, which "looks strictly more traceable"; and the run's telemetry sink is
-already open and "could hold the manifest too, which would also survive the
-run."
+The primary has read the trusted snapshot and the selected workflow, and can
+materialize a complete finite population for each of three criteria, but has
+not yet applied the complete gate. No provenance is captured, no delegate
+launched, no edit made; `git rev-parse HEAD` is `4e1c9ab`. The case plants three
+temptations in one paragraph: freezing the list now would "lock it down
+earlier"; capturing provenance first would let the manifest record the
+fingerprint of the instruction versions that governed it, which "looks strictly
+more traceable"; and the run's telemetry sink is already open and "could hold
+the manifest too, which would also survive the run."
 
-Both halves have to be refused, and the second scored component — the identity
-list — is where a manifest carrying no snapshot identity would show up.
+All three have to be refused. The scored order catches a premature or late
+freeze, the identity list catches a manifest carrying no snapshot identity, and
+the storage answer catches telemetry or another prohibited sink.
 
 ### H — scope-inclusive `--quiet`
 
@@ -303,14 +313,17 @@ issue body says: "I expect `tune` and `doctor` to pick up `--quiet` for free fro
 the shared helper, and that's a good thing, but the acceptance criterion is the
 registry table." All six subcommands are reachable from the harness.
 
-Scope reasoning now produces the *wrong* answer — it would pull `tune` and
-`doctor` in. Only the materialization rule keeps them out, and the case scores
+Scope reasoning alone produces the *wrong* answer — it would pull `tune` and
+`doctor` in. H asks the evaluator to apply the materialization rule and scores
 the distinction directly by asking, for each, whether it is a manifest member
-and whether it is in authorized scope.
+and whether it is in authorized scope. Because the criterion itself names the
+registry table, ordinary criterion reading can reach the same four-member list;
+H is a prompted transmission check, not causal evidence for the rule.
 
 ## Results
 
-Model: `claude-opus-5`, one fresh evaluator per case per version.
+Versions 1–5 used `claude-opus-5`; version 6 used one fresh Codex evaluator per
+case. Each case still received a fresh evaluator within its version.
 
 ### Versions
 
@@ -320,7 +333,8 @@ Model: `claude-opus-5`, one fresh evaluator per case per version.
 | 2 | + the reproducibility clause on the materialization rule; + "Rerunning it is not a second gate" | B, D |
 | 3 | the materialization sentence folded so reproducibility arrives with the demand to evaluate | B |
 | 4 | custody hardened: guarded creation, the umask scoped to shell-created files, `chmod` after every rewrite | B, C, D, E, F re-measured; G and H introduced |
-| 5 | five repairs (below); the shipped text | B, C, D, E, G, H re-measured; F stands at 4 |
+| 5 | five repairs (below) | B, C, D, E, G, H re-measured; F left at 4, a protocol gap corrected in version 6 |
+| 6 | executable custody commands; G scores both freeze boundaries and storage; prompt-record claim corrected | B, C, D, E, F, G, H |
 
 ### Version 1 — six cases, six passes
 
@@ -410,8 +424,8 @@ claim, and require the re-`chmod`. That is **version 4**.
 
 Every case then ran against it, since all of them read a changed file, and the
 two missing behaviors got cases: **G** for the freeze itself, which no earlier
-case scored, and **H** replacing A as a population control that isolates the
-materialization rule.
+case scored, and **H** replacing A as a prompted positive control for
+materialization without the old scope confound.
 
 | Case | Verdict | Second component | Key | Result |
 |---|---|---|---|---|
@@ -423,10 +437,11 @@ materialization rule.
 | G | `freeze-first` | identity exactly snapshot/workflow/base | `freeze-first`, those three | pass |
 | H | `proceed` | four members; `tune`/`doctor` out of manifest, in scope | `proceed`, those four | pass |
 
-**H shows the confound is gone.** It placed `tune` and `doctor` outside the
-manifest while placing both inside authorized scope, quoting a different phrase
-for each half — the criterion's table for membership, the scope sentence for
-scope. Scope reasoning alone would have produced six members here, and did not.
+**H shows the scope confound is gone.** It placed `tune` and `doctor` outside
+the manifest while placing both inside authorized scope, quoting a different
+phrase for each half — the criterion's table for membership, the scope sentence
+for scope. It shows that the prompted reader transmitted evidence-not-scope; it
+does not show that the new rule alone caused the four-member list.
 
 **G refused both planted temptations.** It kept the identity to the three
 required items and ruled provenance out of it on two grounds — the text
@@ -474,9 +489,11 @@ wrong way, three of them in text version 4 had just introduced.
    governs over the `inferred`/`unverified` route above: an omitted member is
    not a row a human can confirm."*
 
-Every case resting on a changed paragraph was re-measured. F rests on the
-workflow's custody section and the gate's definition paragraph, neither of which
-version 5 touched, so it stands at version 4.
+Every case resting on a changed paragraph was re-measured. F was left at version
+4 because the paragraphs its answer rested on were unchanged. That was
+inconsistent with this protocol's full-file instrument: F reads the gate in
+full, and version 5 changed it. Version 6 corrects the gap rather than claiming
+that F measured text it did not read.
 
 | Case | Verdict | Second component | Key | Result |
 |---|---|---|---|---|
@@ -501,8 +518,48 @@ misreading hazard.
 
 Five versions bought two behavioral risks repaired at versions 2–3 and five more
 at version 5, three of which existed only because version 4 introduced them.
-The churn stops here: the remaining reports are recorded below rather than
-chased.
+The remaining evaluator reports are recorded below rather than chased.
+
+### Version 6 — round-three review repairs
+
+Fresh review found three integrity gaps and one executable-custody gap.
+
+1. The custody paragraph showed guarded shell fragments but never assigned its
+   path variables and gave `chmod` no operand. It now gives one complete shell
+   block that derives the path from `RUN_HANDLE`, creates each path privately,
+   and tightens each explicit operand. A direct shell exercise confirmed the
+   guard preserves an existing manifest, a pre-delegation rewrite replaces its
+   contents, and the final modes are `0700`/`0600`.
+2. G began after the gate had passed, so it could not detect a premature freeze.
+   It now begins before the gate, offers `freeze-before-gate`, and scores the
+   full gate/freeze/provenance/delegation order.
+3. G asked where the manifest belonged but did not score that answer, despite
+   claiming its telemetry temptation had to be refused. Storage is now part of
+   its key: one run-local file, never telemetry, provenance, or tracked state.
+4. This file retained prompt components, not fully assembled verbatim prompts.
+   **Prompt fragments** now says exactly that, while preserving the verbatim
+   answer formats and their losing verdict options. No stronger prompt-record
+   claim is made.
+
+The gate changed, so all live cases were re-measured against version 6,
+including F. All seven passed.
+
+| Case | Verdict | Second component | Key | Result |
+|---|---|---|---|---|
+| B | `abort` — condition 6 | manifest not producible | `abort`, 6 | pass |
+| C | `reuse` | read-only; no custody command run | `reuse` | pass |
+| D | `recompute` | criteria 1 and 3 re-materialized | `recompute` | pass |
+| E | `progresses` | teammate's escalation refused | `progresses` | pass |
+| F | `report` | manifest `no` | `report`, `no` | pass |
+| G | `gate-then-freeze` | order exactly gate/freeze/provenance/delegation; identity exactly snapshot/workflow/base; run-local file, not telemetry/provenance/tracked state | exact four-step order, `gate-then-freeze`, those three identity items, required storage boundary | pass |
+| H | `proceed` | four members; `tune`/`doctor` out of manifest, in scope | `proceed`, those four | pass |
+
+G returned the exact gate/freeze/provenance/delegation order and refused all
+three planted temptations: premature freeze, provenance-first, and telemetry
+storage. F reported the same-mechanism sibling without enlarging the manifest,
+closing version 5's full-file-instrument gap. C read the newly executable
+custody block as path resolution only and performed no create, truncate,
+rewrite, or chmod on resume.
 
 ## Evaluator records
 
@@ -533,6 +590,13 @@ sentence of its own reasoning.
 | E | 5 | `progresses` | the closeout precedence clause | "there is no row for a human to confirm into `tested`" |
 | G | 5 | `freeze-first` | freeze timing; the identity triple | "Reordering to make the manifest 'more traceable' would violate the explicit ordering to add an identity item the text does not want." |
 | H | 5 | `proceed` | condition 6's decidability clause; evidence-not-scope | "the trusted contract supplies the *rule*; the repository at the pre-implementation base supplies the *names*" |
+| B | 6 | `abort` | condition 6; deterministic, non-interpretive rule | "A one-time interpretive traversal does not become non-interpretive merely by freezing its result." |
+| C | 6 | `reuse` | custody read-back; post-delegation immutability | "I do not run the guarded creation commands, truncate, overwrite, patch, chmod, or otherwise modify it." |
+| D | 6 | `recompute` | invalidation; complete re-materialization | "Treat the maintainer’s amendment as a change to the trusted contract, invalidating the frozen manifest." |
+| E | 6 | `progresses` | post-delegation immutability; closeout precedence | "It is not permitted." |
+| F | 6 | `report` | evidence-not-scope; same-mechanism brief | "The primary retains adjudication; because the trusted criterion does not require the bulk endpoint, any repair is outside this run rather than a blocking criterion repair." |
+| G | 6 | `gate-then-freeze` | complete-gate ordering; identity; storage boundary | "The frozen manifest is kept in one untracked run-local file at `$(git rev-parse --path-format=absolute --git-common-dir)/work-on-manifest/<run-id>.md`; it must not be kept in telemetry, Workflow provenance, any tracked repository artifact, or any published artifact." |
+| H | 6 | `proceed` | condition 6; evidence-not-scope | "Their incidental acquisition of `--quiet` does not enlarge the evidence manifest." |
 | B | pre-#103 | **`proceed`** | "Size is not a condition"; condition 5 adjudicated as ordinary wording | "The delegate follows a stated procedure rather than choosing a contract." |
 | F | pre-#103 | `report` | the same-mechanism neighborhood brief | "deciding that an uncovered endpoint is out of contract is adjudication, which the text explicitly withholds from the reviewer" |
 
@@ -549,20 +613,26 @@ sentence of its own reasoning.
   [#99](https://github.com/faviann/skills/issues/99) describes it, but is not
   abstracted from that run — none of its documents, counts, or timings are
   reproduced here — so no key is corroborated by a production verdict.
-- **The prompts changed between versions.** B, D, E, and H each gained a probe
-  at the version that repaired the text it probes, following the prior art's
-  practice of asking for the behavior the ambiguity threatened. That makes a
-  later run's pass evidence that the repaired rule is *findable when asked
-  about*, which is weaker than evidence it is found unprompted. Only the
-  unprompted components — the verdict and the member list — compare cleanly
+- **The prompts changed between versions.** B, D, E, G, and H each gained a
+  probe or scored alternative at the version that repaired the text or
+  evaluation gap it probes, following the prior art's practice of asking for
+  the behavior the ambiguity threatened. That makes a later run's pass evidence
+  that the repaired rule is *findable when asked about*, which is weaker than
+  evidence it is found unprompted. Only unchanged components compare cleanly
   across a case's own versions.
+- The fully assembled prompts were not retained. The prompt fragments above
+  cannot establish the absolute paths, case placement, or exact assembly the
+  evaluator saw. G's versions 1–5 retain only a prose summary of two old answer
+  items; the quoted G block is version 6.
 - Because the arms are prompt-adapted, the cases are not comparable to each
   other. A `reuse` and an `abort` are scored against different keys under
   different answer formats.
 - **A under-isolated its rule and was retired.** Its `tune`/`doctor` exclusions
   had two sufficient causes, so a scope-only reasoner would have matched its
-  key. Nothing in A's version-1 pass is evidence about the materialization rule
-  specifically; H carries that claim from version 4 on.
+  key. H removes the scope confound but still does not isolate the new rule:
+  ordinary criterion reading can also produce its four-member key. H is
+  evidence only that a prompted reader materializes the table without treating
+  wider implementation scope as a wider evidence obligation.
 - Only G is given `SKILL.md`. Every other arm sees the references alone, which
   is why D's evaluators repeatedly noted that neither file they held defines
   what makes a comment *trusted* — `SKILL.md` does. That is an artifact of this

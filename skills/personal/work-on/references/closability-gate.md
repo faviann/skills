@@ -157,17 +157,27 @@ carry this run's manifest.
 
 Create the directory and the file for their owner only — `0700` and `0600`.
 Create each in the shell first, guarded so re-running this step never truncates
-what a resume still needs: `[[ -d "$DIR" ]] || (umask 077 && mkdir -p "$DIR")`
-and `[[ -e "$FILE" ]] || (umask 077 && : >"$FILE")`, then `chmod 700` and
-`chmod 600`. The guard protects a manifest a resume still needs from a repeated
-creation step; a rebuild before delegation still overwrites this same path's
-contents outright, as invalidation requires. The umask only closes the creation-to-chmod window for a file the
-shell itself creates; a tool that writes the manifest directly lands it at that
-tool's default mode, so create the empty file this way before writing into it.
-`chmod 600` the file again after every rewrite — an editor that writes a
-replacement and renames it over the old path installs a new inode at the
-default mode. The chmod also tightens a directory an earlier run left readable.
-A run's record of a workstation's work is not group- or world-readable.
+what a resume still needs:
+
+```bash
+manifest_dir="$(git rev-parse --path-format=absolute --git-common-dir)/work-on-manifest"
+manifest_file="$manifest_dir/${RUN_HANDLE%%@*}.md"
+[[ -d "$manifest_dir" ]] || (umask 077 && mkdir -p "$manifest_dir")
+chmod 700 "$manifest_dir"
+[[ -e "$manifest_file" ]] || (umask 077 && : >"$manifest_file")
+chmod 600 "$manifest_file"
+```
+
+The guard protects a manifest a resume still needs from a repeated creation
+step; a rebuild before delegation still overwrites this same path's contents
+outright, as invalidation requires. The umask only closes the creation-to-chmod
+window for a file the shell itself creates; a tool that writes the manifest
+directly lands it at that tool's default mode, so create the empty file this way
+before writing into it. Run `chmod 600 "$manifest_file"` again after every
+rewrite — an editor that writes a replacement and renames it over the old path
+installs a new inode at the default mode. The chmod also tightens a directory an
+earlier run left readable. A run's record of a workstation's work is not group-
+or world-readable.
 
 The selected workflow supplies the manifest to the implementation delegate and
 to the readiness, Standards, Spec, and closure contexts, and keeps it available
