@@ -106,7 +106,12 @@ Procedure:
    `scripts/workflow-provenance.sh capture`, passing the retained
    `$selected_workflow_identity` as `--expected-workflow`, to freeze the
    governing instructions this run read and prove the selected workflow still
-   matches the gate's input. Abort if it fails. Done when capture succeeds.
+   matches the gate's input. If capture reports invalidated frozen inputs,
+   discard the manifest and rerun complete preflight/Closability. If valid
+   replacement state cannot be established, finalize as `preflight-aborted` and
+   hand back as the gate reference requires. Route a genuinely unrecoverable
+   failure through the applicable existing fail-closed handling. Done when
+   capture succeeds.
 8. Follow it without broadening the issue. When code changes are ready for a
    pull request, read and follow `references/github-closeout.md`. Build the
    closeout through `scripts/render-closeout.sh`; never hand-compose its Issues,
