@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RECONCILER="$ROOT/scripts/reconcile-skills.sh"
-LINKER="$ROOT/scripts/link-skills.sh"
 
 tmp_dirs=()
 
@@ -28,9 +27,7 @@ make_test_context() {
   fixture="$TMP_DIR"
   mkdir -p "$fixture/scripts"
   cp "$RECONCILER" "$fixture/scripts/reconcile-skills.sh"
-  cp "$LINKER" "$fixture/scripts/link-skills.sh"
   chmod +x "$fixture/scripts/reconcile-skills.sh"
-  chmod +x "$fixture/scripts/link-skills.sh"
   TEST_REPO="$fixture"
 
   new_tmp_dir
@@ -373,7 +370,148 @@ test_wrong_repository_link_aborts_and_is_preserved() {
   fi
 }
 
-test_stale_repository_link_aborts_and_is_preserved() {
+test_stale_repository_link_is_removed() {
+  local repo home stale renamed unrelated
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+  new_tmp_dir
+  unrelated="$TMP_DIR"
+  mkdir -p "$home/.agents/skills" "$home/.claude/skills"
+  stale="$home/.agents/skills/removed"
+  renamed="$home/.claude/skills/old-name"
+  ln -s "$repo/skills/engineering/removed" "$stale"
+  ln -s "$repo/skills/engineering/old-name" "$renamed"
+  ln -s "$unrelated" "$home/.agents/skills/local-link"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh"
+
+  if [ "$STATUS" -ne 0 ]; then
+    echo "expected stale repository links to be reconciled: $OUTPUT" >&2
+    return 1
+  fi
+  if [ -L "$stale" ] || [ -e "$stale" ] || [ -L "$renamed" ] || [ -e "$renamed" ]; then
+    echo "stale repository link was not removed" >&2
+    return 1
+  fi
+  if [ "$(readlink "$home/.agents/skills/local-link")" != "$unrelated" ]; then
+    echo "removing a stale link changed an unrelated link" >&2
+    return 1
+  fi
+  assert_link_target "$home/.agents/skills/alpha" "$repo/skills/engineering/alpha"
+  assert_link_target "$home/.claude/skills/alpha" "$repo/skills/engineering/alpha"
+}
+
+test_relative_stale_repository_link_is_removed() {
+  local repo home stale
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+  mkdir -p "$home/.agents/skills"
+  stale="$home/.agents/skills/removed"
+  ln -s "$(realpath --relative-to="$home/.agents/skills" "$repo")/skills/engineering/removed" "$stale"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh"
+
+  if [ "$STATUS" -ne 0 ]; then
+    echo "expected a relative stale link to be reconciled: $OUTPUT" >&2
+    return 1
+  fi
+  if [ -L "$stale" ] || [ -e "$stale" ]; then
+    echo "relative stale repository link was not removed" >&2
+    return 1
+  fi
+}
+
+test_sibling_prefix_link_is_preserved() {
+  local base repo home sibling preserved
+  new_tmp_dir
+  base="$TMP_DIR"
+  repo="$base/skills"
+  mkdir -p "$repo/scripts"
+  cp "$RECONCILER" "$repo/scripts/reconcile-skills.sh"
+  chmod +x "$repo/scripts/reconcile-skills.sh"
+  new_tmp_dir
+  home="$TMP_DIR"
+  add_skill "$repo" engineering alpha
+
+  # A sibling path that shares $REPO's prefix without being under it: a link
+  # into it is not repository-owned and must survive.
+  sibling="$base/skills-worktrees/b/skills/engineering/removed"
+  mkdir -p "$sibling"
+  preserved="$home/.agents/skills/removed"
+  mkdir -p "$(dirname "$preserved")"
+  ln -s "$sibling" "$preserved"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh"
+
+  if [ "$STATUS" -ne 0 ]; then
+    echo "a sibling-prefix link failed reconciliation: $OUTPUT" >&2
+    return 1
+  fi
+  if [ "$(readlink "$preserved")" != "$sibling" ]; then
+    echo "sibling-prefix link was removed or rewritten" >&2
+    return 1
+  fi
+  assert_link_target "$home/.agents/skills/alpha" "$repo/skills/engineering/alpha"
+}
+
+test_repository_link_to_a_non_installed_bucket_is_removed() {
+  local repo home installed
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+  add_skill "$repo" in-progress beta
+  installed="$home/.claude/skills/beta"
+  mkdir -p "$(dirname "$installed")"
+  ln -s "$repo/skills/in-progress/beta" "$installed"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh"
+
+  if [ "$STATUS" -ne 0 ]; then
+    echo "expected a link to a non-installed bucket to be reconciled: $OUTPUT" >&2
+    return 1
+  fi
+  if [ -L "$installed" ] || [ -e "$installed" ]; then
+    echo "link to a non-installed bucket was not removed" >&2
+    return 1
+  fi
+  assert_link_target "$home/.claude/skills/alpha" "$repo/skills/engineering/alpha"
+}
+
+test_check_reports_a_stale_link_as_the_only_discrepancy() {
+  local repo home stale stale_target
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+
+  HOME="$home" "$repo/scripts/reconcile-skills.sh" >/dev/null
+
+  stale="$home/.agents/skills/removed"
+  stale_target="$repo/skills/engineering/removed"
+  ln -s "$stale_target" "$stale"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh" --check
+
+  if [ "$STATUS" -ne 1 ]; then
+    echo "expected --check to exit 1 for a stale-only discrepancy: $STATUS" >&2
+    return 1
+  fi
+  if [ "$(readlink "$stale")" != "$stale_target" ]; then
+    echo "--check modified the stale link" >&2
+    return 1
+  fi
+  if [[ "$OUTPUT" != "stale repository link is still linked: $stale" ]]; then
+    echo "--check did not report the stale link alone: $OUTPUT" >&2
+    return 1
+  fi
+}
+
+test_check_reports_stale_repository_link_without_removing_it() {
   local repo home stale stale_target
   make_test_context
   repo="$TEST_REPO"
@@ -384,23 +522,52 @@ test_stale_repository_link_aborts_and_is_preserved() {
   mkdir -p "$(dirname "$stale")"
   ln -s "$stale_target" "$stale"
 
-  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh"
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh" --check
 
   if [ "$STATUS" -eq 0 ]; then
-    echo "expected a stale repository link to fail" >&2
+    echo "expected --check to fail for a stale repository link" >&2
     return 1
   fi
   if [ "$(readlink "$stale")" != "$stale_target" ]; then
-    echo "stale repository link was modified" >&2
+    echo "--check modified a stale repository link" >&2
     return 1
   fi
-  if [[ "$OUTPUT" != *"stale repository link"*"$stale"* ]]; then
-    echo "stale-link error was not actionable: $OUTPUT" >&2
+  if [[ "$OUTPUT" != *"stale repository link is still linked: $stale"* ]]; then
+    echo "--check did not explain the stale link: $OUTPUT" >&2
     return 1
   fi
   if [ -e "$home/.agents/skills/alpha" ] ||
     [ -e "$home/.claude/skills/alpha" ]; then
-    echo "stale link caused partial reconciliation" >&2
+    echo "--check created links while reporting a stale link" >&2
+    return 1
+  fi
+}
+
+test_stale_removal_does_not_run_when_a_conflict_aborts() {
+  local repo home stale collision
+  make_test_context
+  repo="$TEST_REPO"
+  home="$TEST_HOME"
+  add_skill "$repo" engineering alpha
+  mkdir -p "$home/.agents/skills"
+  stale="$home/.agents/skills/removed"
+  ln -s "$repo/skills/engineering/removed" "$stale"
+  collision="$home/.claude/skills/alpha"
+  mkdir -p "$collision"
+  printf '%s\n' "keep me" >"$collision/marker"
+
+  run_reconciler "$home" "$repo/scripts/reconcile-skills.sh"
+
+  if [ "$STATUS" -eq 0 ]; then
+    echo "expected a real-directory collision to fail" >&2
+    return 1
+  fi
+  if [ ! -L "$stale" ]; then
+    echo "conflict aborted after removing a stale link" >&2
+    return 1
+  fi
+  if [[ "$OUTPUT" != *"No changes were made."* ]]; then
+    echo "conflict error was not actionable: $OUTPUT" >&2
     return 1
   fi
 }
@@ -565,7 +732,7 @@ test_check_reports_excluded_skill_without_removing_it() {
   fi
 }
 
-test_linker_does_not_install_excluded_skills() {
+test_excluded_skills_are_never_installed() {
   local repo home
   make_test_context
   repo="$TEST_REPO"
@@ -575,7 +742,7 @@ test_linker_does_not_install_excluded_skills() {
   mkdir -p "$repo/.agents"
   printf '%s\n' "upstream-only" >"$repo/.agents/skill-link-excludes"
 
-  HOME="$home" "$repo/scripts/link-skills.sh"
+  HOME="$home" "$repo/scripts/reconcile-skills.sh"
 
   assert_link_target "$home/.agents/skills/alpha" "$repo/skills/engineering/alpha"
   assert_link_target "$home/.claude/skills/alpha" "$repo/skills/engineering/alpha"
@@ -583,7 +750,7 @@ test_linker_does_not_install_excluded_skills() {
     [ -L "$home/.agents/skills/upstream-only" ] ||
     [ -e "$home/.claude/skills/upstream-only" ] ||
     [ -L "$home/.claude/skills/upstream-only" ]; then
-    echo "linker installed an excluded skill" >&2
+    echo "reconciler installed an excluded skill" >&2
     return 1
   fi
 }
@@ -614,8 +781,20 @@ test_unrelated_symlink_collision_is_preserved
 echo "ok - unrelated symlink collision is preserved"
 test_wrong_repository_link_aborts_and_is_preserved
 echo "ok - wrong repository link aborts and is preserved"
-test_stale_repository_link_aborts_and_is_preserved
-echo "ok - stale repository link aborts and is preserved"
+test_stale_repository_link_is_removed
+echo "ok - stale repository link is removed"
+test_relative_stale_repository_link_is_removed
+echo "ok - relative stale repository link is removed"
+test_sibling_prefix_link_is_preserved
+echo "ok - sibling-prefix link is preserved"
+test_repository_link_to_a_non_installed_bucket_is_removed
+echo "ok - repository link to a non-installed bucket is removed"
+test_check_reports_stale_repository_link_without_removing_it
+echo "ok - check reports stale repository link without removing it"
+test_check_reports_a_stale_link_as_the_only_discrepancy
+echo "ok - check reports a stale link as the only discrepancy"
+test_stale_removal_does_not_run_when_a_conflict_aborts
+echo "ok - stale removal does not run when a conflict aborts"
 test_unrelated_destination_entries_are_preserved
 echo "ok - unrelated destination entries are preserved"
 test_destination_symlink_aborts_without_writing_through_it
@@ -628,5 +807,5 @@ test_excluded_skills_are_removed
 echo "ok - excluded skills are removed"
 test_check_reports_excluded_skill_without_removing_it
 echo "ok - check reports excluded skills without removing them"
-test_linker_does_not_install_excluded_skills
-echo "ok - linker does not install excluded skills"
+test_excluded_skills_are_never_installed
+echo "ok - excluded skills are never installed"
