@@ -81,17 +81,24 @@ Procedure:
    refuses. Fetch the remote default branch and update the current
    branch. Abort if unrelated changes cannot be avoided or the update is unsafe.
    Done on a safely updated branch and a registered run.
-4. Build the trusted snapshot through GitHub's REST comments endpoint
-   (`gh issue view` omits association). Done when no untrusted body/link is in
-   context, the omitted count is reported, every contract source has trusted
-   authority, and the exact source-labelled snapshot bytes are retained under
-   the owner-only run-local custody in `references/closability-gate.md`.
+4. For a new run without frozen contract state, build the trusted snapshot
+   through GitHub's REST comments endpoint (`gh issue view` omits association).
+   On a supported continuation or resume, do not refetch current comments or
+   rebuild the snapshot; defer recovery of the retained frozen snapshot and
+   manifest to their selected-workflow owner in step 5. Done when either the new
+   snapshot contains no untrusted body/link, reports the omitted count, gives
+   every contract source trusted authority, and is retained under the owner-only
+   run-local custody in `references/closability-gate.md`, or the existing frozen
+   pair is ready for selected-workflow recovery without a GitHub refetch.
 5. Use `docs/workflow.md` when present and announce it; otherwise use this
    skill's `references/default-workflow.md`. Read the selected source and treat
    it as binding. Retain its full identity with
    `scripts/workflow-provenance.sh identify-workflow` for the gate and the
-   post-freeze capture. Done when read, identified, and, for a repo workflow,
-   announced.
+   post-freeze capture. On continuation or resume, follow that workflow's
+   frozen-snapshot/manifest custody now; proceed only when it recovers and
+   verifies the exact retained pair without refetching or reconstruction, using
+   the established pre-/post-delegation failure routing. Done when read,
+   identified, recovered when applicable, and, for a repo workflow, announced.
 6. Before capturing provenance, and before any implementation delegation, edit,
    commit, or pull request, apply this skill's `references/closability-gate.md`
    to the trusted snapshot and the selected workflow. Done when every

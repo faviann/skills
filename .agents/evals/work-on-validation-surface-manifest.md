@@ -111,8 +111,9 @@ before the gate and replaced those two items with:
 >    freeze before completing the gate), or `provenance-first` (you capture
 >    workflow provenance before freezing the manifest).
 
-**Resume arm (C)** — role: the primary of an interrupted run. Files: the gate
-and the workflow.
+**Resume arm (C)** — role: the primary of an interrupted run. Files: `SKILL.md`,
+the gate, and the workflow. `SKILL.md` was added at version 9 to cover the
+top-level routing that a genuinely fresh invocation reaches before custody.
 
 > 1. **Action** — say exactly what you do about this run's frozen trusted
 >    snapshot and Validation-surface manifest before you continue the workflow.
@@ -611,6 +612,23 @@ custody boundary.
 | C | `reuse` | verify retained pair; later trusted comment excluded; no locator reconstruction | `reuse`, later trusted comment excluded | pass |
 | G | `gate-then-freeze` | exact four-step order; identity exactly snapshot/base; workflow identity in provenance; two owner-only run-local files outside telemetry/provenance/registry/tracked state | exact order, `gate-then-freeze`, snapshot/base only, required two-file boundary | pass |
 
+### Version 9 — top-level resume routing
+
+Spec review found that procedure step 4 still unconditionally fetched the
+trusted snapshot before a fresh context reached the selected workflow's custody
+rule. Step 4 now branches new runs from continuation/resume, and step 5 requires
+the selected workflow to recover and verify the exact retained pair without
+refetch or reconstruction. C now reads `SKILL.md` as well as the two owning
+references so its instrument covers that top-level route.
+
+C was re-measured with a fresh isolated evaluator. It started at step 4, refused
+the GitHub query and later OWNER observation, verified Workflow provenance and
+the retained pair in order, and returned `reuse` with no contradiction.
+
+| Case | Verdict | Second component | Key | Result |
+|---|---|---|---|---|
+| C | `reuse` | step 4 does not query GitHub; step 5 verifies retained pair; later trusted comment excluded | `reuse`, no refetch, later trusted comment excluded | pass |
+
 ## Evaluator records
 
 One bounded row per run: the verdict, the rule it rested on, and one verbatim
@@ -651,6 +669,7 @@ sentence of its own reasoning.
 | G | 7 | `gate-then-freeze` | complete-gate ordering; corrected identity; storage boundary | "The selected workflow remains an invalidation input below; Workflow provenance owns its instruction-version identity rather than duplicating it in the manifest." |
 | C | 8 | `reuse` | retained-pair recovery and verification; explicit amendment boundary | "The later OWNER observation does not join the contract because it is not an explicit contract amendment." |
 | G | 8 | `gate-then-freeze` | complete-gate ordering; snapshot/base identity; two-file custody boundary | "Keep the exact trusted snapshot and manifest as two owner-only, untracked, run-local files" |
+| C | 9 | `reuse` | top-level no-refetch route; retained-pair recovery and verification | "On a supported continuation or resume, do not refetch current comments or rebuild the snapshot" |
 | B | pre-#103 | **`proceed`** | "Size is not a condition"; condition 5 adjudicated as ordinary wording | "The delegate follows a stated procedure rather than choosing a contract." |
 | F | pre-#103 | `report` | the same-mechanism neighborhood brief | "deciding that an uncovered endpoint is out of contract is adjudication, which the text explicitly withholds from the reviewer" |
 
@@ -687,10 +706,10 @@ sentence of its own reasoning.
   ordinary criterion reading can also produce its four-member key. H is
   evidence only that a prompted reader materializes the table without treating
   wider implementation scope as a wider evidence obligation.
-- Only G is given `SKILL.md`. Every other arm sees the references alone, which
-  is why D's evaluators repeatedly noted that neither file they held defines
-  what makes a comment *trusted* — `SKILL.md` does. That is an artifact of this
-  protocol, not a defect in the instructions.
+- From version 9, C and G are given `SKILL.md`; every other arm sees the
+  references alone. That is why D's evaluators repeatedly noted that neither
+  file they held defines what makes a comment *trusted* — `SKILL.md` does. That
+  is an artifact of this protocol, not a defect in the instructions.
 - C through H hand the evaluator its role and its situation. A real primary
   arrives having already spent a run's context, and a real reviewer carries the
   diff and raw artifacts as well as the brief. Nothing here says how these rules

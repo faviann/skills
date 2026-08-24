@@ -24,6 +24,21 @@ fail() {
   failures=$((failures + 1))
 }
 
+verify_rejected() {
+  local label="$1" expected="$2" description="$3"
+  if (
+    cd "$identity_repo"
+    "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
+  ) >"$flat_dir/$label.out" 2>"$flat_dir/$label.err"; then
+    fail "$description"
+    return
+  fi
+  [[ ! -s "$flat_dir/$label.out" ]] \
+    || fail "$description (verification wrote successful output)"
+  grep -Fqx "$expected" "$flat_dir/$label.err" \
+    || fail "$description (unexpected diagnostic)"
+}
+
 # These documents wrap at 80 columns, so a rule routinely straddles a newline.
 # Content assertions run against a copy flattened one paragraph per line: that
 # rejoins a wrapped rule while still keeping every match inside the block that
@@ -109,6 +124,10 @@ has "$GATE" 'Validation surface is finite and materialized here' \
   'condition 6 requires a finite materialized surface'
 has "$SKILL" 'materialized as a finite frozen' \
   'the top-level procedure requires materialization before delegation'
+has "$SKILL" 'On a supported continuation or resume, do not refetch current comments or rebuild the snapshot' \
+  'the top-level procedure routes resume away from live-source reconstruction'
+has "$SKILL" 'proceed only when it recovers and verifies the exact retained pair without refetching or reconstruction' \
+  'every selected workflow must recover the retained contract before resume'
 echo "ok - preflight materializes a finite surface from an enumeration or a deterministic rule"
 
 ## An authorized-to-be-created member needs a contract-determinable identity
@@ -462,95 +481,53 @@ cp -p -- "$snapshot" "$snapshot_backup"
 cp -p -- "$manifest" "$manifest_backup"
 
 mv -- "$snapshot" "$snapshot.missing"
-if (
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
-) >"$flat_dir/missing-snapshot.out" 2>"$flat_dir/missing-snapshot.err"; then
-  fail 'identity verification silently accepted a missing frozen snapshot'
-fi
-[[ ! -s "$flat_dir/missing-snapshot.out" ]]
-grep -Fqx 'manifest identity: trusted snapshot is missing or unsafe' \
-  "$flat_dir/missing-snapshot.err"
+verify_rejected missing-snapshot \
+  'manifest identity: trusted snapshot is missing or unsafe' \
+  'identity verification silently accepted a missing frozen snapshot'
 mv -- "$snapshot.missing" "$snapshot"
 
 printf '%s\n' 'truncated frozen snapshot' >>"$snapshot"
-if (
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
-) >"$flat_dir/corrupt-snapshot.out" 2>"$flat_dir/corrupt-snapshot.err"; then
-  fail 'identity verification silently accepted a corrupt frozen snapshot'
-fi
-[[ ! -s "$flat_dir/corrupt-snapshot.out" ]]
-grep -Fqx 'manifest identity: trusted snapshot does not match frozen manifest' \
-  "$flat_dir/corrupt-snapshot.err"
+verify_rejected corrupt-snapshot \
+  'manifest identity: trusted snapshot does not match frozen manifest' \
+  'identity verification silently accepted a corrupt frozen snapshot'
 cp -p -- "$snapshot_backup" "$snapshot"
 
 printf '%s\n' \
   '[{"source":"comment:replacement","body":"different frozen contract"}]' \
   >"$snapshot"
 chmod 600 "$snapshot"
-if (
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
-) >"$flat_dir/replaced-snapshot.out" 2>"$flat_dir/replaced-snapshot.err"; then
-  fail 'identity verification silently accepted a replaced frozen snapshot'
-fi
-[[ ! -s "$flat_dir/replaced-snapshot.out" ]]
-grep -Fqx 'manifest identity: trusted snapshot does not match frozen manifest' \
-  "$flat_dir/replaced-snapshot.err"
+verify_rejected replaced-snapshot \
+  'manifest identity: trusted snapshot does not match frozen manifest' \
+  'identity verification silently accepted a replaced frozen snapshot'
 cp -p -- "$snapshot_backup" "$snapshot"
 
 chmod 644 "$snapshot"
-if (
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
-) >"$flat_dir/unsafe-mode.out" 2>"$flat_dir/unsafe-mode.err"; then
-  fail 'identity verification silently accepted non-owner-only frozen state'
-fi
-[[ ! -s "$flat_dir/unsafe-mode.out" ]]
-grep -Fqx 'manifest identity: frozen state is not owner-only' \
-  "$flat_dir/unsafe-mode.err"
+verify_rejected unsafe-mode \
+  'manifest identity: frozen state is not owner-only' \
+  'identity verification silently accepted non-owner-only frozen state'
 chmod 600 "$snapshot"
 
 printf '%s\n' '- corrupt manifest body' >>"$manifest"
-if (
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
-) >"$flat_dir/corrupt-manifest.out" 2>"$flat_dir/corrupt-manifest.err"; then
-  fail 'identity verification silently accepted a corrupt frozen manifest'
-fi
-[[ ! -s "$flat_dir/corrupt-manifest.out" ]]
-grep -Fqx 'manifest identity: frozen manifest is corrupt' \
-  "$flat_dir/corrupt-manifest.err"
+verify_rejected corrupt-manifest \
+  'manifest identity: frozen manifest is corrupt' \
+  'identity verification silently accepted a corrupt frozen manifest'
 cp -p -- "$manifest_backup" "$manifest"
 
 other_base="$(git -C "$identity_repo" rev-parse HEAD^)"
 sed -i "2cpre-implementation-base $other_base" "$manifest"
 chmod 600 "$manifest"
-if (
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
-) >"$flat_dir/base-mismatch.out" 2>"$flat_dir/base-mismatch.err"; then
-  fail 'identity verification silently accepted a replaced pre-implementation base'
-fi
-[[ ! -s "$flat_dir/base-mismatch.out" ]]
-grep -Fqx 'manifest identity: frozen manifest is corrupt' \
-  "$flat_dir/base-mismatch.err"
+verify_rejected base-mismatch \
+  'manifest identity: frozen manifest is corrupt' \
+  'identity verification silently accepted a replaced pre-implementation base'
 cp -p -- "$manifest_backup" "$manifest"
 echo "ok - missing, replaced, or corrupt frozen state fails closed"
 
 printf '%s\n' \
   '{"source":"issue:example/repo#103:body","body":"changed contract"}' \
   >"$snapshot"
-if (
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
-) >"$flat_dir/mismatch.out" 2>"$flat_dir/mismatch.err"; then
-  fail 'identity verification silently reused a mismatched trusted snapshot'
-fi
-[[ ! -s "$flat_dir/mismatch.out" ]]
-grep -Fqx 'manifest identity: trusted snapshot does not match frozen manifest' \
-  "$flat_dir/mismatch.err"
+verify_rejected mismatch \
+  'manifest identity: trusted snapshot does not match frozen manifest' \
+  'identity verification silently reused a mismatched trusted snapshot'
 cp -p -- "$snapshot_backup" "$snapshot"
 echo "ok - manifest, retained snapshot, and base binding mismatches are not silently reused"
 
