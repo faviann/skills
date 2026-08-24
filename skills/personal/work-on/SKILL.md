@@ -54,6 +54,14 @@ Authority invariants (bind regardless of workflow):
   validation command in the run's telemetry sink as it happens, following
   `references/run-telemetry.md`.
   Telemetry observes the run; it never decides what the run does.
+- Freeze every acceptance criterion's Validation surface into this run's
+  Validation-surface manifest when the closability gate passes, before workflow
+  provenance capture and implementation delegation; supply it to every
+  implementation and review delegate and keep it available for adjudication. It
+  bounds the direct-evidence obligation only — never authorized implementation,
+  ordinary review, defect reporting, or same-mechanism investigation — and after
+  delegation it is immutable. `references/closability-gate.md` owns its creation
+  and validity; the selected workflow owns its custody and post-freeze handling.
 - Register the run's lifecycle before implementation and finalize it on every
   hand-back, following `references/run-registry.md`. Registration may refuse a
   run whose predecessor left an unfinished obligation; it never changes what an
@@ -83,11 +91,13 @@ Procedure:
 6. Before capturing provenance, and before any implementation delegation, edit,
    commit, or pull request, apply this skill's `references/closability-gate.md`
    to the trusted snapshot and the selected workflow. Done when every
-   acceptance criterion has an available direct validation seam, no criterion is
-   knowingly limited to `inferred` or `unverified` evidence, every blocking
-   prerequisite is complete, the required commands are executable, and the
-   trusted contract is consistent; otherwise finalize the run as
-   `preflight-aborted` and hand back as that reference requires.
+   acceptance criterion has an available direct validation seam, every
+   criterion's direct-evidence obligation is materialized as a finite frozen
+   Validation surface, no criterion is knowingly limited to `inferred` or
+   `unverified` evidence, every blocking prerequisite is complete, the required
+   commands are executable, and the trusted contract is consistent; otherwise
+   finalize the run as `preflight-aborted` and hand back as that reference
+   requires.
 7. Immediately before delegating implementation, run this skill's
    `scripts/workflow-provenance.sh capture` to freeze the governing
    instructions this run read. Abort if it fails. Done when capture succeeds.
