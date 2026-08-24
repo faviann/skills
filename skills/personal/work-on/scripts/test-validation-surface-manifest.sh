@@ -135,8 +135,10 @@ has "$GATE" 'selected workflow remains an invalidation input' \
   'workflow identity stays in provenance while workflow changes still invalidate'
 has "$GATE" 'workflow-provenance.sh identify-workflow' \
   'the selected workflow is fingerprinted before manifest derivation'
-has "$GATE" 'capture compares the current selected workflow with that retained identity' \
+has "$GATE" 'capture in `SKILL.md` step 7 compares the current selected workflow with that retained identity' \
   'post-freeze provenance capture must match the workflow used for derivation'
+lacks "$GATE" 'scripts/workflow-provenance.sh capture' \
+  'the gate hands back after freeze instead of performing provenance capture'
 precedes "$SKILL" "apply this skill's .references/closability-gate\.md" \
   '`scripts/workflow-provenance\.sh capture`' \
   'the procedure applies the gate before capturing provenance'

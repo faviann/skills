@@ -230,17 +230,11 @@ temporary snapshot file may then be removed: the manifest is the durable
 run-specific binding, while the trusted sources re-establish the comparison
 input. A run's record of a workstation's work is not group- or world-readable.
 
-After the freeze, capture Workflow provenance with the retained identity:
-
-```bash
-scripts/workflow-provenance.sh capture \
-  --expected-workflow "$selected_workflow_identity"
-```
-
-Capture compares the current selected workflow with that retained identity
-before it writes the provenance ledger. A mismatch invalidates the manifest and
-takes complete recomputation before delegation; a later identity obtained from
-the changed workflow cannot authorize the old manifest.
+After the freeze, return to the procedure with the retained identity. The later
+capture in `SKILL.md` step 7 compares the current selected workflow with that
+retained identity before it writes the provenance ledger. A mismatch invalidates
+the manifest and takes complete recomputation before delegation; a later
+identity obtained from the changed workflow cannot authorize the old manifest.
 
 The selected workflow supplies the manifest to the implementation delegate and
 to the readiness, Standards, Spec, and closure contexts, and keeps it available
