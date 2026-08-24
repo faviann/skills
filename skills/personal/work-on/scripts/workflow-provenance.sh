@@ -16,6 +16,7 @@ work_on_inputs=(
   skills/personal/work-on/SKILL.md
   skills/personal/work-on/references/closability-gate.md
   skills/personal/work-on/references/github-closeout.md
+  skills/personal/work-on/references/review-state-machine.md
   skills/personal/work-on/references/run-telemetry.md
   skills/personal/work-on/references/validation-evidence.md
   skills/personal/work-on/scripts/manifest-identity.sh

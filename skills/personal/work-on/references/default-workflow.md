@@ -92,6 +92,11 @@ Frozen snapshot or manifest state that can no longer be recovered or verified
 after delegation takes the same hand-back. A later attempt builds a fresh
 trusted snapshot and a fresh manifest; it never inherits these objects.
 
+Apply `references/review-state-machine.md` to every review chain. It freezes the
+governing state and owns cumulative, delta, confirmation, blindness, and
+invalidation semantics. The manifest custody above and
+`references/validation-evidence.md` retain their stronger ownership boundaries.
+
 ## 2. Delegate implementation
 
 Spawn a fresh subagent and give it this contract directly, populated only from
@@ -172,13 +177,14 @@ directive.
 On later rounds, re-check only affected criteria; do not run the full closeout
 sweep.
 
-## 4. Combined candidate gate
+## 4. Initial cumulative candidate gate
 
-Against the same `<base>...HEAD`, start `code-review` and the closure sweep in
-`references/github-closeout.md` together, using raw artifacts only. The closure
-table remains provisional until final validation.
+Apply the initial cumulative gate in `references/review-state-machine.md`.
+Standards and Spec come from `code-review`; the closure sweep comes from
+`references/github-closeout.md`. Record each atomic delegation as `--kind full
+--phase gate`. The closure table remains provisional until final validation.
 
-## 5. Adjudicate and remediate
+## 5. Adjudicate and remediate through delta review
 
 Adjudicate checkpoint directives, both review axes, and closure findings
 together. A directive with a mechanical seam is blocking and must be resolved
@@ -203,15 +209,17 @@ Log one rationale line per decision in an untracked ledger at
 dismiss re-raised findings by prior rationale unless the reviewer brings new
 evidence. Reviewers never see the ledger.
 
-Batch all blockers from one combined gate back to the initial implementation
+Batch all accepted blockers from one gate back to the initial implementation
 delegate through the harness's supported continuation mechanism, applying the
 implementation-owner fallback in `SKILL.md`'s authority invariants when
 continuation is unavailable. Run affected focused checks under the same
 Candidate and Validation identity rule, applying
-`references/validation-evidence.md`, then commit and rerun the gate with fresh
-reviewers until clean; do not show later reviewers prior
-reports, adjudications, or the ledger, and do not run the full regression suite
-in this loop.
+`references/validation-evidence.md`, then commit the exact current candidate.
+
+Apply the remediation delta loop and fresh cumulative confirmation in
+`references/review-state-machine.md`. Record each delta-axis delegation as
+`--kind delta --phase remediation` and each cumulative confirmation axis as
+`--kind full --phase gate`. Run no full regression in the remediation loop.
 
 ## 6. Closeout
 
@@ -219,8 +227,10 @@ At Closeout, reuse qualifying full-regression evidence for the exact final
 Candidate and Validation identity when it already exists and settles its
 assurance question, under `references/validation-evidence.md`; otherwise execute
 the full regression there. Never pre-produce it earlier to be reused. Run
-`git diff --check`. Any code change invalidates the gate and validation;
-otherwise finalize the existing closure table and complete
+`git diff --check`. Any candidate-content or governing-input change invalidates
+the applicable confirmation and returns to the review-chain rules above; new
+qualifying raw evidence against the exact unchanged candidate does not.
+Otherwise finalize the existing closure table and complete
 `references/github-closeout.md`.
 
 Report: outcome, commits, tests/checks run, review results, gate table, and

@@ -4,6 +4,8 @@
 
 The two axes are never merged and never re-ranked. The report ends with a worst issue *per axis* and refuses to name a single winner across them, because a change can pass one axis and fail the other: code that follows every convention while implementing the wrong thing passes Standards and fails Spec; code that does exactly what the [ticket](https://www.aihero.dev/ai-coding-dictionary/ticket) asked while breaking the repo's conventions does the reverse. A blended verdict lets the passing axis hide the failing one. Each reviewer currently reports in under 600 words; that limit is an interim setting pending a separate evidence-backed reassessment, not a settled optimum.
 
+An orchestrator can also supply a blind delta-review package. In that mode both axes receive the same exact anchor, current candidate, mechanical delta, full contract, binding standards, and qualifying raw evidence. The delta is where inspection begins; a concrete contract or same-mechanism reason can lead into unchanged context without turning every correction into another full-candidate reread.
+
 ## When to reach for it
 
 Type `/code-review`, or the agent reaches for it automatically when you ask to review a branch, a PR, work in progress, or anything "since X".
@@ -17,7 +19,7 @@ Type `/code-review`, or the agent reaches for it automatically when you ask to r
 | The whole codebase has drifted, not one diff | [improve-codebase-architecture](https://aihero.dev/skills-improve-codebase-architecture) |
 | Something is broken and you do not know why | [diagnosing-bugs](https://aihero.dev/skills-diagnosing-bugs) |
 
-You must supply the fixed point. If you do not, the skill asks for one rather than guessing; it then checks the ref resolves and the diff is non-empty before spawning anything, so a typo'd branch name fails in front of you instead of inside two sub-agents.
+You must supply the fixed point. If you do not, the skill asks for one rather than guessing; it resolves the current candidate to an exact SHA, then checks the ref resolves and the diff is non-empty before spawning anything, so a typo'd branch name fails in front of you instead of inside two sub-agents.
 
 ## Prerequisites
 
@@ -75,10 +77,15 @@ Because fixes create new surface, and because the judgement-call half of the Sta
 
 No. It diffs `<fixed-point>...HEAD`, three-dot, which is measured from the merge-base and excludes staged and working-tree changes. If `implement` has not made an interim commit, the work about to be committed is invisible to the review. Commit first, then review, then amend or add a fixup.
 
+**Can it review only a remediation delta?**
+
+Yes, when a workflow supplies the blind delta package. Both reviewers still judge against the full contract, but begin with the mechanically exact anchor-to-candidate delta. They do not receive the finding or adjudication that caused the remediation, which keeps their judgments independent; unchanged context is reached only for a concrete question or bounded same-mechanism investigation.
+
 ## It's working if
 
 - It refuses to start on a bad ref or an empty diff, before any sub-agent is spawned.
 - The report arrives as two separate blocks under `## Standards` and `## Spec`, not one merged list.
+- In delta mode, both axes name the same exact candidate and anchor and neither repeats prior findings or dispositions.
 - Every Standards finding names either a rule in one of your repo's files or one of the twelve smells, with the hunk quoted; every Spec finding quotes a line of the spec.
 - The closing summary gives a worst issue per axis and declines to pick an overall winner.
 - With no spec available, the Spec block says so instead of listing requirements it inferred from the code.

@@ -600,7 +600,7 @@ nested_bytes="$(review_bytes)"
 [[ "$(jq -r '[.[] | select(.type == "review_delegation" and .kind == "readiness")][-1]
   | .input_bytes' -s "$sink")" -eq "$nested_bytes" ]]
 
-# `delta` is recordable even though the workflow does not yet run delta review.
+# `delta` records remediation review without changing the telemetry schema.
 telemetry review-delegation --run "$work_run" --role review-spec \
   --kind delta --phase remediation --round 2 \
   --base "$base_sha" --head "$head_sha"

@@ -28,18 +28,27 @@ runtime modes, scope drift, tests that stay green when the claimed behavior
 is absent, and machinery whose only consumer is its own test — a seam built
 to make a conversational constraint mechanically checkable.
 
-Delegate a sweep of the cumulative diff to a fresh subagent given raw
-artifacts only — the diff command, issue snapshot, and binding doc paths;
-never the ledger or anyone's conclusions. It returns a trace table: every
-mechanism a reviewer could name (a state, a run, a handler, a retry) mapped
-to the acceptance criterion requiring it. The primary adjudicates uncited
-rows: removal — removals re-enter the review loop — unless the ledger
-records why removal is worse than keeping it. Put the table and rulings in
-the PR body.
+When the selected workflow delegates a closure axis, use a fresh subagent given
+raw artifacts only. A cumulative axis receives the full diff command, issue
+snapshot, binding doc paths, frozen Validation-surface manifest, and qualifying
+raw evidence. A delta axis receives the selected workflow's identical neutral
+delta-review package and begins at its exact delta. Neither receives the ledger
+or anyone's conclusions. It returns a trace table: every mechanism a reviewer
+could name (a state, a run, a handler, a retry) mapped to the acceptance
+criterion requiring it. The primary adjudicates uncited rows: removal — removals
+re-enter the review loop — unless the ledger records why removal is worse than
+keeping it. Put the table and rulings in the PR body.
 
-Reuse a combined-candidate-gate sweep only while its base, HEAD, trusted
-snapshot, and artifacts are unchanged; final regression may complete its
-evidence. Otherwise rerun it.
+Closeout consumes exactly one applicable clean cumulative confirmation: either
+the clean initial cumulative gate while its candidate and governing inputs stay
+unchanged, or the post-remediation fresh blind cumulative confirmation. Do not
+delegate a second identical closure sweep merely because Closeout begins. Reuse
+the confirmation only while its base, exact Candidate identity, trusted
+snapshot, binding standards, accepted full review contract,
+Validation-surface manifest, and reviewed artifacts are unchanged. New
+qualifying raw evidence for that exact candidate may complete the provisional
+table without invalidating confirmation. A candidate-content or governing-input
+change returns to the selected workflow's review state machine.
 
 Outcome:
 - Every criterion `tested` and no unresolved hard-rule breach → eligible for

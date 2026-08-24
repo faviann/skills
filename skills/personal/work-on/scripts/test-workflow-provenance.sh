@@ -135,6 +135,22 @@ grep -Fqx 'workflow provenance: work-on instructions changed since capture' \
 git -C "$skills_checkout" restore \
   skills/personal/work-on/references/validation-evidence.md
 
+# Review topology is also an authority invariant for every selected workflow,
+# so changing its state-machine reference invalidates frozen run provenance.
+capture_in "$skills_checkout"
+printf 'post-capture review-state change\n' \
+  >>"$skills_checkout/skills/personal/work-on/references/review-state-machine.md"
+if verify_in "$skills_checkout" \
+    >"$fixture/review-state.out" 2>"$fixture/review-state.err"; then
+  printf 'FAIL[review-state]: verify accepted changed review state machine\n' >&2
+  exit 1
+fi
+[[ ! -s "$fixture/review-state.out" ]]
+grep -Fqx 'workflow provenance: work-on instructions changed since capture' \
+  "$fixture/review-state.err"
+git -C "$skills_checkout" restore \
+  skills/personal/work-on/references/review-state-machine.md
+
 # A missing ledger fails verification without a canonical value.
 mv "$skills_ledger" "$fixture/saved-ledger.json"
 if verify_in "$skills_checkout" \
