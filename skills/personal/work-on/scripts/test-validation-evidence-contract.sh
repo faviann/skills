@@ -166,11 +166,63 @@ requires_contract "$POLICY" \
   'Trivially cheap checks stay at reviewer discretion' \
   'Do not move or pre-produce validation merely to create reusable evidence' \
   'discretionary cheap check owes no justification record'
-forbids_contract "$POLICY" \
-  'no runtime predicate classifies validation by cost' \
-  'expensive deterministic|additional expensive execution|expensive duplicate' \
-  '(materially costly|expensive|costly)[^.]{0,160}(is the default|at most one|once per|requires a (recorded )?distinct assurance)' \
+# Cost may describe waste; it may never decide whether validation runs. These
+# shapes are forbidden on every governing instruction surface, not only the
+# policy, so a cost predicate cannot re-enter through a neighbouring file.
+cost_predicates=(
+  'expensive deterministic|additional expensive execution|expensive duplicate'
+  '(materially costly|expensive|costly)[^.]{0,160}(is the default|at most one|once per|requires a (recorded )?distinct assurance)'
   '(one|a single) qualifying execution[^.]{0,160}(default|per (identity|candidate))'
+  '(materially costly|expensive|costly|slow)[^.]{0,120}(skip|omit|forgo|bypass|waive)'
+  '(skip|omit|forgo|bypass|waive)[^.]{0,120}(materially costly|expensive|costly|slow)'
+  '(classif|decid|determin|judg)[^.]{0,120}(from|using|based on) [^.]{0,60}(recorded|prior|measured|historical|telemetr)[^.]{0,60}(duration|runtime|timing|cost)'
+  '(duration|runtime|timing|telemetr)[^.]{0,120}(decide|determine|classify)[^.]{0,80}(required|skip|reuse|materially costly)'
+)
+
+for surface in "$POLICY" "$SKILL" "$WORKFLOW" "$CLOSEOUT"; do
+  forbids_contract "$surface" \
+    'no runtime predicate decides validation from cost, duration, or telemetry' \
+    "${cost_predicates[@]}"
+done
+
+# Observational duration legitimately exists in telemetry and in the rendered
+# closeout. What may not exist is an executable decision keyed to it.
+script_cost_predicates=(
+  'expensive'
+  'materially costly'
+  'materially_costly'
+  '(skip|reuse|rerun|classify).{0,80}(duration|elapsed|timing|telemetry)'
+  '(duration|elapsed|timing|telemetry).{0,80}(skip|reuse|rerun|classify)'
+)
+for candidate_script in "$skill_dir"/scripts/*.sh; do
+  case "$(basename "$candidate_script")" in test-*) continue ;; esac
+  for pattern in "${script_cost_predicates[@]}"; do
+    if grep -Eqi -- "$pattern" "$candidate_script"; then
+      fail "no work-on script decides validation from cost or duration (${candidate_script##*/}: $pattern)"
+    fi
+  done
+done
+
+# The guard has teeth only if the rule #122 rejects actually trips it: skipping
+# unresolved required validation because prior telemetry called it costly.
+counterfactual="$flat_dir/rejected-cost-rule.md"
+cat >"$counterfactual" <<'REJECTED'
+## Cost exemption
+
+When a validation is materially costly, skip it and accept the existing
+evidence, even when the assurance question is unresolved. Classify each
+validation as cheap or materially costly from its recorded prior run duration
+in the run telemetry sink before deciding.
+REJECTED
+counterfactual_caught=0
+for pattern in "${cost_predicates[@]}"; do
+  if grep -Eqi -- "$pattern" "$(flatten "$counterfactual")"; then
+    counterfactual_caught=1
+  fi
+done
+if (( counterfactual_caught == 0 )); then
+  fail 'the forbidden-predicate patterns catch a telemetry-driven skip rule'
+fi
 
 # The guardrail is reachable only after sufficiency, and clause order is the
 # whole mitigation for reading it as licence to skip a required execution. A
