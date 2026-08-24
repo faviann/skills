@@ -114,8 +114,17 @@ lacks "$package" \
   'remediation rationale|prior finding|prior report|accepted directive|adjudication|disposition|ledger|fixes [A-Z0-9#]' \
   'the delta-review package is blind to prior conclusions and repair rationale'
 has "$REVIEW" \
-  'delta-review package.*both.*Standards.*Spec' \
+  'both Standards and Spec.*only the exact package.*verbatim' \
   'code-review carries the exact delta package to both independent axes'
+has "$REVIEW" \
+  'delta-review package replaces steps 1 through 3' \
+  'delta mode replaces generic cumulative discovery'
+has "$REVIEW" \
+  'identities and frozen sources are authoritative.*never resolve an independent `HEAD`.*build or pass a commit list.*discover or refetch a spec.*discover live standards' \
+  'delta mode cannot leak commit rationale or substitute live governing inputs'
+has "$REVIEW" \
+  'prompt from only the exact package verbatim and the corresponding axis brief' \
+  'the composed delta prompt contains no convenience inputs'
 echo 'ok - delta reviewers receive the exact neutral package and no prior conclusions'
 
 ## Delta is the initial surface; concrete reasons bound context expansion

@@ -10,19 +10,29 @@ Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 
 Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
 
-When a caller supplies a delta-review package, carry that exact package to both
-Standards and Spec. It must identify the previous Reviewed anchor and exact
-current Candidate, provide their mechanically exact delta, and include the full
-trusted contract, binding standards, and qualifying raw validation evidence.
-Treat the delta as the initial search surface and follow the caller's bounded
-unchanged-context and same-mechanism rules. Keep the assignment neutral: do not
-add remediation rationale, prior findings or reports, accepted directives,
-adjudications, dispositions, the adjudication ledger, or a summary of what the
-change is meant to fix.
+When a caller supplies a delta-review package, use the separate delta-package
+mode below. The caller owns that package's contract; this skill transports it
+without augmenting it.
 
 The issue tracker should have been provided to you — run `/setup-matt-pocock-skills` if `docs/agents/issue-tracker.md` is missing.
 
 ## Process
+
+### Delta-package mode
+
+A caller-supplied delta-review package replaces steps 1 through 3. Verify that
+its previous Reviewed-anchor identity and exact current Candidate identity both
+resolve and that executing its mechanical diff reproduces the supplied delta.
+Those identities and frozen sources are authoritative: never resolve an
+independent `HEAD`, build or pass a commit list, discover or refetch a spec, or
+discover live standards. A missing field, identity mismatch, or non-reproducible
+delta fails before either sub-agent starts.
+
+For both Standards and Spec, construct the prompt from only the exact package
+verbatim and the corresponding axis brief in step 4. Add no convenience summary
+or other context. The delta remains the initial search surface; follow the
+package's bounded unchanged-context and same-mechanism rules. Then continue at
+step 5.
 
 ### 1. Pin the fixed point
 
@@ -77,14 +87,12 @@ evidence-backed reassessment.
 
 - The full diff command and commit list.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
-- Any caller-supplied delta-review package, verbatim.
 - The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 600 words."
 
 **Spec sub-agent prompt** — include:
 
 - The diff command and commit list.
 - The path or fetched contents of the spec.
-- Any caller-supplied delta-review package, verbatim.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 600 words."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report.
