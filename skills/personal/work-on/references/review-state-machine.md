@@ -91,14 +91,13 @@ cumulative gate. A matching verified confirmation proceeds toward Closeout.
 
 Do not persist per-axis completion, active-gate progress, reviewer reports, or
 other partial-gate machinery. Only after all required delta axes complete and
-their reports are adjudicated may the new Reviewed anchor become durable. A
-clean gate writes it immediately. When accepted blockers require correction,
-keep the preceding checkpoint until the corrected Candidate is committed, then
-atomically persist the completed gate's Candidate as the anchor before launching
-the next delta gate. This delays durability, not semantic anchor advancement,
-and makes an earlier interruption rerun the whole gate from the preceding
-checkpoint. Only after a cumulative confirmation completes and adjudication
-leaves it clean does that confirmation become durable and reusable.
+their reports are adjudicated may the new Reviewed anchor become durable. At
+that stable checkpoint, atomically persist the completed gate's Candidate as the
+Reviewed anchor regardless of findings and before any correction or final
+confirmation begins. An interruption before replacement leaves the preceding
+checkpoint authoritative and reruns the whole gate. Only after a cumulative
+confirmation completes and adjudication leaves it clean does that confirmation
+become durable and reusable.
 
 ### Cumulative-review package
 
@@ -138,11 +137,11 @@ each the same exact cumulative-review package for `C0`.
 complete against the same exact candidate under unchanged governing inputs. A
 Reviewed anchor does not mean clean, accepted, closable, or eligible for
 closeout; it is only the candidate from which a later correction delta is
-computed. Adjudicate all three reports after the required axes complete. When
-the gate is clean, atomically persist `C0` as both anchor and cumulative
-confirmation. When accepted blockers produce a committed correction, persist
-`C0` as anchor with no confirmation immediately before its delta gate. An
-interruption before either stable checkpoint reruns the whole initial gate.
+computed. Adjudicate all three reports after the required axes complete, then
+atomically persist `C0` as anchor regardless of findings. The same replacement
+also records `C0` as cumulative confirmation when the gate is clean, and records
+no confirmation when accepted blockers require correction. An interruption
+before that stable checkpoint reruns the whole initial gate.
 
 A clean initial cumulative gate, while candidate content and governing inputs
 remain unchanged, satisfies the required fresh blind
@@ -205,10 +204,8 @@ Advance the Reviewed anchor only after all three required delta axes complete
 against the same exact candidate under unchanged governing inputs. Advance it
 even when the gate has findings: Reviewed anchor does not mean clean, accepted,
 closable, or eligible for closeout. Adjudicate the completed gate. For a clean
-gate, atomically persist the advanced anchor with no cumulative confirmation
-before final cumulative review. For an accepted blocker, keep the preceding
-checkpoint through correction, then persist the completed gate's Candidate as
-anchor with no confirmation immediately before reviewing the new correction.
+gate or a gate with an accepted blocker, atomically persist the advanced anchor
+with no cumulative confirmation before final cumulative review or correction.
 Partial axis results never alter the durable checkpoint.
 
 ## Fresh cumulative confirmation after remediation

@@ -287,6 +287,12 @@ has "$STATE" \
   'only after all required delta axes complete.*Reviewed anchor.*durable' \
   'only a complete delta gate can make its anchor durable'
 has "$STATE" \
+  'axes complete.*reports are adjudicated.*persist.*Reviewed anchor.*regardless of findings.*before.*correction' \
+  'a completed gate makes its current Reviewed anchor durable before correction'
+lacks "$STATE" \
+  'keep the preceding checkpoint until the corrected Candidate is committed' \
+  'durability never waits for the next Candidate'
+has "$STATE" \
   'only after a cumulative confirmation completes.*clean.*durable.*reusable' \
   'only a clean complete cumulative confirmation becomes durable'
 has "$STATE" \
