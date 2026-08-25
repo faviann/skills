@@ -66,6 +66,12 @@ Authority invariants (bind regardless of workflow):
   Standards, Spec, or closure contexts produce or adjudicate evidence, and keep
   the policy available to the primary. It permits reuse without weakening the
   frozen Validation-surface manifest's direct-evidence population.
+- Treat manifests and acceptance-evidence contracts as authority for what
+  validation and direct evidence is owed, while the selected workflow owns when
+  it is executed. An eventual obligation, repository baseline, or scoped
+  required-command entry cannot move evidence into an earlier phase or make it
+  an implementation-completion prerequisite. Keep later-phase obligations
+  visible and owed under their selected-workflow-derived owning phases.
 - Apply `references/review-state-machine.md` to every selected workflow's
   cumulative and remediation reviews. It owns Reviewed-anchor advancement,
   delta-package blindness, final cumulative confirmation, and review-chain
@@ -119,7 +125,8 @@ Procedure:
    knowingly limited to `inferred` or `unverified` evidence, every blocking
    prerequisite is complete, the required commands are executable, the trusted
    contract is consistent, and every criterion's direct-evidence obligation is
-   materialized as a finite frozen Validation surface; otherwise
+   materialized as a finite frozen Validation surface, and every definitely owed
+   obligation has a deterministically resolved owning phase; otherwise
    finalize the run as `preflight-aborted` and hand back as that reference
    requires.
 7. Immediately before delegating implementation, run this skill's

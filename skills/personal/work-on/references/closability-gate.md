@@ -73,6 +73,22 @@ evidence its criterion demands under conditions 1 and 3.
 
 Together, these surfaces are the run's **Validation-surface manifest**.
 
+## Phase ownership
+
+Enumerate every definitely owed validation command and direct-evidence
+obligation from the trusted contract, Validation-surface manifest, repository
+baseline, and planned scoped-delegate contract. Resolve each one's owning phase
+deterministically from the selected workflow, interpreted alongside the
+governing validation authority that establishes what is owed. The selected
+workflow alone supplies execution timing; the other sources cannot pull an
+obligation earlier merely by listing it.
+
+Keep every resolved obligation and owning phase available for the scoped
+delegate contract, including obligations owned by later phases. If the selected
+workflow does not deterministically resolve an obligation's phase, condition 4
+fails and the unresolved phase aborts Closability. Infer no implementation,
+earliest, next-gate, or Closeout default.
+
 ## Conditions
 
 The gate passes only when all six hold.
@@ -92,12 +108,14 @@ The gate passes only when all six hold.
    where the contract requires a public boundary, a human assumption with no
    available verifier, or no evidence at all. Proceed when the planned
    validation would directly produce `tested` evidence after implementation.
-4. **The required workflow and validation commands are executable** in this
-   environment, including ordinary setup that is explicitly part of the run.
-   Abort when they need a dependency or authority that cannot be established
-   within this scope. A transient command failure during later validation is
-   not a preflight failure: this asks whether the path is available and
-   executable, not whether the unimplemented candidate already passes.
+4. **The required workflow and validation commands are executable, and every
+   definitely owed obligation has a resolved owning phase.** Abort when a
+   command needs a dependency or authority that cannot be established within
+   this scope, or when the selected workflow cannot deterministically resolve
+   its phase. Ordinary setup explicitly included in the run is available. A
+   transient command failure during later validation is not a preflight
+   failure: this asks whether the path is available and executable, not whether
+   the unimplemented candidate already passes.
 5. **The trusted contract is internally consistent.** Abort on a criterion
    requiring behavior the issue places out of scope, two trusted requirements
    demanding incompatible outcomes, a criterion requiring a mechanism the issue
