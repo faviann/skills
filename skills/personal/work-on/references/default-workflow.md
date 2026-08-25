@@ -210,12 +210,36 @@ Log one rationale line per decision in an untracked ledger at
 dismiss re-raised findings by prior rationale unless the reviewer brings new
 evidence. Reviewers never see the ledger.
 
+Before dispatching the accepted blockers, apply
+`references/normative-remediation.md` to determine whether the Corrective batch
+contains at least one qualifying unit. If it does, identify every qualifying
+unit and record its Authority delta. Then give the retained implementation
+delegate the adjudicated directives and any Authority deltas; keep its `Risks:`
+channel and authority relationship unchanged, and do not ask it to pre-answer
+the entitlement analysis. If the batch contains no qualifying unit, proceed
+through ordinary remediation without an Authority delta, semantic-reader
+package, or semantic challenge; this branch never widens into general
+remediation review.
+
 Batch all accepted blockers from one gate back to the initial implementation
 delegate through the harness's supported continuation mechanism, applying the
 implementation-owner fallback in `SKILL.md`'s authority invariants when
 continuation is unavailable. Run affected focused checks under the same
 Candidate and Validation identity rule, applying
-`references/validation-evidence.md`, then commit the exact current candidate.
+`references/validation-evidence.md`.
+
+Before committing the exact current candidate, if the batch contains at least
+one qualifying unit, launch one fresh semantic reader for the batch, handling
+every qualifying unit in one invocation. Keep that reader blind to expected
+semantics until its independent interpretation completes. Resolve
+`INSUFFICIENT_CONTEXT` and reconcile any material mismatch through
+`references/normative-remediation.md`. An unresolved challenge means the
+qualifying correction is not committed as though the challenge passed; take the
+settled escalation, `Progresses`, or `failed` route. Only a completed challenge
+permits committing the normative correction as the candidate reviewed by the
+next delta gate. A batch with no qualifying unit proceeds to commit through the
+existing workflow without launching a semantic reader or constructing a
+semantic-reader package.
 
 Apply the remediation delta loop and fresh cumulative confirmation in
 `references/review-state-machine.md`. Record each delta-axis delegation as
