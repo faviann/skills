@@ -17,11 +17,13 @@ Candidate tree; evidence regeneration uses the identity its check depends on.
 Read the issue, trusted comments, linked parent/spec, and relevant repo docs.
 Preserve unrelated user changes.
 
-Record scope, non-scope, acceptance criteria, validation seams, required
-commands, and open questions. Done when the pre-implementation closability gate
-in `references/closability-gate.md` passes and freezes this run's
-Validation-surface manifest. A missing seam aborts there; it is never carried
-into implementation for the closure gate to discover.
+Record scope, non-scope, acceptance criteria, validation seams, every required
+command and evidence obligation with its selected-workflow-derived owning
+phase, and open questions. Done when the pre-implementation closability gate in
+`references/closability-gate.md` passes and freezes this run's
+Validation-surface manifest. A missing seam or unresolved owning phase aborts
+there; it is never carried into implementation for the closure gate to
+discover.
 
 ## Validation-surface manifest custody
 
@@ -117,15 +119,25 @@ Scoped implementation contract:
   evidence about; it bounds evidence, not the authorized scope above>
 - Validation evidence: <qualifying raw evidence and safe provenance locators;
   apply `references/validation-evidence.md` before deciding what to execute>
-- Required commands: <targeted and baseline checks>
+- Required commands and evidence obligations: <every implementation- and
+  later-phase obligation, each paired with the owning phase derived from this
+  selected workflow; keep later-phase obligations visible and eventually
+  required>
 - Authority: GitHub reads and workspace edits only. Do not refetch issue
   comments, commit, mutate GitHub, or change the contract.
 - Coherence pass: <copy the complete bounded coherence-pass instruction from
   `SKILL.md`'s authority invariants>
 - Completion: use `/tdd` at the named seams where possible, implement only this
-  contract, run the required checks, perform the populated Coherence pass, then
-  stop.
+  contract, run only implementation-owned obligations, perform the populated
+  Coherence pass, then stop. Later-phase obligations remain visible and owed to
+  their owning phases; they are not delegate-completion prerequisites.
 ```
+
+The default workflow assigns implementation-owned focused evidence genuinely
+needed for development to Implementation. A repository baseline, complete
+direct-evidence population, or other later-phase entry remains in the scoped
+contract under its resolved owner and cannot become implementation completion
+merely because it is eventually owed.
 
 The scoped contract is the delegate's complete implementation workflow. The
 delegate returns only:
@@ -161,13 +173,22 @@ adjudications, or dispositions.
 
 Inspect the worktree and, unless qualifying evidence for the exact current
 Candidate and Validation identity already settles their assurance question,
-run affected focused checks. Before the first commit, delegate one fresh
+run affected focused checks owned by Implementation or needed to settle the
+readiness question. Before the first commit, delegate one fresh
 raw-artifact readiness sweep; adjudicate it once and batch
 all blockers back to the initial implementation delegate through the harness's
 supported continuation mechanism, applying the implementation-owner fallback
 in `SKILL.md`'s authority invariants when continuation is unavailable. Re-check
 affected evidence, then commit normally; each later round adds a commit (no
 amend or squash).
+
+After readiness corrections are complete and the commit stabilizes the exact
+Candidate and Validation identity, execute the remaining direct evidence owned
+by this workflow's pre-gate or initial-gate path. For a complete multi-case
+population, Implementation may execute only narrow cases genuinely needed for
+development; the complete population waits for this post-stabilization
+transition. Apply `references/validation-evidence.md` so qualifying unchanged
+members are reused and only invalidated members execute again.
 
 After committing, status only the criteria this round claims. `tested` requires
 evidence of the actual artifact and mode that would fail if the behavior — or
@@ -179,6 +200,10 @@ On later rounds, re-check only affected criteria; do not run the full closeout
 sweep.
 
 ## 4. Initial cumulative candidate gate
+
+Enter only after the Primary checkpoint has discharged the remaining evidence
+owned by the pre-gate or initial-gate path against the stabilized Candidate and
+Validation identity. Later-phase evidence remains visible under its owner.
 
 Apply the initial cumulative gate in `references/review-state-machine.md`.
 Standards and Spec come from `code-review`; the closure sweep comes from
@@ -245,6 +270,10 @@ Apply the remediation delta loop and fresh cumulative confirmation in
 `references/review-state-machine.md`. Record each delta-axis delegation as
 `--kind delta --phase remediation` and each cumulative confirmation axis as
 `--kind full --phase gate`. Run no full regression in the remediation loop.
+After a remediation commit stabilizes the Candidate and Validation identity,
+execute only invalidated members of the pre-gate or initial-gate evidence
+population; reuse every unchanged qualifying member under
+`references/validation-evidence.md` before the next gate.
 
 ## 6. Closeout
 

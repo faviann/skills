@@ -4,7 +4,10 @@ Apply this policy whenever an implementation, readiness, Standards, Spec, or
 closure context produces or adjudicates validation evidence. The frozen
 Validation-surface manifest remains the complete population of direct evidence
 the accepted candidate owes; this policy decides whether qualifying evidence
-for a listed member must be executed again.
+for a listed member must be executed again. It owns evidence identity,
+sufficiency, invalidation, and reuse; it does not decide the workflow phase in
+which evidence is executed. The selected workflow owns that timing, and this
+policy applies when the owning phase is reached.
 
 ## Qualifying evidence
 
