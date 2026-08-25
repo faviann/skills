@@ -70,6 +70,11 @@ Authority invariants (bind regardless of workflow):
   cumulative and remediation reviews. It owns Reviewed-anchor advancement,
   delta-package blindness, final cumulative confirmation, and review-chain
   invalidation without taking validation execution or manifest ownership.
+- Apply `references/normative-remediation.md` to every qualifying Corrective
+  batch, including the first. It owns the object-based qualification test,
+  Authority delta, fresh blind semantic reader, and blocking checkpoint before
+  the normative correction is committed as the candidate reviewed by the next
+  delta gate, without becoming review-chain or lifecycle state.
 - Register the run's lifecycle before implementation and finalize it on every
   hand-back, following `references/run-registry.md`. Registration may refuse a
   run whose predecessor left an unfinished obligation; it never changes what an
