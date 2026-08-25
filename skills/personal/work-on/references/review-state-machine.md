@@ -58,7 +58,9 @@ atomically at each stable checkpoint. It contains only:
   and Workflow provenance identities;
 - the current Reviewed anchor, or `null` before the initial gate completes; and
 - any currently valid cumulative-confirmation Candidate together with the exact
-  governing identity it confirms, otherwise `null`.
+  governing identity it confirms, otherwise `null`; and
+- the pending required correction: `null`, or the exact accepted corrective
+  directives bound to their Reviewed anchor and governing identity.
 
 These files are semantic review-chain state, not telemetry, Run registry state,
 an adjudication ledger, or Convergence-budget state. The governing-input identity
@@ -74,7 +76,8 @@ anchor, and any stored confirmation before reuse. The exact current Candidate is
 resolved and verified from the repository under the existing Candidate-identity
 rule on resume; it is not stored as duplicated authority. A stored confirmation
 is applicable only when its Candidate equals that resolved current Candidate and
-its governing identity equals the verified bundle.
+its governing identity equals the verified bundle. A checkpoint containing both
+a confirmation and a pending required correction is invalid.
 
 Interrupted gate work is disposable:
 
@@ -83,11 +86,22 @@ Interrupted gate work is disposable:
 - during a delta gate, rerun all required delta axes with fresh reviewers from
   the persisted Reviewed anchor to the exact resolved current Candidate.
 
-The verified stable identities choose that route without active-gate state: when
-the anchor is `null`, run the initial cumulative gate; when the anchor differs
-from the current Candidate, run the delta gate between them; when the anchor
-equals the current Candidate and confirmation is `null`, run the final
-cumulative gate. A matching verified confirmation proceeds toward Closeout.
+A pending required correction on resume takes priority before any final
+cumulative confirmation or Closeout transition, regardless of Candidate
+relationship. Recover its exact accepted corrective directives and verify their
+Reviewed anchor and governing identity before continuing correction. If the
+directive cannot be recovered sufficiently to continue, fail closed; never drop
+the obligation or ask a fresh reviewer to rediscover it. Clear it only after the
+directive is resolved in a committed changed Candidate, then take the direct
+anchor-to-Candidate delta route. This primary-only state is never included in a
+review package.
+
+With no pending correction, the verified stable identities choose the route
+without active-gate state: when the anchor is `null`, run the initial cumulative
+gate; when the anchor differs from the current Candidate, run the delta gate
+between them; when the anchor equals the current Candidate and confirmation is
+`null`, run the final cumulative gate. A matching verified confirmation proceeds
+toward Closeout.
 
 Do not persist per-axis completion, active-gate progress, reviewer reports, or
 other partial-gate machinery. Only after all required delta axes complete and
@@ -140,8 +154,10 @@ closeout; it is only the candidate from which a later correction delta is
 computed. Adjudicate all three reports after the required axes complete, then
 atomically persist `C0` as anchor regardless of findings. The same replacement
 also records `C0` as cumulative confirmation when the gate is clean, and records
-no confirmation when accepted blockers require correction. An interruption
-before that stable checkpoint reruns the whole initial gate.
+no confirmation plus the exact accepted corrective directives when blockers
+require correction. Thus a dirty initial gate followed by interruption recovers
+that correction remains required. An interruption before that stable checkpoint
+reruns the whole initial gate.
 
 A clean initial cumulative gate, while candidate content and governing inputs
 remain unchanged, satisfies the required fresh blind
@@ -206,7 +222,12 @@ even when the gate has findings: Reviewed anchor does not mean clean, accepted,
 closable, or eligible for closeout. Adjudicate the completed gate. For a clean
 gate or a gate with an accepted blocker, atomically persist the advanced anchor
 with no cumulative confirmation before final cumulative review or correction.
-Partial axis results never alter the durable checkpoint.
+Record pending correction as `null` for the clean gate, and as the exact accepted
+corrective directives for the blocked gate. Partial axis results never alter the
+durable checkpoint. A dirty delta gate followed by interruption recovers that
+correction remains required. A clean delta gate followed by interruption has no
+pending correction, so final cumulative confirmation remains its next
+transition.
 
 ## Fresh cumulative confirmation after remediation
 
@@ -218,12 +239,15 @@ their adjudication.
 
 If adjudication leaves that cumulative confirmation clean and its candidate and
 governing inputs stay unchanged, atomically persist its Candidate and governing
-identity; it is the confirmation Closeout consumes. If a blocker from the final
-cumulative confirmation is accepted and correction is allowed, apply the
-correction, run a fresh three-axis delta gate from the retained Reviewed anchor,
-then run another fresh blind cumulative confirmation. The route is always
-correction → delta gate → fresh blind cumulative confirmation; the earlier
-confirmation never applies to changed content.
+identity with pending correction `null`; it is the confirmation Closeout
+consumes. If a blocker from the final cumulative confirmation is accepted and
+correction is allowed, atomically persist its exact corrective directives as the
+pending required correction with no confirmation, apply the correction, run a
+fresh three-axis delta gate from the retained Reviewed anchor, then run another
+fresh blind cumulative confirmation. The route is always correction → delta gate
+→ fresh blind cumulative confirmation; the earlier confirmation never applies
+to changed content. A dirty final cumulative confirmation followed by
+interruption recovers that correction remains required.
 
 ## Invalidation and evidence
 
@@ -234,7 +258,8 @@ preflight/Closability input and focused validation, then establish a new
 Reviewed anchor with a fresh initial cumulative gate. A chain restart is
 available only when that input is legally mutable. Replace the checkpoint only
 with the newly verified governing bundle and its empty anchor/confirmation state;
-an old checkpoint never crosses governing identities.
+set pending correction to `null`. An old checkpoint never crosses governing
+identities.
 
 A post-delegation omitted required member of the Validation-surface manifest
 takes precedence over review restart. Follow the immutable-manifest hand-back;

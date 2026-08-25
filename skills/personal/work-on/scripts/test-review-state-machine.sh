@@ -272,6 +272,24 @@ has "$STATE" \
   'frozen governing-input identity bundle.*current Reviewed anchor.*valid cumulative-confirmation Candidate.*governing identity' \
   'the durable checkpoint contains only the identities needed for recovery'
 has "$STATE" \
+  'pending required correction.*`null`.*accepted corrective directive.*Reviewed anchor.*governing identity' \
+  'the checkpoint distinguishes and carries a recoverable correction obligation'
+has "$STATE" \
+  'dirty initial gate.*interruption.*correction remains required' \
+  'dirty initial-gate recovery cannot skip its accepted blocker'
+has "$STATE" \
+  'dirty delta gate.*interruption.*correction remains required' \
+  'dirty delta-gate recovery cannot skip its accepted blocker'
+has "$STATE" \
+  'clean delta gate.*interruption.*final cumulative confirmation remains.*next transition' \
+  'clean delta-gate recovery still advances to final cumulative confirmation'
+has "$STATE" \
+  'dirty final cumulative confirmation.*interruption.*correction remains required' \
+  'dirty final-confirmation recovery cannot skip its accepted blocker'
+has "$STATE" \
+  'pending required correction.*resume.*before.*final cumulative.*Closeout.*cannot be recovered.*fail closed' \
+  'resume gives a recoverable correction obligation priority and fails closed without it'
+has "$STATE" \
   'current Candidate.*resolved.*verified.*repository.*resume.*not stored.*duplicated authority' \
   'resume resolves the current Candidate from the repository'
 has "$STATE" \

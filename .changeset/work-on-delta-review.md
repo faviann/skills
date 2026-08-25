@@ -15,4 +15,5 @@ Code review now accepts those inputs through a caller-pinned judgment adapter;
 `work-on` retains all cumulative and delta state. Remediation uses a direct
 anchor-to-Candidate comparison, closure delta review stays incremental, and
 owner-only stable checkpoints recover the governing identity, Reviewed anchor,
-and applicable cumulative confirmation while interrupted gates rerun fresh.
+applicable cumulative confirmation, and any pending accepted correction while
+interrupted gates rerun fresh.
