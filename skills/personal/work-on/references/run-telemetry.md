@@ -71,13 +71,12 @@ writers refuse it before torn-line repair or append.
   `review-spec`, or `closure-sweep`. One invocation is exactly one reviewer.
 - `--phase` is one of `orient`, `implementation`, `checkpoint`, `gate`,
   `remediation`, `closeout`.
-- `--kind` is one of `readiness`, `full`, `delta`. `delta` exists in the schema
-  so the recorder does not need changing later; the current workflow never
-  emits it.
+- `--kind` is one of `readiness`, `full`, `delta`. The review state machine emits
+  `delta` for each remediation-axis delegation without changing this schema.
 - The accepted review combinations are readiness/readiness/checkpoint;
   Standards, Spec, or closure/full/gate; Standards, Spec, or
-  closure/delta/remediation; and closure/full/closeout. Recording delta does
-  not authorize a delta-review workflow.
+  closure/delta/remediation; and closure/full/closeout. The selected workflow,
+  never telemetry, authorizes and governs delta review.
 - `review-delegation` resolves both refs to full SHAs itself and measures the
   reviewed artifact's byte count itself. Use `--worktree` for a sweep that reads
   uncommitted work; the [worktree-review bundle](#the-worktree-review-bundle)

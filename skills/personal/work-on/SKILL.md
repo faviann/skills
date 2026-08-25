@@ -66,6 +66,10 @@ Authority invariants (bind regardless of workflow):
   Standards, Spec, or closure contexts produce or adjudicate evidence, and keep
   the policy available to the primary. It permits reuse without weakening the
   frozen Validation-surface manifest's direct-evidence population.
+- Apply `references/review-state-machine.md` to every selected workflow's
+  cumulative and remediation reviews. It owns Reviewed-anchor advancement,
+  delta-package blindness, final cumulative confirmation, and review-chain
+  invalidation without taking validation execution or manifest ownership.
 - Register the run's lifecycle before implementation and finalize it on every
   hand-back, following `references/run-registry.md`. Registration may refuse a
   run whose predecessor left an unfinished obligation; it never changes what an
@@ -123,7 +127,8 @@ Procedure:
    hand back as the gate reference requires. Route a genuinely unrecoverable
    failure through the applicable existing fail-closed handling. Done when
    capture succeeds.
-8. Follow it without broadening the issue. When code changes are ready for a
+8. Follow it without broadening the issue, including the review state machine
+   required by the authority invariants. When code changes are ready for a
    pull request, read and follow `references/github-closeout.md`. Build the
    closeout through `scripts/render-closeout.sh`; never hand-compose its Issues,
    Closure gate, or Workflow telemetry sections. After that body is read back
