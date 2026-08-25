@@ -69,8 +69,7 @@ Authority invariants (bind regardless of workflow):
 - Apply `references/review-state-machine.md` to every selected workflow's
   cumulative and remediation reviews. It owns Reviewed-anchor advancement,
   delta-package blindness, final cumulative confirmation, and review-chain
-  invalidation and stable-checkpoint recovery without taking validation
-  execution or manifest ownership.
+  invalidation without taking validation execution or manifest ownership.
 - Register the run's lifecycle before implementation and finalize it on every
   hand-back, following `references/run-registry.md`. Registration may refuse a
   run whose predecessor left an unfinished obligation; it never changes what an
@@ -106,10 +105,8 @@ Procedure:
    post-freeze capture. On continuation or resume, follow that workflow's
    frozen-snapshot/manifest custody now; proceed only when it recovers and
    verifies the exact retained pair without refetching or reconstruction, using
-   the established pre-/post-delegation failure routing. After review has begun,
-   also recover its stable review-chain checkpoint before selecting another
-   gate. Done when read, identified, recovered when applicable, and, for a repo
-   workflow, announced.
+   the established pre-/post-delegation failure routing. Done when read,
+   identified, recovered when applicable, and, for a repo workflow, announced.
 6. Before capturing provenance, and before any implementation delegation, edit,
    commit, or pull request, apply this skill's `references/closability-gate.md`
    to the trusted snapshot and the selected workflow. Done when every
