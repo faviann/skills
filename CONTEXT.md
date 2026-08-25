@@ -82,13 +82,9 @@ _Avoid_: approved candidate, clean baseline
 One automatic, accepted-blocker-driven correction after the initial cumulative gate that changes the exact candidate content identity. Blockers adjudicated and repaired together form one batch; surrounding review, validation, evidence gathering, synchronization, and state-machine restarts do not.
 _Avoid_: finding, review round, validation run, remediation attempt
 
-**Convergence lifecycle**:
-One logical `work-on` attempt governed by one corrective-batch budget, spanning session or telemetry segments, continuation, review-chain restarts, synchronization, and ordinary resume until a durable outcome. A materially re-entered successor is a new lifecycle rather than a continuation of the old one.
-_Avoid_: run, telemetry segment, review chain
-
 **Convergence episode**:
-The analysis grouping of one **Convergence lifecycle** and its causally connected successor lifecycles, so corrective repetition remains visible across legitimate re-entry. It is an observation boundary, not workflow state or an outcome.
-_Avoid_: retry chain, extended lifecycle
+The analysis grouping of one logical `work-on` attempt — its session and telemetry segments, continuation, review-chain restarts, synchronization, and ordinary resume, up to a durable outcome — together with its causally connected successor attempts, so corrective repetition stays visible when the work is picked up again. It is an observation boundary, not workflow state or an outcome.
+_Avoid_: retry chain, extended lifecycle, Convergence lifecycle
 
 **Independent judgment**:
 A fresh reviewer's own assessment of the candidate, contract, and evidence, made without inheriting another participant's conclusions or dispositions.
@@ -140,8 +136,7 @@ _Avoid_: model kind, model family
 - A successful `work-on` PR closeout writes one **PR-local observation**, whose latest-run values are not a lower bound on any later run's
 - A `work-on` run passes one **Closability gate** before it delegates implementation; a run that fails it resolves as `preflight-aborted`, seals, and never reaches the closure gate
 - A **Validation-surface manifest** materializes the required **Validation surfaces** when the **Closability gate** passes
-- A **Convergence lifecycle** has one corrective-batch budget and may span several `work-on` telemetry segments or review chains
-- A **Convergence episode** contains one or more causally connected **Convergence lifecycles**
+- A **Convergence episode** contains one or more causally connected logical `work-on` attempts, each of which may span several `work-on` telemetry segments or review chains
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
 - A **Map** holds many **Decision tickets** and one **Not yet specified** section
