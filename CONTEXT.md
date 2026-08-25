@@ -83,7 +83,7 @@ One automatic, accepted-blocker-driven correction after the initial cumulative g
 _Avoid_: finding, review round, validation run, remediation attempt
 
 **Convergence lifecycle**:
-One logical `work-on` attempt governed by one corrective-batch budget, spanning session or telemetry segments, continuation, review-chain restarts, synchronization, and ordinary resume until a durable outcome. A materially re-entered successor is a new lifecycle rather than a continuation of the old one.
+One logical `work-on` attempt governed by one owner-only, issue-keyed corrective-batch authority, spanning session or telemetry segments, continuation, review-chain restarts, synchronization, and ordinary resume until a durable outcome. Its consumed units are exact correlated source-to-result **Candidate identity** transitions; a materially re-entered successor is a new lifecycle rather than a continuation of the old one.
 _Avoid_: run, telemetry segment, review chain
 
 **Convergence episode**:

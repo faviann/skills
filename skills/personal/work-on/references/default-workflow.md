@@ -97,6 +97,9 @@ Apply `references/review-state-machine.md` to every review chain. It freezes the
 governing state and owns cumulative, delta, confirmation, blindness, and
 invalidation semantics. The manifest custody above and
 `references/validation-evidence.md` retain their stronger ownership boundaries.
+After the initial cumulative gate, apply `references/convergence-state.md`; it
+owns Corrective-batch authorization, capacity, recovery, and material re-entry
+across every review chain and continuation.
 
 ## 2. Delegate implementation
 
@@ -184,6 +187,11 @@ Apply the initial cumulative gate in `references/review-state-machine.md`.
 Standards and Spec come from `code-review`; the closure sweep comes from
 `references/github-closeout.md`. Record each atomic delegation as `--kind full
 --phase gate`. The closure table remains provisional until final validation.
+After all three axes complete against the exact initial Candidate, recover an
+existing Convergence lifecycle or begin its issue-keyed semantic authority under
+`references/convergence-state.md`. Do this before acting on any accepted
+blocker. A continuation, run, synchronization, review-chain restart, or fresh
+cumulative anchor reuses that lifecycle and its consumed count.
 
 ## 5. Adjudicate and remediate through delta review
 
@@ -211,11 +219,26 @@ dismiss re-raised findings by prior rationale unless the reviewer brings new
 evidence. Reviewers never see the ledger.
 
 Batch all accepted blockers from one gate back to the initial implementation
-delegate through the harness's supported continuation mechanism, applying the
-implementation-owner fallback in `SKILL.md`'s authority invariants when
-continuation is unavailable. Run affected focused checks under the same
+delegate only after recovering Convergence semantic state at the exact source
+Candidate and authorizing one jointly delegated correction under
+`references/convergence-state.md`. Capacity is checked before the delegate may
+mutate candidate content. Use the harness's supported continuation mechanism,
+applying the implementation-owner fallback in `SKILL.md`'s authority invariants
+when continuation is unavailable. Run affected focused checks under the same
 Candidate and Validation identity rule, applying
 `references/validation-evidence.md`, then commit the exact current candidate.
+When content changed, complete the correlated source-to-result Corrective-batch
+transition before delta review, another correction, synchronization, or
+hand-back. An exactly unchanged Candidate leaves the authorization pending and
+consumes no unit.
+
+When authorization refuses because two batches completed, stop before sending
+directives or editing. Preserve every unresolved blocker, the exact exhausted
+Candidate, count, and a concrete material re-entry condition. End the lifecycle
+as `Progresses` when ordinary closeout permits a safe, independently useful
+partial Candidate, and as `failed` otherwise. AFK uses the same decision and
+cannot extend or reset capacity. A clean Candidate after two batches continues
+through every ordinary review and closeout requirement.
 
 Apply the remediation delta loop and fresh cumulative confirmation in
 `references/review-state-machine.md`. Record each delta-axis delegation as
@@ -232,7 +255,9 @@ the full regression there. Never pre-produce it earlier to be reused. Run
 the applicable confirmation and returns to the review-chain rules above; new
 qualifying raw evidence against the exact unchanged candidate does not.
 Otherwise finalize the existing closure table and complete
-`references/github-closeout.md`.
+`references/github-closeout.md`. Before Run registry finalization, durably end
+the active Convergence lifecycle with that same outcome and exact Candidate as
+`references/convergence-state.md` requires.
 
 Report: outcome, commits, tests/checks run, review results, gate table, and
 leftovers/follow-ups.

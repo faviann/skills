@@ -94,6 +94,14 @@ Outcome:
   mechanism in the contract. Seams that make mechanical behavior observable
   (injected boundaries, scripted externals) remain ordinary good engineering.
 
+When Convergence capacity is exhausted, keep every accepted blocker unresolved
+and stop before the forbidden candidate mutation. `Closes` is unavailable.
+Use `Progresses` only when the exact current Candidate is safe, independently
+useful, and otherwise eligible for ordinary partial closeout; use `failed` when
+it is not. Record the exact Candidate, exhausted count, blockers, and concrete
+material re-entry condition through `convergence-state.md` before Run registry
+finalization. This adds no closure, registry, or telemetry outcome.
+
 ## Reconcile discovered work
 
 Before creating the pull request, classify every unresolved element:

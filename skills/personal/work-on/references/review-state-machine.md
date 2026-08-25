@@ -4,7 +4,9 @@ Apply this state machine in every selected `work-on` workflow. It owns review
 identity, cumulative and delta transitions, reviewer blindness, and review-chain
 invalidation. The selected workflow owns implementation sequencing and invokes
 these gates; `github-closeout.md` owns closure judgments;
-`validation-evidence.md` owns whether validation executes.
+`validation-evidence.md` owns whether validation executes; and
+`convergence-state.md` owns whether an accepted-blocker-driven correction may
+mutate the Candidate.
 
 ## Frozen governing state
 
@@ -170,9 +172,9 @@ available only when that input is legally mutable. An old Reviewed anchor never
 crosses governing identities.
 
 A post-delegation omitted required member of the Validation-surface manifest
-takes precedence over review restart. Follow the immutable-manifest hand-back;
-never absorb the omission by rebuilding governing state or restarting this
-review state machine.
+takes precedence over review restart and Convergence capacity. Follow the
+immutable-manifest hand-back; never absorb the omission as a Corrective batch,
+by rebuilding governing state, or by restarting this review state machine.
 
 New qualifying raw evidence for the exact unchanged candidate does not itself
 invalidate a review or confirmation. Apply `validation-evidence.md`: assurance

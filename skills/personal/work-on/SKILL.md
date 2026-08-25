@@ -70,6 +70,11 @@ Authority invariants (bind regardless of workflow):
   cumulative and remediation reviews. It owns Reviewed-anchor advancement,
   delta-package blindness, final cumulative confirmation, and review-chain
   invalidation without taking validation execution or manifest ownership.
+- Apply `references/convergence-state.md` after every selected workflow's
+  initial cumulative gate. Its owner-only issue authority governs the active
+  Convergence lifecycle, every Corrective-batch source-to-result transition,
+  and the two-batch limit across all supported continuation boundaries without
+  taking review, evidence, manifest, telemetry, or registry ownership.
 - Register the run's lifecycle before implementation and finalize it on every
   hand-back, following `references/run-registry.md`. Registration may refuse a
   run whose predecessor left an unfinished obligation; it never changes what an
@@ -128,11 +133,12 @@ Procedure:
    failure through the applicable existing fail-closed handling. Done when
    capture succeeds.
 8. Follow it without broadening the issue, including the review state machine
-   required by the authority invariants. When code changes are ready for a
-   pull request, read and follow `references/github-closeout.md`. Build the
-   closeout through `scripts/render-closeout.sh`; never hand-compose its Issues,
-   Closure gate, or Workflow telemetry sections. After that body is read back
-   and validated, apply the `work-on` label with
+   and Convergence semantic state required by the authority invariants. When
+   code changes are ready for a pull request, read and follow
+   `references/github-closeout.md`. Build the closeout through
+   `scripts/render-closeout.sh`; never hand-compose its Issues, Closure gate,
+   or Workflow telemetry sections. After that body is read back and validated,
+   apply the `work-on` label with
    `scripts/ensure-work-on-label.sh`; its failures warn and never block
    hand-back. Done when the workflow's completion criteria are met and, on the
    PR path, the final PR body has been read back and checked with
