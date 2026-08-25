@@ -16,6 +16,8 @@ CLOSABILITY="$skill_dir/references/closability-gate.md"
 EVIDENCE="$skill_dir/references/validation-evidence.md"
 TELEMETRY="$skill_dir/references/run-telemetry.md"
 GLOSSARY="$skill_dir/../../../CONTEXT.md"
+EVAL="$skill_dir/../../../.agents/evals/work-on-normative-remediation.md"
+STATIC="$script_dir/test-normative-remediation.sh"
 
 failures=0
 fixture_dir="$(mktemp -d)"
@@ -44,9 +46,18 @@ has() {
 }
 
 lacks() {
-  if grep -Eqi -- "$2" "$1"; then
+  if grep -Eqi -- "$2" "$(flatten "$1")"; then
     fail "$3 (unexpected in ${1#"$skill_dir/"}: $2)"
   fi
+}
+
+extract_section() {
+  local source="$1" heading="$2" output="$3"
+  awk -v heading="$heading" '
+    $0 == heading { inside = 1 }
+    inside && $0 != heading && /^#{1,3} / { exit }
+    inside { print }
+  ' "$source" >"$output"
 }
 
 if [[ ! -f "$CONTRACT" ]]; then
@@ -59,6 +70,8 @@ fi
 has "$SKILL" \
   'every qualifying Corrective batch.*references/normative-remediation.md|references/normative-remediation.md.*every qualifying Corrective batch' \
   'the top-level invariant binds every selected workflow to normative remediation'
+has "$WORKFLOW" 'references/normative-remediation.md.*Corrective batch' \
+  'the default workflow invokes normative remediation for corrective batches'
 has "$CONTRACT" \
   'changes the (words|wording), structure, or placement of a governing proposition or relationship' \
   'qualification turns on the governing object being changed'
@@ -88,6 +101,11 @@ lacks "$CONTRACT" 'semantic reader.*(prove|establish|verify|ensure).*authority-s
   'P1-shaped site completeness never becomes the semantic reader.s duty'
 has "$CONTRACT" 'fresh reader is not responsible for proving.*every (governing )?site|site discovery.*primary' \
   'site discovery remains the primary.s responsibility'
+site_completeness_pattern='(semantic )?reader.{0,160}(must|shall|required to|is responsible for).{0,160}(all|every|complete(ness)?).{0,160}(authority|governing).{0,80}(site|source)|(must|shall|required to).{0,160}(prove|establish|verify|ensure).{0,160}(authority|governing).{0,80}(site|source).{0,80}(complete(ness)?|all|every)'
+for source in "$SKILL" "$WORKFLOW" "$CONTRACT" "$EVAL"; do
+  lacks "$source" "$site_completeness_pattern" \
+    'no frozen member makes authority-site completeness the reader.s obligation'
+done
 echo 'ok - the Authority delta records its bounded semantic model without laundering site completeness'
 
 ## The retained implementation owner drafts; one new blind reader challenges.
@@ -109,6 +127,13 @@ has "$WORKFLOW" \
 has "$WORKFLOW" \
   'no qualifying unit.*without an Authority delta, semantic-reader package, or semantic challenge.*never widens into general remediation review' \
   'a non-qualifying batch proceeds without an empty challenge or general review'
+has "$WORKFLOW" 'retained implementation delegate.*adjudicated directives.*Authority deltas.*`Risks:`.*authority relationship.*not ask.*entitlement' \
+  'the workflow preserves the retained delegate handoff and Risks channel'
+cross_batch_state_pattern='(must|shall|required to).{0,120}(retain|reuse|persist|carry|share).{0,120}(semantic )?reader.{0,80}(across|between).{0,40}batch|cross-batch.{0,80}(semantic[- ]reader|reader).{0,80}(state|memory|ledger|history)'
+for source in "$SKILL" "$WORKFLOW" "$CONTRACT" "$EVAL"; do
+  lacks "$source" "$cross_batch_state_pattern" \
+    'no frozen member introduces cross-batch semantic-reader state'
+done
 echo 'ok - drafting stays with the retained owner and interpretation goes to one fresh reader per batch'
 
 ## Semantic units preserve binding force without expanding to cumulative review.
@@ -193,6 +218,8 @@ has "$WORKFLOW" 'normative-remediation.md' \
   'the remediation sequence invokes the normative-remediation authority'
 has "$WORKFLOW" 'before.*commit.*candidate.*next.*delta gate' \
   'the workflow places the challenge before the next delta candidate commit'
+has "$SKILL" 'blocking checkpoint.*before.*committed.*candidate.*next.*delta gate' \
+  'custom workflows remain bound to the pre-candidate checkpoint'
 has "$CONTRACT" \
   'only after interpretation.*compare.*expected.*derived|compare.*expected.*derived.*only after interpretation' \
   'the primary compares expected and derived meaning only after interpretation'
@@ -203,6 +230,8 @@ has "$CONTRACT" 'cannot state.*semantic change.*does not dispatch exact wording'
   'exact wording cannot substitute for the primary.s understanding'
 has "$CONTRACT" 'named acceptance criterion.*false or unverifiable.*`Progresses` or `failed`' \
   'required contract work cannot be deferred to a silent follow-up'
+has "$WORKFLOW" 'unresolved challenge.*not committed.*escalation.*`Progresses`.*`failed`' \
+  'the default workflow preserves unresolved-challenge nondeferral'
 has "$CONTRACT" 'second (semantic )?reader.*only.*unresolved material ambiguity.*never routine' \
   'a second reader is escalation rather than fan-out'
 has "$CONTRACT" 'blocking pre-commit' \
@@ -218,6 +247,8 @@ has "$CONTRACT" 'never reuse.*review-axis agent' \
   'the semantic reader is never reused in a review lane'
 has "$CONTRACT" 'existence and output never enter.*cumulative or delta package' \
   'the semantic reader is fenced from the review chain'
+has "$WORKFLOW" 'one fresh semantic reader.*every qualifying unit.*one invocation' \
+  'the workflow preserves the fresh-reader batch fence'
 has "$CONTRACT" 'No telemetry schema change|no new telemetry kind' \
   'the mechanism introduces no telemetry semantics'
 for protected in "$STATE" "$CLOSABILITY" "$EVIDENCE" "$TELEMETRY"; do
@@ -235,9 +266,35 @@ lacks "$GLOSSARY" '^\*\*Before the normative correction is committed' \
   'the sequencing boundary is ordinary prose rather than a glossary headword'
 echo 'ok - the two mechanism names have normal glossary treatment'
 
-## This mechanism stays distinct from the controlled policy scenario.
-lacks "$CONTRACT" 'controlled policy scenario|frozen pilot provenance|protocol revision 2' \
-  'the normative-remediation contract does not absorb issue 102.s controlled scenario'
+## The static and behavioral instruments stay distinct from issue 102.
+contract_scenario_pattern='controlled[[:space:]]+policy[[:space:]]+scenario'
+lacks "$CONTRACT" "$contract_scenario_pattern" \
+  'the normative contract does not absorb the controlled scenario'
+scenario_pattern="frozen[[:space:]]+pilot[[:space:]]+provenance|end-to-end[[:space:]]+enforcement[[:space:]]+(under|against)|mechanism-specific[[:space:]]+success[[:space:]]+(rule|threshold)|protocol[[:space:]]+revision[[:space:]]+2"
+for instrument in "$CONTRACT" "$EVAL" "$STATIC"; do
+  lacks "$instrument" "$scenario_pattern" \
+    'the normative-remediation instruments do not duplicate issue 102.s scenario'
+done
+
+## The eval identity and Primary oracles cover their complete frozen inputs.
+has "$EVAL" '### Canonical byte recipe' \
+  'the eval defines one canonical byte recipe'
+has "$EVAL" 'measured-instruction hash.*per-case instrument-input hash' \
+  'the eval names both identities governed by the canonical recipe'
+has "$EVAL" 'sha256sum "\$stream"' \
+  'the measured-instruction identity has an exact SHA-256 command'
+has "$EVAL" 'canonical_hash.*case_id.bytes' \
+  'the per-case identity has an exact SHA-256 command'
+for case_name in 'P1-e11-h1-none-trigger' 'P2-k1-m1-obligation-weakening'; do
+  case_section="$fixture_dir/$case_name"
+  extract_section "$EVAL" "### \`$case_name\`" "$case_section"
+  has "$case_section" \
+    'governing proposition or relationship.*location.*current governing meaning.*intended resulting meaning.*constraints expected to survive.*related governing sites considered.*how they were identified.*no completeness' \
+    "$case_name requires the complete Authority delta and bounded site treatment"
+  has "$case_section" \
+    'only after interpretation.*compare.*retained implementation delegate.*revis(e|es).*fresh.*challenge.*before commit' \
+    "$case_name requires compare, delegate revision, and rechallenge before commit"
+done
 
 if (( failures > 0 )); then
   printf '\n%s normative-remediation assertion(s) failed.\n' "$failures" >&2

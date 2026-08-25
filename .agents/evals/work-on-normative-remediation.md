@@ -48,6 +48,131 @@ message. Any change to one of these inputs changes the applicable hash and
 requires the affected case to be re-executed under the new version. Results from
 different versions are never pooled.
 
+### Canonical byte recipe
+
+Run the following from the repository root. The recipe uses the declared file
+order, canonical repository-relative names, byte counts, and NUL framing. The
+only hash operation is the shown `sha256sum` over the resulting canonical byte
+stream.
+
+```bash
+set -euo pipefail
+
+eval_file=.agents/evals/work-on-normative-remediation.md
+base=9c32a54175af4a8e76aebc6a450ea55ed67ceda0
+identity_dir="$(mktemp -d)"
+trap 'rm -rf "$identity_dir"' EXIT
+
+canonical_hash() {
+  local stream="$1"
+  shift
+  : >"$stream"
+  while (( "$#" )); do
+    local label="$1" canonical_name="$2" source="$3" bytes
+    shift 3
+    bytes="$(LC_ALL=C wc -c <"$source" | tr -d '[:space:]')"
+    {
+      printf '%s\0%s\0%s\0' "$label" "$canonical_name" "$bytes"
+      cat "$source"
+      printf '\0'
+    } >>"$stream"
+  done
+  sha256sum "$stream" | awk '{print $1}'
+}
+
+extract_section() {
+  local heading="$1" output="$2"
+  awk -v heading="$heading" '
+    $0 == heading { inside = 1 }
+    inside && $0 != heading && /^#{1,3} / { exit }
+    inside { print }
+  ' "$eval_file" >"$output"
+}
+
+mkdir "$identity_dir/prechange"
+git archive "$base" -- \
+  skills/personal/work-on/SKILL.md \
+  skills/personal/work-on/references/default-workflow.md \
+  | tar -x -C "$identity_dir/prechange"
+
+printf 'live-primary %s\n' "$(canonical_hash \
+  "$identity_dir/live-primary.bytes" \
+  instruction skills/personal/work-on/SKILL.md \
+    skills/personal/work-on/SKILL.md \
+  instruction skills/personal/work-on/references/default-workflow.md \
+    skills/personal/work-on/references/default-workflow.md \
+  instruction skills/personal/work-on/references/normative-remediation.md \
+    skills/personal/work-on/references/normative-remediation.md)"
+printf 'live-reader %s\n' "$(canonical_hash \
+  "$identity_dir/live-reader.bytes" \
+  instruction skills/personal/work-on/references/normative-remediation.md \
+    skills/personal/work-on/references/normative-remediation.md)"
+printf 'prechange-reader %s\n' "$(canonical_hash \
+  "$identity_dir/prechange-reader.bytes" \
+  instruction skills/personal/work-on/SKILL.md \
+    "$identity_dir/prechange/skills/personal/work-on/SKILL.md" \
+  instruction skills/personal/work-on/references/default-workflow.md \
+    "$identity_dir/prechange/skills/personal/work-on/references/default-workflow.md")"
+
+extract_section '## Protocol' "$identity_dir/protocol"
+extract_section '### Common prompt' "$identity_dir/common"
+extract_section '### Primary role and answer format' "$identity_dir/primary-role"
+extract_section '### Reader role and answer format' "$identity_dir/reader-role"
+
+cases=(
+  P1-e11-h1-none-trigger
+  P2-k1-m1-obligation-weakening
+  P3-structural-bounded-package
+  P4-unresolved-challenge-route
+  R1-e11-h1-entitlement
+  R2-k1-m1-obligation
+  R3-nonconsequential-prose
+  R4-inadequate-context
+  CF-R3-prechange
+  CF-R4-prechange
+)
+roles=(primary primary primary primary reader reader reader reader reader reader)
+packages=(
+  P1-e11-h1-none-trigger
+  P2-k1-m1-obligation-weakening
+  P3-structural-bounded-package
+  P4-unresolved-challenge-route
+  R1-e11-h1-entitlement
+  R2-k1-m1-obligation
+  R3-nonconsequential-prose
+  R4-inadequate-context
+  R3-nonconsequential-prose
+  R4-inadequate-context
+)
+
+for index in "${!cases[@]}"; do
+  case_id="${cases[$index]}"
+  package_id="${packages[$index]}"
+  role_file="$identity_dir/${roles[$index]}-role"
+  extract_section "### \`$package_id\`" "$identity_dir/$case_id-package"
+  extract_section "### \`$case_id\`" "$identity_dir/$case_id-case"
+  components=(
+    protocol '## Protocol' "$identity_dir/protocol"
+    common '### Common prompt' "$identity_dir/common"
+    role "${roles[$index]}" "$role_file"
+    package "$package_id" "$identity_dir/$case_id-package"
+  )
+  if [[ "$case_id" != "$package_id" ]]; then
+    components+=(counterfactual "$case_id" "$identity_dir/$case_id-case")
+  fi
+  printf '%s %s\n' "$case_id" "$(canonical_hash \
+    "$identity_dir/$case_id.bytes" "${components[@]}")"
+done
+```
+
+For an ordinary case, its package section includes the case paragraph and key.
+For a counterfactual, the stream includes both the referenced live Reader
+package section and the counterfactual section carrying its key. Thus the hidden
+key is covered without entering the assembled evaluator message. A changed
+instruction file affects its arm; a changed shared section affects every case
+that includes it; a changed case or key affects only that case. Re-execute
+exactly those affected cases.
+
 ## Protocol
 
 Run all ten cases. Launch one fresh evaluator per case; no evaluator may receive
@@ -148,7 +273,14 @@ Permitted verdicts: `challenge-required`, `no-challenge`.
 Key: `challenge-required`. Qualification must rest on changing the words of a
 governing proposition despite intended delta `none`; the unit must include the
 banner's status context; the package must withhold `none`, preserved invariants,
-and blocker rationale.
+and blocker rationale. The answer must give all five Authority-delta fields: the
+governing proposition or relationship and location, current governing meaning,
+intended resulting meaning, constraints expected to survive, and related
+governing sites considered with how they were identified; open-ended site
+discovery must carry no completeness claim. Only after interpretation may the
+primary compare expected and derived semantics. The derived material mismatch
+requires the retained implementation delegate to revise, followed by a fresh
+semantic challenge of the revision before commit.
 
 ### `P2-k1-m1-obligation-weakening`
 
@@ -176,7 +308,14 @@ Permitted verdicts: `material-challenge`, `nonmaterial`, `no-challenge`.
 Key: `material-challenge`. Qualification rests on changing a governing
 proposition; the semantic unit contains both ordered entries and the precedence
 relationship; reasoning identifies required-to-advisory as a material governing
-consequence.
+consequence. The answer must give all five Authority-delta fields: the governing
+proposition or relationship and location, current governing meaning, intended
+resulting meaning, constraints expected to survive, and related governing sites
+considered with how they were identified; open-ended site discovery must carry
+no completeness claim. Only after interpretation may the primary compare
+expected and derived semantics. The derived material mismatch requires the
+retained implementation delegate to revise, followed by a fresh semantic
+challenge of the revision before commit.
 
 ### `P3-structural-bounded-package`
 
@@ -356,9 +495,14 @@ and disqualifies it as causal evidence.
 
 ## Results
 
-All ten changed-version executions matched their keyed verdict and named the
-rule each case was built to exercise. The harness evaluator identities below
-retain the exact assembled prompts and responses.
+The recorded changed-version population comprised eight live plus two prechange
+counterfactual executions (ten total). Every verdict matched its current key and
+named the rule the case was built to exercise. P1 and P2 were re-executed after
+their keys changed. The other eight evaluator prompts and case/key inputs are
+byte-unchanged; their identity columns were recalculated under the newly
+specified canonical recipe rather than pooled from different inputs. The
+harness evaluator identities below retain the exact assembled prompts and
+responses.
 
 Both candidate-discriminator counterfactuals also matched their keys. CF-R3
 reached `NO_MATERIAL_SEMANTIC_DELTA` for the same non-consequential clause-order
@@ -373,16 +517,16 @@ mechanism.
 
 | Case | Evaluator | Measured-instruction hash | Per-case instrument-input hash | Verdict | Governing rule named | Contradiction/ambiguity | Result |
 |---|---|---|---|---|---|---|---|
-| `P1-e11-h1-none-trigger` | `/root/eval2_p1` | `8922e0c2b3fd03ea8d50d321219a74fbfd80c1a49ddf4315de87d6f9154ecab3` | `622a273103091ebce3fe8200ff9abae42ac1b798ec55acd68e601251b1cb69a9` | `challenge-required` | Object trigger despite intended `none`; bounded banner unit and withhold boundary | None | pass |
-| `P2-k1-m1-obligation-weakening` | `/root/eval2_p2` | `8922e0c2b3fd03ea8d50d321219a74fbfd80c1a49ddf4315de87d6f9154ecab3` | `4e39d7be8180827549b2a957b076b8e170f1ab72c8c3e07e7e66a9619c0d0ca0` | `material-challenge` | Ordered-list unit; binding-to-advisory consequence | None | pass |
-| `P3-structural-bounded-package` | `/root/eval2_p3` | `8922e0c2b3fd03ea8d50d321219a74fbfd80c1a49ddf4315de87d6f9154ecab3` | `9c561493891d70f5c0bed4b39e225a67f5ffc00e4af72d10c76ecf2cd9e26f1d` | `bounded-challenge` | Relocation uses source and destination contexts; no whole-document expansion | The proposed AFTER has a binding-versus-historical tension; no instruction contradiction | pass |
-| `P4-unresolved-challenge-route` | `/root/eval2_p4` | `8922e0c2b3fd03ea8d50d321219a74fbfd80c1a49ddf4315de87d6f9154ecab3` | `5b5d363ac48f6c8c543e2f5bbab36ccd44556b64a7efbcf07753a92b8a898b32` | `progresses-uncommitted` | Unresolved finite-context route; named-criterion nondeferral | Surface tension between general next-committed-round language and the specific unresolved-challenge rule; the specific route is deterministic and noncontradictory | pass |
-| `R1-e11-h1-entitlement` | `/root/eval2_r1` | `a327f720bb9d783eb05204f05e8e0553b88520c72f301f3a345e1699b0e11895` | `92c11a75509bb14c4321a5bbb413f4d77f2b2530448bfd9746338d84f2e1b523` | `MATERIAL_SEMANTIC_DELTA` | Projection-scope narrowing | `new capture work` has a boundary ambiguity, but all plausible narrower readings are material | pass |
-| `R2-k1-m1-obligation` | `/root/eval2_r2` | `a327f720bb9d783eb05204f05e8e0553b88520c72f301f3a345e1699b0e11895` | `fbd5bb979a9274f02ed8f618db8152db210fc2d0177344381b4b7e0a670a4527` | `MATERIAL_SEMANTIC_DELTA` | Required separation becomes required consideration/advisory | None | pass |
-| `R3-nonconsequential-prose` | `/root/eval2_r3` | `a327f720bb9d783eb05204f05e8e0553b88520c72f301f3a345e1699b0e11895` | `daa5a5979a1917d05bb173ab6494e1f21996a0c0567f433ccabc629fb0ad41df` | `NO_MATERIAL_SEMANTIC_DELTA` | Timing, scope, and obligation are unchanged | None | pass; non-discriminating control |
-| `R4-inadequate-context` | `/root/eval2_r4` | `a327f720bb9d783eb05204f05e8e0553b88520c72f301f3a345e1699b0e11895` | `73db1e6ca1cc6d3918461eb4a07dbf17070a6bb97eb0a50afd8cb8dd1b0a5fc8` | `INSUFFICIENT_CONTEXT` | Finite definitions for both named scopes and staging membership are required | None | pass; non-discriminating control |
-| `CF-R3-prechange` | `/root/eval2_cf_r3` | `2d6e8da9e645a9dda01f08d79ea5068d370fd5f9098861603e924366fc8f5db2` | `dc0437755a99c51fde3c67d640b3a8c14c5db81fe90613e1bce9c4b0aad819a7` | `NO_MATERIAL_SEMANTIC_DELTA` | Same non-consequential clause-order reason as R3 | Shared ambiguity about where raw output is recorded creates no semantic delta | keyed pass; R3 retired from causal evidence |
-| `CF-R4-prechange` | `/root/eval2_cf_r4` | `2d6e8da9e645a9dda01f08d79ea5068d370fd5f9098861603e924366fc8f5db2` | `bcb8b8f6b9994d57c4a9676ccc8710425fc05e42a217139bba414116e1da089d` | `INSUFFICIENT_CONTEXT` | Pre-change unclear-scope rule; missing named scope definitions | None | keyed pass; R4 retired from causal evidence |
+| `P1-e11-h1-none-trigger` | `/root/eval3_p1` | `44fd4d5414490148b0a5ee4fe73305dc5d5fb772f5952b1d62e704b78ce36d61` | `8150afe33d4f7e4d99fc305e62cdd4bbb43113584c1d5f79bd8c9259bed353a8` | `challenge-required` | Qualification despite intended `none`; all five Authority-delta fields with bounded/no-completeness site treatment; status-context unit/package/withholds; compare, retained-delegate revision, and fresh rechallenge before commit | No instruction contradiction; `New capture work` ambiguously excludes future projections | pass |
+| `P2-k1-m1-obligation-weakening` | `/root/eval3_p2` | `44fd4d5414490148b0a5ee4fe73305dc5d5fb772f5952b1d62e704b78ce36d61` | `dcedf7c4feb072e37090d9e775074523d54ad34685a1c5efbd7bc8a78e79eeda` | `material-challenge` | Required-to-advisory weakening; all five Authority-delta fields with bounded/no-completeness site treatment; ordered entries and precedence; compare, retained-delegate revision, and fresh rechallenge before commit | No instruction contradiction; narrower replacement wording remains underspecified but routes to revision | pass |
+| `P3-structural-bounded-package` | `/root/eval2_p3` | `44fd4d5414490148b0a5ee4fe73305dc5d5fb772f5952b1d62e704b78ce36d61` | `0d90c30bef96299aa61bf93e9671309a220d169a6e8d0f5b81d07d87aabb676c` | `bounded-challenge` | Relocation uses source and destination contexts; no whole-document expansion | The proposed AFTER has a binding-versus-historical tension; no instruction contradiction | pass |
+| `P4-unresolved-challenge-route` | `/root/eval2_p4` | `44fd4d5414490148b0a5ee4fe73305dc5d5fb772f5952b1d62e704b78ce36d61` | `565530ca164ffb1b3b7b906f8446dfc44ae8d3b5c00eaefa178bd79118d07989` | `progresses-uncommitted` | Unresolved finite-context route; named-criterion nondeferral | Surface tension between general next-committed-round language and the specific unresolved-challenge rule; the specific route is deterministic and noncontradictory | pass |
+| `R1-e11-h1-entitlement` | `/root/eval2_r1` | `cfc3bdd8743cd42c98d5ac69f5c4cf6d23198251437d46d419987d978e0ec6fc` | `8b348fcc3359cbcf94cffce3b15e88e8f3820bc671e781e66013cfbdc1d4534b` | `MATERIAL_SEMANTIC_DELTA` | Projection-scope narrowing | `new capture work` has a boundary ambiguity, but all plausible narrower readings are material | pass |
+| `R2-k1-m1-obligation` | `/root/eval2_r2` | `cfc3bdd8743cd42c98d5ac69f5c4cf6d23198251437d46d419987d978e0ec6fc` | `f0c5e80f1d6a3c03d71ae119a74dc0c42b3f767dc5c30dcf7bfcd27dce089db6` | `MATERIAL_SEMANTIC_DELTA` | Required separation becomes required consideration/advisory | None | pass |
+| `R3-nonconsequential-prose` | `/root/eval2_r3` | `cfc3bdd8743cd42c98d5ac69f5c4cf6d23198251437d46d419987d978e0ec6fc` | `4ddb64d9ab7779766bfe3cf745de0e18524e79fd9c6372f22799b5bd0fafada6` | `NO_MATERIAL_SEMANTIC_DELTA` | Timing, scope, and obligation are unchanged | None | pass; non-discriminating control |
+| `R4-inadequate-context` | `/root/eval2_r4` | `cfc3bdd8743cd42c98d5ac69f5c4cf6d23198251437d46d419987d978e0ec6fc` | `fcaad2e3895dc43f187eee6bbe3c9451b67a8a24e0a26bf63ed520bcf6126c28` | `INSUFFICIENT_CONTEXT` | Finite definitions for both named scopes and staging membership are required | None | pass; non-discriminating control |
+| `CF-R3-prechange` | `/root/eval2_cf_r3` | `3ae4898d06dd53eb2e17c87862f62ee63865daa40b8bcb1407e3df6190df1700` | `6095ba6dd06e7a095856deada61ebe555763bf45136b58e500142456019c385b` | `NO_MATERIAL_SEMANTIC_DELTA` | Same non-consequential clause-order reason as R3 | Shared ambiguity about where raw output is recorded creates no semantic delta | keyed pass; R3 retired from causal evidence |
+| `CF-R4-prechange` | `/root/eval2_cf_r4` | `3ae4898d06dd53eb2e17c87862f62ee63865daa40b8bcb1407e3df6190df1700` | `78ff79e065de26ae41f53e7cb753573d3ce12246b496557f78d670d5d58c29ac` | `INSUFFICIENT_CONTEXT` | Pre-change unclear-scope rule; missing named scope definitions | None | keyed pass; R4 retired from causal evidence |
 
 ## Interpretation limits
 
