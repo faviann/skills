@@ -11,3 +11,8 @@ manifest failures, qualifying validation-evidence reuse, and the existing
 non-authoritative delta telemetry kind. Standards reviews reuse one complete
 frozen input containing exact repository standards content and the existing
 Fowler baseline with its repo-overrides and judgement-call semantics.
+Code review now accepts those inputs through a caller-pinned judgment adapter;
+`work-on` retains all cumulative and delta state. Remediation uses a direct
+anchor-to-Candidate comparison, closure delta review stays incremental, and
+owner-only stable checkpoints recover the governing identity, Reviewed anchor,
+and applicable cumulative confirmation while interrupted gates rerun fresh.

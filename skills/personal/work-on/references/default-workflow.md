@@ -10,8 +10,9 @@ Abort if:
 
 ## 1. Orient
 
-Record the base SHA (`git rev-parse HEAD`) before any edit; every diff, review,
-and evidence regeneration compares `<base>...HEAD`.
+Record the base SHA (`git rev-parse HEAD`) before any edit. Review uses the
+state machine's direct comparison-base or Reviewed-anchor tree to the exact
+Candidate tree; evidence regeneration uses the identity its check depends on.
 
 Read the issue, trusted comments, linked parent/spec, and relevant repo docs.
 Preserve unrelated user changes.
@@ -94,7 +95,9 @@ trusted snapshot and a fresh manifest; it never inherits these objects.
 
 Apply `references/review-state-machine.md` to every review chain. It freezes the
 governing state and owns cumulative, delta, confirmation, blindness, and
-invalidation semantics. The manifest custody above and
+invalidation semantics. On continuation or resume after review began, recover
+and verify only its stable review-chain checkpoint before selecting the next
+gate; partial gate work is rerun there. The manifest custody above and
 `references/validation-evidence.md` retain their stronger ownership boundaries.
 
 ## 2. Delegate implementation

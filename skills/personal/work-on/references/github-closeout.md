@@ -5,8 +5,15 @@
 Apply `validation-evidence.md` to reuse qualifying evidence and to decide when
 the closure context owes the narrowest Independent execution.
 
-Independently inspect the contract, production paths, diff, and evidence, then
-build this table:
+When the selected workflow delegates a closure axis, use a fresh subagent given
+raw artifacts only. Neither kind receives the ledger or anyone's conclusions.
+
+### Cumulative closure
+
+An initial or final cumulative closure axis receives the selected workflow's
+identical neutral cumulative-review package. Independently inspect the full
+contract, production paths, cumulative subject, and evidence, then build this
+complete table:
 
 | Acceptance criterion | Production path | Exact artifact/mode/seam | Evidence | Status |
 |---|---|---|---|---|
@@ -28,16 +35,30 @@ runtime modes, scope drift, tests that stay green when the claimed behavior
 is absent, and machinery whose only consumer is its own test — a seam built
 to make a conversational constraint mechanically checkable.
 
-When the selected workflow delegates a closure axis, use a fresh subagent given
-raw artifacts only. A cumulative axis receives the selected workflow's
-identical frozen cumulative-review package and begins at its full subject. A
-delta axis receives its identical neutral delta-review package and begins at its
-exact delta. Neither receives the ledger
-or anyone's conclusions. It returns a trace table: every mechanism a reviewer
-could name (a state, a run, a handler, a retry) mapped to the acceptance
-criterion requiring it. The primary adjudicates uncited rows: removal — removals
-re-enter the review loop — unless the ledger records why removal is worse than
-keeping it. Put the table and rulings in the PR body.
+It returns a trace table: every mechanism a reviewer could name (a state, a run,
+a handler, a retry) mapped to the acceptance criterion requiring it. The primary
+adjudicates uncited rows: removal — removals re-enter the review loop — unless
+the ledger records why removal is worse than keeping it. Put the table and
+rulings in the PR body. The final cumulative axis is the complete closure-table
+backstop after remediation.
+
+### Delta closure
+
+The delta closure axis receives the selected workflow's identical neutral pinned
+review package and its incremental closure brief. Begin at the exact correction
+and judge only its effects on contract coverage, production paths, validation
+seams, Validation-surface members, evidence identity or sufficiency, scope, and
+unrequired machinery. Follow the package's concrete unchanged-context and #62
+rules when those effects require it.
+
+Return the closure findings and affected criterion/mechanism rows attributable
+to that scope. This delta closure is incremental: it does not reconstruct the
+complete cumulative closure table or trace every unchanged mechanism. The
+primary retains the provisional cumulative table without exposing it to the
+delta reviewer; final cumulative review supplies the complete closure table as
+the backstop.
+
+## Closeout confirmation
 
 Closeout consumes exactly one applicable clean cumulative confirmation: either
 the clean initial cumulative gate while its candidate and governing inputs stay

@@ -106,6 +106,10 @@ for required in \
   grep -Fqi -- "$required" "$cumulative_package" \
     || fail "cumulative-review package includes $required"
 done
+lacks "$cumulative_package" '\.\.\.' \
+  'caller-pinned cumulative review also uses its exact supplied endpoints'
+grep -Eqi -- 'git diff[^.]*comparison-base[^.]*candidate' "$cumulative_package" \
+  || fail 'the cumulative package uses its two exact endpoints directly'
 has "$STATE" \
   'same exact package to Standards, Spec, and closure' \
   'every cumulative axis receives one frozen package without live discovery'
@@ -119,8 +123,11 @@ has "$STATE" \
   'accepted blocker.*candidate-content change.*invalidates.*confirmation.*retain.*Reviewed anchor.*delta' \
   'blocker remediation invalidates confirmation and retains the prior anchor'
 has "$STATE" \
-  'mechanically exact delta.*Reviewed anchor.*current Candidate' \
+  'mechanically exact (direct )?delta.*Reviewed anchor.*current Candidate' \
   'the correction review uses the exact anchor-to-candidate delta'
+has "$STATE" \
+  'direct.*Reviewed.?anchor.*current Candidate.*two-endpoint tree comparison' \
+  'the remediation subject is a direct anchor-to-candidate tree comparison'
 has "$STATE" \
   'Standards.*Spec.*closure.*delta.*same exact current candidate' \
   'all delta axes assess one current candidate'
@@ -146,6 +153,10 @@ for required in \
   grep -Fqi -- "$required" "$package" \
     || fail "delta-review package includes $required"
 done
+lacks "$package" '\.\.\.' \
+  'the exact remediation subject never silently becomes a merge-base range'
+grep -Eqi -- 'git diff[^.]*previous-anchor[^.]*current-candidate' "$package" \
+  || fail 'the exact remediation package uses two direct endpoints'
 lacks "$package" \
   'remediation rationale|prior finding|prior report|accepted directive|adjudication|disposition|ledger|fixes [A-Z0-9#]' \
   'the delta-review package is blind to prior conclusions and repair rationale'
@@ -154,16 +165,19 @@ grep -Eqi -- \
   "$(flatten "$package")" \
   || fail 'the transported package carries bounded unchanged-context and #62 rules'
 has "$REVIEW" \
-  'WORK-ON-REVIEW.md.*instead of the ordinary input discovery' \
-  'the inherited skill routes work-on packages to their separate adapter'
+  'caller.*pinned.*WORK-ON-REVIEW.md.*instead of the ordinary input discovery' \
+  'the inherited skill routes caller-pinned inputs to the separate adapter'
 lacks "$REVIEW" \
   'Delta-package mode|delta-review package replaces steps|never resolve an independent `HEAD`' \
   'the upstream-derived skill does not inline its work-on exception'
 has "$REVIEW_ADAPTER" \
-  'replaces `SKILL.md` steps 1 through 3 and the generic input bullets in step 4' \
-  'work-on package mode replaces generic cumulative discovery'
+  'pinned inputs replace `SKILL.md` steps 1 through 3 and the generic input bullets in step 4' \
+  'pinned invocation replaces generic cumulative discovery'
 has "$REVIEW_ADAPTER" \
-  'Candidate identity and frozen sources are authoritative.*never resolve an independent `HEAD`.*build or pass a commit list.*discover or refetch a spec.*discover live standards' \
+  'comparison Candidate identity.*current Candidate identity.*frozen.*contract.*frozen Standards input.*raw validation evidence.*caller-supplied review-scope' \
+  'the adapter exposes one complete caller-pinned review interface'
+has "$REVIEW_ADAPTER" \
+  'supplied identities and frozen sources are authoritative.*never resolve an independent `HEAD`.*build or pass a commit list.*discover or refetch a spec.*discover live standards' \
   'package mode cannot leak commit rationale or substitute live governing inputs'
 has "$REVIEW_ADAPTER" \
   'Construct each prompt from exactly two inputs' \
@@ -171,6 +185,12 @@ has "$REVIEW_ADAPTER" \
 has "$REVIEW_ADAPTER" \
   'Standards.*complete frozen Standards input.*repository standards.*Fowler smell baseline.*repo-overrides.*judgement-call' \
   'the Standards package preserves its complete existing contract'
+lacks "$REVIEW_ADAPTER" \
+  'Reviewed anchor|anchor advancement|cumulative confirmation|delta gate|#62|work-on owns|work-on supplies' \
+  'the adapter carries no work-on review-state semantics'
+lacks "$REVIEW_ADAPTER" \
+  'work-on' \
+  'the pinned adapter does not need to know its caller'
 
 prompt_template="$fixture_dir/work-on-prompt-template.txt"
 code_block_after "$REVIEW_ADAPTER" '## Prompt composition' "$prompt_template"
@@ -195,8 +215,17 @@ grep -Eqi -- 'Binding Standards input.*Fowler smell baseline.*repo[- ]overrides.
   "$(flatten "$standards_composed")" \
   || fail 'the composed Standards prompt carries the Fowler baseline and semantics'
 has "$CLOSEOUT" \
-  'delta axis receives.*identical neutral delta-review package.*Neither receives the ledger or anyone.s conclusions' \
+  'delta closure axis receives.*identical neutral.*review package' \
   'the closure delta axis receives the same blind package'
+has "$CLOSEOUT" \
+  'Neither kind receives the ledger or anyone.s conclusions' \
+  'both closure assignments remain blind'
+has "$CLOSEOUT" \
+  'delta closure is incremental.*does not.*complete cumulative closure table' \
+  'the closure delta axis is genuinely incremental'
+has "$CLOSEOUT" \
+  'final cumulative.*complete.*closure.*table.*backstop' \
+  'the final cumulative closure axis retains the complete backstop'
 echo 'ok - delta reviewers receive the exact neutral package and no prior conclusions'
 
 ## Delta is the initial surface; concrete reasons bound context expansion
@@ -225,6 +254,51 @@ has "$CLOSEOUT" \
   'initial cumulative gate.*unchanged.*or.*post-remediation.*fresh blind cumulative confirmation' \
   'closeout consumes the applicable confirmation without manufacturing another gate'
 echo 'ok - closeout is reached only through the applicable exact cumulative confirmation'
+
+## Stable checkpoints are recoverable; partial gates are disposable
+has "$STATE" \
+  'owner-only run-local review-chain files' \
+  'review-chain checkpoints have recoverable custody'
+has "$STATE" \
+  'semantic review-chain state' \
+  'the checkpoint is authoritative workflow state rather than telemetry'
+has "$STATE" \
+  'complete frozen Standards input.*accepted full review contract.*review-inputs.md' \
+  'the exact frozen reviewer inputs have one recoverable locator'
+has "$STATE" \
+  'governing-input identity bundle.*review-inputs.*digest' \
+  'the checkpoint binds the recoverable frozen reviewer inputs'
+has "$STATE" \
+  'frozen governing-input identity bundle.*current Reviewed anchor.*valid cumulative-confirmation Candidate.*governing identity' \
+  'the durable checkpoint contains only the identities needed for recovery'
+has "$STATE" \
+  'current Candidate.*resolved.*verified.*repository.*resume.*not stored.*duplicated authority' \
+  'resume resolves the current Candidate from the repository'
+has "$STATE" \
+  'initial or final cumulative gate.*rerun all required cumulative axes' \
+  'an interrupted cumulative gate reruns every axis'
+has "$STATE" \
+  'delta gate.*rerun all required delta axes.*persisted Reviewed anchor.*current Candidate' \
+  'an interrupted delta gate reruns every axis from the durable anchor'
+has "$STATE" \
+  'anchor is `null`.*initial cumulative gate.*anchor differs.*current Candidate.*delta gate.*anchor equals.*current Candidate.*confirmation is `null`.*final cumulative gate' \
+  'stable identities alone select the safe resume gate'
+has "$STATE" \
+  'only after all required delta axes complete.*Reviewed anchor.*durable' \
+  'only a complete delta gate can make its anchor durable'
+has "$STATE" \
+  'only after a cumulative confirmation completes.*clean.*durable.*reusable' \
+  'only a clean complete cumulative confirmation becomes durable'
+has "$STATE" \
+  'do not persist.*per-axis completion.*active-gate progress' \
+  'review-chain recovery carries no partial-gate machinery'
+has "$SKILL" \
+  'review-chain.*stable-checkpoint recovery' \
+  'the top-level workflow requires stable review recovery'
+has "$WORKFLOW" \
+  'recover.*stable review-chain checkpoint.*partial gate work is rerun' \
+  'the default workflow recovers only stable review checkpoints'
+echo 'ok - resume recovers stable review checkpoints and reruns interrupted gates whole'
 
 ## Invalidation composes with manifest and evidence ownership
 has "$STATE" \

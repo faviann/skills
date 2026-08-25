@@ -4,7 +4,7 @@
 
 The two axes are never merged and never re-ranked. The report ends with a worst issue *per axis* and refuses to name a single winner across them, because a change can pass one axis and fail the other: code that follows every convention while implementing the wrong thing passes Standards and fails Spec; code that does exactly what the [ticket](https://www.aihero.dev/ai-coding-dictionary/ticket) asked while breaking the repo's conventions does the reverse. A blended verdict lets the passing axis hide the failing one. Each reviewer currently reports in under 600 words; that limit is an interim setting pending a separate evidence-backed reassessment, not a settled optimum.
 
-The `work-on` orchestrator can instead supply a frozen cumulative- or blind delta-review package. In that mode the package replaces normal fixed-point, commit-message, spec, and standards discovery, so both axes receive the same exact candidate and governing inputs without live sources or remediation context leaking in beside them. The Standards input still includes the exact applicable repository standards and the complete Fowler baseline with its repo-overrides and judgement-call rules; it is frozen once and reused across cumulative and delta review. A delta package also supplies its exact anchor and mechanical correction delta; that delta is where inspection begins, while a concrete contract or same-mechanism reason can lead into unchanged context without turning every correction into another full-candidate reread.
+An orchestrator such as `work-on` can instead pin the exact comparison and current Candidates, frozen contract, frozen Standards input, raw evidence, and review scope. In that mode those inputs replace normal fixed-point, commit-message, spec, and standards discovery. `code-review` uses them directly and performs only Standards and Spec judgment. The Standards input still includes the exact applicable repository standards and the complete Fowler baseline with its repo-overrides and judgement-call rules.
 
 ## When to reach for it
 
@@ -19,7 +19,7 @@ Type `/code-review`, or the agent reaches for it automatically when you ask to r
 | The whole codebase has drifted, not one diff | [improve-codebase-architecture](https://aihero.dev/skills-improve-codebase-architecture) |
 | Something is broken and you do not know why | [diagnosing-bugs](https://aihero.dev/skills-diagnosing-bugs) |
 
-In normal mode, you must supply the fixed point. If you do not, the skill asks for one rather than guessing; it then checks the ref resolves and the diff is non-empty before spawning anything, so a typo'd branch name fails in front of you instead of inside two sub-agents. In `work-on` package mode, the orchestrator supplies and freezes the comparison identities instead.
+In normal mode, you must supply the fixed point. If you do not, the skill asks for one rather than guessing; it then checks the ref resolves and the diff is non-empty before spawning anything, so a typo'd branch name fails in front of you instead of inside two sub-agents. In pinned mode, the caller supplies the exact comparison identities instead.
 
 ## Prerequisites
 
@@ -79,13 +79,13 @@ No. It diffs `<fixed-point>...HEAD`, three-dot, which is measured from the merge
 
 **Can it review only a remediation delta?**
 
-Yes, when a workflow supplies the blind delta package. Both reviewers still judge against the full contract, but begin with the mechanically exact anchor-to-candidate delta. Normal commit-list and live-source discovery is skipped, so they do not receive the finding or adjudication that caused the remediation through side inputs; unchanged context is reached only for a concrete question or bounded same-mechanism investigation.
+Yes, when a workflow supplies that exact comparison and its bounded review scope as pinned inputs. Both reviewers still judge against the full contract, while normal commit-list and live-source discovery is skipped. The workflow—not `code-review`—owns the delta state and blindness rules.
 
 ## It's working if
 
 - It refuses to start on a bad ref or an empty diff, before any sub-agent is spawned.
 - The report arrives as two separate blocks under `## Standards` and `## Spec`, not one merged list.
-- In delta mode, both axes name the same exact candidate and anchor and neither repeats prior findings or dispositions.
+- In pinned mode, both axes receive the same exact comparison, Candidate, governing inputs, evidence, and scope.
 - Every Standards finding names either a rule in one of your repo's files or one of the twelve smells, with the hunk quoted; every Spec finding quotes a line of the spec.
 - The closing summary gives a worst issue per axis and declines to pick an overall winner.
 - With no spec available, the Spec block says so instead of listing requirements it inferred from the code.

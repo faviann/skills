@@ -10,9 +10,9 @@ Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 
 Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
 
-When `work-on` supplies a frozen cumulative- or delta-review package, read and
-follow [`WORK-ON-REVIEW.md`](./WORK-ON-REVIEW.md) instead of the ordinary input
-discovery in steps 1–4, then aggregate in step 5.
+When a caller supplies pinned review inputs, read and follow
+[`WORK-ON-REVIEW.md`](./WORK-ON-REVIEW.md) instead of the ordinary input discovery
+in steps 1–4, then aggregate in step 5.
 
 The issue tracker should have been provided to you — run `/setup-matt-pocock-skills` if `docs/agents/issue-tracker.md` is missing.
 
