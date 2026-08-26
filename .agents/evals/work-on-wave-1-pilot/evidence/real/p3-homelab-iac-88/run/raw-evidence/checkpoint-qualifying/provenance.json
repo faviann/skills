@@ -1,0 +1,26 @@
+{
+  "repository": "faviann/homelab-iac",
+  "base_sha": "93f69bc8044172900952ceda6bf5552bfc7968a3",
+  "candidate": {
+    "tracked_diff": "empty",
+    "untracked_files": {
+      "tests/regression/portal_traefik_recreation.py": "ec09444c670ffa1c65d1f320a2ba396ae4f7f6e2",
+      "tests/regression/test_portal_traefik_redis_recreation.py": "01286d4ff9d3c414e54aa5f852396c8adf16c5f4",
+      "tests/unit/test_portal_traefik_contract.py": "4df381927882559482ef8ab185e079731548bde5"
+    }
+  },
+  "working_directory": "/home/faviann/repos/homelab-iac/claude-2",
+  "focused_validation": {
+    "command_structure": "uv run --locked pytest -q --junitxml=<EVIDENCE>/pytest.xml tests/regression/test_portal_traefik_redis_recreation.py tests/unit/test_portal_traefik_contract.py tests/unit/test_portal_externalservice_config.py",
+    "telemetry_command_id": "portal-traefik-focused",
+    "result_artifact": "pytest.xml",
+    "attempt_artifacts": "attempts/"
+  },
+  "compose_validation": {
+    "command_structure": "env CF_DNS_API_TOKEN=<PLACEHOLDER> TRAEFIK_DASHBOARD_CREDENTIALS=<PLACEHOLDER> docker compose -f stacks/portal/traefik3/compose.yaml config",
+    "telemetry_command_id": "portal-traefik-compose-config",
+    "result_artifact": "compose.yaml",
+    "sensitive_inputs": "credential placeholders only"
+  },
+  "prior_failure_adjudication": "/home/faviann/repos/homelab-iac/.bare/worktrees/claude-2/work-on-adjudication.log"
+}

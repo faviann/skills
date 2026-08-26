@@ -1,0 +1,4 @@
+services:
+  redis:
+    labels:
+      issue-88.recreation: "true"

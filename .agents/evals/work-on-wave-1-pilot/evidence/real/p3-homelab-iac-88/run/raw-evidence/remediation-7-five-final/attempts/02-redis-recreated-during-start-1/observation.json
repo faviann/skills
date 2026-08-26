@@ -1,0 +1,27 @@
+{
+  "attempt_name": "02-redis-recreated-during-start-1",
+  "closed_watch_tree": true,
+  "compose_project": "portal-traefik-recreation-875549b144e9",
+  "docker_server_version": "29.7.2",
+  "evidence_directory": "/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/remediation-7-five-final/attempts/02-redis-recreated-during-start-1",
+  "image_ids": {
+    "redis": "sha256:d75bda00b778ad5e03a639ec36e00f6665a5d7e0f35a6250be5b103fb2117275",
+    "traefik": "sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d"
+  },
+  "local_route_status": 200,
+  "redis_container_after": "c10041f4c297f17898daadb683af60e9589eec51ad36f93e92ebb89da094a80b",
+  "redis_container_before": "220784a98af88fd55cd93eb22c6aab8e1e9bbcb4d82510a9bc833944a338f4f6",
+  "redis_resumed_at": "2026-08-26T13:04:31.781541+00:00",
+  "redis_route_statuses": {
+    "bazarr.local.faviann.com": 200,
+    "immich.local.faviann.com": 200,
+    "jellyfin.local.faviann.com": 200
+  },
+  "redis_seeded_at": "2026-08-26T13:04:35.456827+00:00",
+  "redis_suspended_at": "2026-08-26T13:04:15.195904+00:00",
+  "tracked_compose_sha256": "7898bffb48660bd5e728836059b6d1ef3850bffdbf27c8bff39e0b16f0c7779f",
+  "traefik_container_after": "56bc5206af07ab39df052bd4c8adc85adbf04bf41cfff92b56faf95be526e8cf",
+  "traefik_container_before": "56bc5206af07ab39df052bd4c8adc85adbf04bf41cfff92b56faf95be526e8cf",
+  "traefik_running_while_redis_suspended": true,
+  "traefik_started_at": "2026-08-26T13:04:16.086665625Z"
+}

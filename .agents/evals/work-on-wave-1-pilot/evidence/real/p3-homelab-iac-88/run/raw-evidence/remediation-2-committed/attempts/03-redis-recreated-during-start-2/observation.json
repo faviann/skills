@@ -1,0 +1,25 @@
+{
+  "attempt_name": "03-redis-recreated-during-start-2",
+  "closed_watch_tree": false,
+  "docker_server_version": "29.7.2",
+  "evidence_directory": "/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/remediation-2-committed/attempts/03-redis-recreated-during-start-2",
+  "historical_incident": false,
+  "images": {
+    "redis": "sha256:d75bda00b778ad5e03a639ec36e00f6665a5d7e0f35a6250be5b103fb2117275",
+    "traefik": "sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d",
+    "traefik-docker-socket-proxy": "sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459"
+  },
+  "local_route_status": 200,
+  "redis_container_after": "433d24770650e1ffc2b9d812072357f978acfc30161b6eda5212b37d4e829280",
+  "redis_container_before": "205cca3db6e71c3825de231fe9dca0ee4879ab9d4e6af9a826b493816435494a",
+  "redis_route_statuses": {
+    "bazarr.test": 200,
+    "immich.test": 200,
+    "jellyfin.test": 200
+  },
+  "redis_routes_before_input": null,
+  "route_timeout_seconds": 30,
+  "scenario": "redis-recreated-during-provider-start",
+  "traefik_container_after": "24be40d3441730e5843c6a334330b45b46803d9bef27e61e3ed3d5a6b451394c",
+  "traefik_container_before": "24be40d3441730e5843c6a334330b45b46803d9bef27e61e3ed3d5a6b451394c"
+}

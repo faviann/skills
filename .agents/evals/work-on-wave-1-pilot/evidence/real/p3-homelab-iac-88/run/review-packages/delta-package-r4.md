@@ -1,0 +1,49 @@
+# Delta review assignment
+
+Independently review the exact candidate delta against the full accepted review
+contract.
+
+- Previous Reviewed-anchor identity: commit/tree
+  `9902f9abd6f057e304e8c1cb780d9f0eb2a0ac7a`.
+- Exact current Candidate identity: clean commit/tree
+  `96211292429198cf0d048472011e9d41fa9067c2`.
+- Mechanically exact direct delta:
+  `/home/faviann/repos/homelab-iac/.bare/work-on-review/20260826T103730Z-9b799001/delta-r4.diff`,
+  SHA-256 `2daa3dcc1578ac4a86b9e55c8f81da8518408693c55bac59b35b8ffd7cc0f933`.
+  Verify byte-for-byte from
+  `git diff --no-ext-diff --no-color --no-textconv 9902f9abd6f057e304e8c1cb780d9f0eb2a0ac7a^{tree} 96211292429198cf0d048472011e9d41fa9067c2^{tree}`.
+- Full trusted contract: exact frozen snapshot
+  `/home/faviann/repos/homelab-iac/.bare/work-on-manifest/20260826T103730Z-9b799001.trusted-snapshot.json`.
+  Do not refetch comments or discover another spec.
+- Binding Standards input: exact frozen combined input
+  `/home/faviann/repos/homelab-iac/.bare/work-on-review/20260826T103730Z-9b799001/standards.md`,
+  SHA-256 `5501bc1b61c74487020657237c4aab600fe177dc92e543d9e1ba977447303a71`.
+- Validation-surface manifest: exact immutable file
+  `/home/faviann/repos/homelab-iac/.bare/work-on-manifest/20260826T103730Z-9b799001.md`.
+- Validation-evidence policy: exact file
+  `/home/faviann/repos/skills/skills/personal/work-on/references/validation-evidence.md`.
+- Qualifying exact-candidate corrected evidence:
+  `/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/remediation-4-committed/`.
+  Its provenance also names the raw pre-fix reproduction under exact tracked
+  configuration. The missing-provider-input observation remains ephemeral under
+  pytest; its JUnit result is retained and no raw artifact is claimed.
+
+Review scope: begin at the exact correction delta. Inspect unchanged context
+only for a concrete contract or changed-mechanism question, a reproduced seed,
+or same-mechanism neighborhood investigation. Do not routinely reconstruct the
+cumulative candidate.
+
+Same-mechanism neighborhood: after reproducing a defect, name its mechanism and
+criterion, then trace immediate same-boundary branches, call sites, input shapes,
+diagnostics, or governed states. For failure-raising operations, enumerate same-
+flow occurrences and try seed-shaped input through compatible public entry
+points. Count distinct branches/call sites/diagnostics/states only. Stop before
+another criterion, subsystem, external boundary, or speculative defense. The
+manifest never limits inspection.
+
+Do not read prior reports, implementation history, rationale, findings,
+adjudications, dispositions, or the ledger. Do not edit, commit, refetch
+comments, or mutate GitHub. Inspect evidence before execution. If narrow
+independent execution is necessary, wrap it in telemetry for run
+`20260826T103730Z-9b799001@8de8159fe68e446b8c345d38452d4049`, phase
+`remediation`, round `4`, with a safe command id.

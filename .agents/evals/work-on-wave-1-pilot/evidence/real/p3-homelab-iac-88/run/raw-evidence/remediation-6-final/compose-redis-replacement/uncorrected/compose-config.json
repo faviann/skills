@@ -1,0 +1,145 @@
+{
+  "name": "portal-traefik-uncorrected-89f9ae7beade",
+  "networks": {
+    "shared": {
+      "name": "portal-traefik-uncorrected-89f9ae7beade_shared",
+      "ipam": {}
+    },
+    "traefik": {
+      "name": "portal-traefik-uncorrected-89f9ae7beade_traefik",
+      "driver": "bridge",
+      "ipam": {}
+    }
+  },
+  "services": {
+    "backend": {
+      "command": [
+        "--entrypoints.backend.address=:8081",
+        "--ping=true",
+        "--ping.entrypoint=backend"
+      ],
+      "entrypoint": null,
+      "image": "docker.io/library/traefik:v3.6",
+      "labels": {
+        "traefik.enable": "true",
+        "traefik.http.routers.portal-entry.rule": "Host(`portal-entry.local.faviann.com`)",
+        "traefik.http.services.portal-entry.loadbalancer.server.port": "8081"
+      },
+      "networks": {
+        "shared": null
+      },
+      "security_opt": [
+        "no-new-privileges:true"
+      ]
+    },
+    "redis": {
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "ALLOW_EMPTY_PASSWORD": "yes"
+      },
+      "image": "bitnami/redis:latest",
+      "networks": {
+        "shared": null
+      },
+      "restart": "no"
+    },
+    "traefik": {
+      "command": null,
+      "depends_on": {
+        "redis": {
+          "condition": "service_started",
+          "required": true
+        },
+        "traefik-docker-socket-proxy": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "CF_DNS_API_TOKEN": "\u003cREPLACE_ME\u003e",
+        "TRAEFIK_DASHBOARD_CREDENTIALS": "\"\u003cREPLACE_ME\u003e\""
+      },
+      "image": "docker.io/library/traefik:v3.6",
+      "networks": {
+        "shared": null,
+        "traefik": null
+      },
+      "ports": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 443,
+          "protocol": "tcp"
+        }
+      ],
+      "restart": "no",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "/home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml",
+          "target": "/etc/traefik/traefik.yaml",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "/home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/conf.d",
+          "target": "/etc/traefik/conf.d",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "/tmp/portal-traefik-uncorrected-89f9ae7beade-sxrd36ho/certificates",
+          "target": "/var/traefik/certs",
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "/tmp/portal-traefik-uncorrected-89f9ae7beade-sxrd36ho/logs",
+          "target": "/logs",
+          "bind": {}
+        }
+      ]
+    },
+    "traefik-docker-socket-proxy": {
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "CONTAINERS": "1",
+        "EVENTS": "1",
+        "INFO": "1",
+        "NETWORKS": "1",
+        "POST": "0"
+      },
+      "image": "tecnativa/docker-socket-proxy",
+      "networks": {
+        "traefik": null
+      },
+      "restart": "no",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "/run/docker.sock",
+          "target": "/var/run/docker.sock",
+          "read_only": true,
+          "bind": {}
+        }
+      ]
+    }
+  },
+  "x-managed-files": [
+    {
+      "mode": "0600",
+      "path": "./appdata/traefik3/data/certs/cloudflare-acme.json"
+    }
+  ]
+}

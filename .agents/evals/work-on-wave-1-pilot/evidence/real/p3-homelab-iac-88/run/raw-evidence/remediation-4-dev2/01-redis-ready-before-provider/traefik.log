@@ -1,0 +1,77 @@
+2026-08-26T11:58:38Z WRN Traefik can reject some encoded characters in the request path. When your backend is not fully compliant with [RFC 3986](https://datatracker.ietf.org/doc/html/rfc3986), it is recommended to set these options to `false` to avoid split-view situation. Refer to the documentation for more details: https://doc.traefik.io/traefik/v3.6/migrate/v3/#encoded-characters-configuration-default-values
+2026-08-26T11:58:38Z INF Traefik version 3.6.25 built on 2026-07-31T12:26:16Z version=3.6.25
+2026-08-26T11:58:38Z INF 
+Version check is disabled.
+You will not be notified if a new version is available.
+More details: https://doc.traefik.io/traefik/contributing/data-collection/
+
+2026-08-26T11:58:38Z INF 
+Stats collection is disabled.
+Help us improve Traefik by turning this feature on :)
+More details on: https://doc.traefik.io/traefik/contributing/data-collection/
+
+2026-08-26T11:58:38Z INF Starting provider aggregator *aggregator.ProviderAggregator
+2026-08-26T11:58:38Z INF Starting provider *file.Provider
+2026-08-26T11:58:38Z INF Starting provider *traefik.Provider
+2026-08-26T11:58:38Z INF Starting provider *redis.Provider
+2026-08-26T11:58:38Z INF Starting provider *docker.Provider
+2026-08-26T11:58:38Z INF Starting provider *acme.ChallengeTLSALPN
+2026-08-26T11:58:38Z INF Starting provider *acme.Provider
+2026-08-26T11:58:38Z INF Testing certificate renew... acmeCA=https://acme-v02.api.letsencrypt.org/directory providerName=cloudflare.acme
+2026-08-26T11:58:38Z WRN maxResponseBodySize is not configured, allowing unlimited response body size which can lead to DoS attacks and memory exhaustion. Please set an appropriate limit. entryPointName=websecure middlewareName=forwardAuth-authentik@file middlewareType=ForwardAuth routerName=ai@file
+2026-08-26T11:58:38Z WRN maxResponseBodySize is not configured, allowing unlimited response body size which can lead to DoS attacks and memory exhaustion. Please set an appropriate limit. entryPointName=websecure middlewareName=forwardAuth-authentik@file middlewareType=ForwardAuth routerName=collie@file
+2026-08-26T11:58:38Z WRN maxResponseBodySize is not configured, allowing unlimited response body size which can lead to DoS attacks and memory exhaustion. Please set an appropriate limit. entryPointName=websecure middlewareName=forwardAuth-authentik@file middlewareType=ForwardAuth routerName=collie@file
+2026-08-26T11:58:38Z WRN maxResponseBodySize is not configured, allowing unlimited response body size which can lead to DoS attacks and memory exhaustion. Please set an appropriate limit. entryPointName=websecure middlewareName=forwardAuth-authentik@file middlewareType=ForwardAuth routerName=ai@file
+2026-08-26T11:58:40Z INF Register... providerName=cloudflare.acme
+2026-08-26T11:58:40Z INF Registering the account. email=faviann@gmail.com lib=lego
+2026-08-26T11:58:41Z INF Obtaining bundled SAN certificate. domains="faviann.com, *.faviann.com, *.admin.faviann.com, *.home.faviann.com, *.media.faviann.com, *.public.faviann.com, *.local.faviann.com" lib=lego
+2026-08-26T11:58:41Z INF Use solver. domain=*.admin.faviann.com lib=lego type=dns-01
+2026-08-26T11:58:41Z INF Use solver. domain=*.home.faviann.com lib=lego type=dns-01
+2026-08-26T11:58:41Z INF Use solver. domain=*.faviann.com lib=lego type=dns-01
+2026-08-26T11:58:41Z INF Use solver. domain=*.public.faviann.com lib=lego type=dns-01
+2026-08-26T11:58:41Z INF Use solver. domain=*.local.faviann.com lib=lego type=dns-01
+2026-08-26T11:58:41Z INF Use solver. domain=*.media.faviann.com lib=lego type=dns-01
+2026-08-26T11:58:41Z INF Use solver. domain=faviann.com lib=lego type=dns-01
+2026-08-26T11:58:41Z INF dns01: preparing to solve the challenge. domain=*.admin.faviann.com lib=lego
+2026-08-26T11:58:41Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.admin.faviann.com. lib=lego
+2026-08-26T11:58:42Z INF dns01: preparing to solve the challenge. domain=*.home.faviann.com lib=lego
+2026-08-26T11:58:42Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.home.faviann.com. lib=lego
+2026-08-26T11:58:42Z INF dns01: preparing to solve the challenge. domain=*.faviann.com lib=lego
+2026-08-26T11:58:42Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.faviann.com. lib=lego
+2026-08-26T11:58:42Z INF dns01: preparing to solve the challenge. domain=*.public.faviann.com lib=lego
+2026-08-26T11:58:42Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.public.faviann.com. lib=lego
+2026-08-26T11:58:42Z INF dns01: preparing to solve the challenge. domain=*.local.faviann.com lib=lego
+2026-08-26T11:58:42Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.local.faviann.com. lib=lego
+2026-08-26T11:58:42Z INF dns01: preparing to solve the challenge. domain=*.media.faviann.com lib=lego
+2026-08-26T11:58:42Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.media.faviann.com. lib=lego
+2026-08-26T11:58:43Z INF dns01: preparing to solve the challenge. domain=faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.faviann.com. lib=lego
+2026-08-26T11:58:43Z INF dns01: cleaning DNS-01 challenge. domain=*.admin.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.admin.faviann.com. lib=lego
+2026-08-26T11:58:43Z WRN Cleaning up failed. error={"error":"cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header","kind":"*fmt.wrapError","stack":null} domain=*.admin.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: cleaning DNS-01 challenge. domain=*.home.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.home.faviann.com. lib=lego
+2026-08-26T11:58:43Z WRN Cleaning up failed. error={"error":"cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header","kind":"*fmt.wrapError","stack":null} domain=*.home.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: cleaning DNS-01 challenge. domain=*.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.faviann.com. lib=lego
+2026-08-26T11:58:43Z WRN Cleaning up failed. error={"error":"cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header","kind":"*fmt.wrapError","stack":null} domain=*.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: cleaning DNS-01 challenge. domain=*.public.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.public.faviann.com. lib=lego
+2026-08-26T11:58:43Z WRN Cleaning up failed. error={"error":"cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header","kind":"*fmt.wrapError","stack":null} domain=*.public.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: cleaning DNS-01 challenge. domain=*.local.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.local.faviann.com. lib=lego
+2026-08-26T11:58:43Z WRN Cleaning up failed. error={"error":"cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header","kind":"*fmt.wrapError","stack":null} domain=*.local.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: cleaning DNS-01 challenge. domain=*.media.faviann.com lib=lego
+2026-08-26T11:58:43Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.media.faviann.com. lib=lego
+2026-08-26T11:58:44Z WRN Cleaning up failed. error={"error":"cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header","kind":"*fmt.wrapError","stack":null} domain=*.media.faviann.com lib=lego
+2026-08-26T11:58:44Z INF dns01: cleaning DNS-01 challenge. domain=faviann.com lib=lego
+2026-08-26T11:58:44Z INF dns01: Found CNAME entry. cname=faviann.com. fqdn=_acme-challenge.faviann.com. lib=lego
+2026-08-26T11:58:44Z WRN Cleaning up failed. error={"error":"cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header","kind":"*fmt.wrapError","stack":null} domain=faviann.com lib=lego
+2026-08-26T11:58:44Z INF Deactivating authorization. lib=lego url=https://acme-v02.api.letsencrypt.org/acme/authz/3670342185/767143558795
+2026-08-26T11:58:44Z INF Deactivating authorization. lib=lego url=https://acme-v02.api.letsencrypt.org/acme/authz/3670342185/767143558805
+2026-08-26T11:58:44Z INF Deactivating authorization. lib=lego url=https://acme-v02.api.letsencrypt.org/acme/authz/3670342185/767143558815
+2026-08-26T11:58:44Z INF Deactivating authorization. lib=lego url=https://acme-v02.api.letsencrypt.org/acme/authz/3670342185/767143558825
+2026-08-26T11:58:45Z INF Deactivating authorization. lib=lego url=https://acme-v02.api.letsencrypt.org/acme/authz/3670342185/767143558835
+2026-08-26T11:58:45Z INF Deactivating authorization. lib=lego url=https://acme-v02.api.letsencrypt.org/acme/authz/3670342185/767143558845
+2026-08-26T11:58:45Z INF Deactivating authorization. lib=lego url=https://acme-v02.api.letsencrypt.org/acme/authz/3670342185/767143558855
+2026-08-26T11:58:45Z ERR Unable to obtain ACME certificate for domains error="unable to generate a certificate for the domains [faviann.com *.faviann.com *.admin.faviann.com *.home.faviann.com *.media.faviann.com *.public.faviann.com *.local.faviann.com]: resolver: one or more domains had a problem: [*.admin.faviann.com: dns01: error presenting token (*.admin.faviann.com): cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header] [*.faviann.com: dns01: error presenting token (*.faviann.com): cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header] [*.home.faviann.com: dns01: error presenting token (*.home.faviann.com): cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header] [*.local.faviann.com: dns01: error presenting token (*.local.faviann.com): cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header] [*.media.faviann.com: dns01: error presenting token (*.media.faviann.com): cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header] [*.public.faviann.com: dns01: error presenting token (*.public.faviann.com): cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header] [faviann.com: dns01: error presenting token (faviann.com): cloudflare: failed to find zone faviann.com.: [status code 400] 6003: Invalid request headers; 6111: Invalid format for Authorization header]" ACME CA=https://acme-v02.api.letsencrypt.org/directory acmeCA=https://acme-v02.api.letsencrypt.org/directory domains=["faviann.com","*.faviann.com","*.admin.faviann.com","*.home.faviann.com","*.media.faviann.com","*.public.faviann.com","*.local.faviann.com"] providerName=cloudflare.acme routerName=traefik@file rule=Host(`traefik.local.faviann.com`)

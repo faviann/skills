@@ -1,0 +1,14 @@
+{
+  "candidate_commit": "d9bc7e59aede459812880772f7dcb94d002aa403",
+  "candidate_blobs": {
+    "stacks/portal/traefik3/compose.yaml": "d756c35b9eed75f77f97c2b23b23beb2e0661b6b",
+    "tests/regression/portal_traefik_recreation.py": "a37c28e6c74b06f96a0f59d4168b9171a39597e1",
+    "tests/regression/test_portal_traefik_redis_recreation.py": "80b1f3ad957c5cea9ccde638de237f279d234899",
+    "tests/unit/test_portal_traefik_contract.py": "b7aa7384aa8ce81bb789887cd21351855f03d632"
+  },
+  "compose_sha256": "d4915bc0a71e8a6272ac3ee3542d5cd721ee9a7feda0c50d4b25f9c2affc95a8",
+  "docker_server_version": "29.7.2",
+  "focused_result": "15 passed in 180.59s",
+  "pre_fix_reproduction": "/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/remediation-7-committed/04-redis-recreated-during-start-3/",
+  "tested_at": "2026-08-26T13:27:57Z"
+}

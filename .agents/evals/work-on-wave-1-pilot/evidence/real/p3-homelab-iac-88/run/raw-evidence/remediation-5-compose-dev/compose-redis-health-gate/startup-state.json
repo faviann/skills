@@ -1,0 +1,13 @@
+{
+  "redis": {
+    "container_id": "8d5de6904ea6fa199df9f53f4b8e1cd05ade9bb5bd7bc3f730d1a76de8f3e31d",
+    "health_status": "healthy",
+    "healthy_at": "2026-08-26T12:23:19.18794579Z",
+    "started_at": "2026-08-26T12:23:13.693183467Z"
+  },
+  "traefik": {
+    "container_id": "ae36b8e844fb21ce8c395c83b307fe03aab6dbff3385a8dfbc21ed2182d8e7ee",
+    "running": true,
+    "started_at": "2026-08-26T12:23:19.605893774Z"
+  }
+}

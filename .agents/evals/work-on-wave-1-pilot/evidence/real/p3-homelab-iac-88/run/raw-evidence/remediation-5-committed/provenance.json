@@ -1,0 +1,10 @@
+{
+  "candidate_commit": "c9bdca70591de3dcd7b22c33cd3565b2e3563aeb",
+  "compose_blob": "99f8c62feaf3d7924709074261f9252abcdab6f7",
+  "compose_sha256": "863925a64700a945b89ecdda86eee6bdcaf2605a82a3d531bd88778753b42f9a",
+  "docker_server_version": "29.7.2",
+  "static_config_blob": "6d40117e7cd73cb92061b59035bc38693ce5144d",
+  "static_config_sha256": "b6ee16bb1917fe814ce54a09539ee33267683559dc0559c8c31826b386f99928",
+  "test_result": "16 passed in 109.63s",
+  "tested_at": "2026-08-26T12:29:48Z"
+}

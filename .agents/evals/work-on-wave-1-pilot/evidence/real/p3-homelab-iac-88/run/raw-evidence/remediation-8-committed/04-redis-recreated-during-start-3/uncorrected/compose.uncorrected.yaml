@@ -1,0 +1,7 @@
+services:
+  redis:
+    healthcheck: !reset null
+  traefik:
+    depends_on: !override
+      traefik-docker-socket-proxy:
+        condition: service_started

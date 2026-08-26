@@ -1,0 +1,21 @@
+{
+  "repository": "faviann/homelab-iac",
+  "candidate_commit": "9902f9abd6f057e304e8c1cb780d9f0eb2a0ac7a",
+  "worktree": "clean",
+  "candidate_blobs": {
+    "tests/regression/portal_traefik_recreation.py": "d32f17188fa367780f197cb759a2303413e9a83b",
+    "tests/regression/test_portal_traefik_redis_recreation.py": "eeb7f7ae4d47632e7742160f49a40b5fc3fda25d",
+    "tests/unit/test_portal_traefik_contract.py": "4df381927882559482ef8ab185e079731548bde5"
+  },
+  "validation": {
+    "command_structure": "uv run --locked pytest -q --junitxml=<EVIDENCE>/pytest.xml tests/regression/test_portal_traefik_redis_recreation.py",
+    "telemetry_command_id": "portal-traefik-focused",
+    "result_artifact": "pytest.xml",
+    "attempt_artifacts": "attempts/"
+  },
+  "reused_unchanged_evidence": {
+    "locator": "/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/checkpoint-qualifying/",
+    "members": "Portal parsed-config tests and placeholder-only effective Compose output",
+    "identity_reason": "The final correction changed only the recreation harness and its regression test. Portal production config, Portal contract-test blob, externalservice tests, and Compose inputs are unchanged."
+  }
+}

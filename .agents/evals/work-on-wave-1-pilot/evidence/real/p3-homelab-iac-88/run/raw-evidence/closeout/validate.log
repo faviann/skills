@@ -1,0 +1,80 @@
+[WARNING]: Falling back to Ansible unique filter as Jinja2 one failed: 'inventory_hostname' is undefined
+
+Passed: 0 failure(s), 0 warning(s) in 413 files processed of 491 encountered. Profile 'production' was required, and it passed.
+PASS  test_lxc_lifecycle_decision.py  (79.6s)
+PASS  test_lxc_lifecycle_planning_barrier.py  (26.7s)
+PASS  test_lifecycle_run_lock.py  (2.3s)
+PASS  test_lxc_lifecycle_invalid_state.py  (1.9s)
+PASS  test_lxc_lifecycle_guest_bootstrap_contract.py  (1.3s)
+PASS  test_lxc_spec_contract.py  (2.9s)
+PASS  test_lxc_spec_invalid_guest_bootstrap.py  (1.9s)
+PASS  test_lxc_spec_layer_merge.py  (2.1s)
+PASS  test_proxmox_lxc_provision_contract.py  (2.6s)
+PASS  test_proxmox_lxc_lifecycle_configure_check_mode_absent.py  (1.9s)
+PASS  test_proxmox_lxc_lifecycle_observation_status.py  (9.8s)
+PASS  test_lxc_manual_ssh_recovery.py  (8.4s)
+PASS  test_lxc_ssh_key_injector_identity_mismatch.py  (11.9s)
+PASS  test_lxc_fleet_preflight.py  (56.6s)
+PASS  test_proxmox_lxc_host_config_check_mode_missing_config.py  (30.5s)
+PASS  test_proxmox_lxc_host_config_observation_failure.py  (20.3s)
+PASS  test_proxmox_lxc_host_config_readiness_deadline.py  (25.6s)
+PASS  test_lxc_docker_runtime_daemon_options.py  (20.4s)
+PASS  test_lxc_nvidia_runtime_repository.py  (27.5s)
+PASS  test_lxc_lifecycle_wiring.py  (44.0s)
+PASS  test_proxmox_lxc_host_config_result.py  (182.0s)
+PASS  test_hawser_standard_remote_default.py  (24.3s)
+PASS  test_fixture_fact_cache_isolation.py  (46.9s)
+ok: full lifecycle regression set passed (23 launchers)
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/faviann/repos/homelab-iac/claude-2
+configfile: pyproject.toml
+testpaths: tests
+collected 492 items
+
+tests/regression/test_control_node_dependencies.py ....                  [  0%]
+tests/regression/test_image_update_renovate_adapter_real.py .            [  1%]
+tests/regression/test_lxc_docker_runtime_daemon_options.py .             [  1%]
+tests/regression/test_lxc_nvidia_runtime_repository.py ..                [  1%]
+tests/regression/test_overmind_postgres_backup.py .....                  [  2%]
+tests/regression/test_portal_traefik_redis_recreation.py ......          [  3%]
+tests/regression/test_sandbox_multiprocessing_primitives.py ssss         [  4%]
+tests/regression/test_validate_command.py ....                           [  5%]
+tests/regression/test_workstation_baseline_github_keys.py ..             [  5%]
+tests/regression/test_workstation_first_login_setup_contract.py ....     [  6%]
+tests/regression/test_workstation_origin_firewall_idempotency.py .       [  6%]
+tests/regression/test_workstation_origin_firewall_resolution.py .        [  7%]
+tests/regression/test_workstation_persistent_home.py .                   [  7%]
+tests/unit/test_authentik_auth_flow_blueprints.py .                      [  7%]
+tests/unit/test_authentik_blueprint_idempotency.py ..................... [ 11%]
+.                                                                        [ 11%]
+tests/unit/test_authentik_blueprint_sync_navidrome.py .....              [ 13%]
+tests/unit/test_compose_env_filter.py ..                                 [ 13%]
+tests/unit/test_dockhand_inventory.py .                                  [ 13%]
+tests/unit/test_image_update_renovate_adapter.py ....................... [ 18%]
+............                                                             [ 20%]
+tests/unit/test_jellystat_secret_contract.py ..                          [ 21%]
+tests/unit/test_lxc_docker_runtime_daemon_options_report.py ........     [ 22%]
+tests/unit/test_lxc_docker_runtime_role.py .                             [ 22%]
+tests/unit/test_lxc_fleet_preflight_contract.py ..                       [ 23%]
+tests/unit/test_lxc_lifecycle_regression_runner.py ...........           [ 25%]
+tests/unit/test_lxc_release_probe_shared_task.py .                       [ 25%]
+tests/unit/test_navidrome_reconciler.py ......                           [ 27%]
+tests/unit/test_oidc_manifest.py ....................................... [ 34%]
+...........                                                              [ 37%]
+tests/unit/test_overmind_contract.py .......                             [ 38%]
+tests/unit/test_portal_externalservice_config.py ....                    [ 39%]
+tests/unit/test_portal_traefik_contract.py .....                         [ 40%]
+tests/unit/test_proxmox_pct.py .............................             [ 46%]
+tests/unit/test_servarr_beets_flask_contract.py ........                 [ 47%]
+tests/unit/test_stack_update_policy_command.py ......................... [ 53%]
+...................................................................      [ 66%]
+tests/unit/test_stack_update_policy_selection.py ................        [ 69%]
+tests/unit/test_stack_update_policy_snapshot.py ........................ [ 74%]
+........................................................................ [ 89%]
+.....................................                                    [ 96%]
+tests/unit/test_vault_token.py .....                                     [ 97%]
+tests/unit/test_workstation_baseline_role.py .......                     [ 99%]
+tests/unit/test_workstation_inventory.py ...                             [100%]
+
+================== 488 passed, 4 skipped in 997.43s (0:16:37) ==================

@@ -1,0 +1,27 @@
+{
+  "repository": "faviann/homelab-iac",
+  "candidate_commit": "96211292429198cf0d048472011e9d41fa9067c2",
+  "worktree": "clean",
+  "candidate_blobs": {
+    "stacks/portal/traefik3/compose.yaml": "99f8c62feaf3d7924709074261f9252abcdab6f7",
+    "tests/regression/portal_traefik_recreation.py": "2e65281e7c8adfdcaceaa4f95bb3eb6a211e853b",
+    "tests/regression/test_portal_traefik_redis_recreation.py": "877f968953f2b8c6fd7fe52c99746a7543b4b436",
+    "tests/unit/test_portal_traefik_contract.py": "d18450b8439f697db51627ce23568992970cd21f"
+  },
+  "focused_validation": {
+    "command_structure": "uv run --locked pytest -q --junitxml=<EVIDENCE>/pytest.xml tests/regression/test_portal_traefik_redis_recreation.py tests/unit/test_portal_traefik_contract.py tests/unit/test_portal_externalservice_config.py",
+    "telemetry_command_id": "portal-traefik-focused",
+    "result_artifact": "pytest.xml",
+    "attempt_artifacts": "attempts/"
+  },
+  "compose_validation": {
+    "command_structure": "env CF_DNS_API_TOKEN=<PLACEHOLDER> TRAEFIK_DASHBOARD_CREDENTIALS=<PLACEHOLDER> docker compose -f stacks/portal/traefik3/compose.yaml config",
+    "telemetry_command_id": "portal-traefik-compose-config",
+    "result_artifact": "compose.yaml",
+    "sensitive_inputs": "credential placeholders only"
+  },
+  "pre_fix_reproduction": {
+    "locator": "/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/remediation-4-final/02-redis-recreated-during-start-1/",
+    "observation": "Exact tracked configuration: local Docker route 200; Bazarr/Jellyfin/Immich Redis routes 404 after 30 seconds; distinct Redis IDs; unchanged Traefik ID."
+  }
+}

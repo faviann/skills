@@ -1,0 +1,35 @@
+services:
+  traefik-docker-socket-proxy:
+    container_name: !reset null
+    restart: "no"
+  traefik:
+    container_name: !reset null
+    restart: "no"
+    ports: !override
+      - "127.0.0.1::443/tcp"
+    volumes:
+      - /home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml:/etc/traefik/traefik.yaml:ro
+      - /home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/conf.d:/etc/traefik/conf.d:ro
+      - /tmp/portal-traefik-recreation-dd2f0b35a17e-5bcy1apg/certificates:/var/traefik/certs:rw
+      - /tmp/portal-traefik-recreation-dd2f0b35a17e-5bcy1apg/logs:/logs:rw
+  redis:
+    container_name: !reset null
+    restart: "no"
+    ports: !reset []
+  backend:
+    image: docker.io/library/traefik:v3.6
+    command:
+      - --entrypoints.backend.address=:8081
+      - --ping=true
+      - --ping.entrypoint=backend
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.portal-entry.rule: "Host(`portal-entry.local.faviann.com`)"
+      traefik.http.services.portal-entry.loadbalancer.server.port: 8081
+    networks:
+      - shared
+networks:
+  shared:
+    external: false

@@ -1,0 +1,30 @@
+{
+  "attempt_name": "01-redis-ready-before-provider",
+  "closed_watch_tree": false,
+  "docker_server_version": "29.7.2",
+  "evidence_directory": "/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/remediation-4-dev2/01-redis-ready-before-provider",
+  "images": {
+    "redis": "sha256:d75bda00b778ad5e03a639ec36e00f6665a5d7e0f35a6250be5b103fb2117275",
+    "traefik": "sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d",
+    "traefik-docker-socket-proxy": "sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459"
+  },
+  "local_route_status": null,
+  "redis_container_after": null,
+  "redis_container_before": null,
+  "redis_route_statuses": {
+    "bazarr.test": null,
+    "immich.test": null,
+    "jellyfin.test": null
+  },
+  "redis_routes_before_input": null,
+  "route_timeout_seconds": 30,
+  "scenario": "redis-ready-before-provider",
+  "tracked_config_mounts": {
+    "/etc/traefik/conf.d": "/home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/conf.d",
+    "/etc/traefik/traefik.yaml": "/home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml"
+  },
+  "tracked_dynamic_config_loaded": false,
+  "tracked_static_config_loaded": false,
+  "traefik_container_after": "1f33202c0db70751d9b7e262ef7a6871fb7a13c70bada0a30e7643eb83f21a61",
+  "traefik_container_before": "1f33202c0db70751d9b7e262ef7a6871fb7a13c70bada0a30e7643eb83f21a61"
+}

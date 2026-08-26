@@ -1,0 +1,7 @@
+services:
+  redis:
+    healthcheck: !reset null
+  traefik:
+    depends_on:
+      redis:
+        condition: service_started

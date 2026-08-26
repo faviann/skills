@@ -1,0 +1,20 @@
+services:
+  traefik-docker-socket-proxy:
+    container_name: !reset null
+    restart: "no"
+  traefik:
+    container_name: !reset null
+    restart: "no"
+    ports: !reset []
+    volumes:
+      - /home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml:/etc/traefik/traefik.yaml:ro
+      - /home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/conf.d:/etc/traefik/conf.d:ro
+      - /tmp/portal-traefik-compose-83ccd1c55986-z2zkln75/certificates:/var/traefik/certs:rw
+      - /tmp/portal-traefik-compose-83ccd1c55986-z2zkln75/logs:/logs:rw
+  redis:
+    container_name: !reset null
+    restart: "no"
+    ports: !reset []
+networks:
+  shared:
+    external: false

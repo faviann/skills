@@ -1,0 +1,57 @@
+{
+  "candidate": {
+    "arm": "candidate",
+    "closed_watch_tree": false,
+    "compose_project": "portal-traefik-candidate-5db52628fb1a",
+    "image_ids": {
+      "redis": "sha256:d75bda00b778ad5e03a639ec36e00f6665a5d7e0f35a6250be5b103fb2117275",
+      "traefik": "sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d"
+    },
+    "local_route_status": 200,
+    "redis_container_after": "7843be9a101b005417d898a0dbf1244b41012f7baff66cff3d5da97ea9891445",
+    "redis_container_before": "d8e31356eab960bce5b1647ba0d9a0f1764593ff1039859e83b81ef25ff4784d",
+    "redis_healthy_at": "2026-08-26T12:46:32.100416525Z",
+    "redis_provider_started_while_suspended": false,
+    "redis_resumed_at": "2026-08-26T12:46:30.254497+00:00",
+    "redis_route_statuses": {
+      "bazarr.local.faviann.com": 200,
+      "immich.local.faviann.com": 200,
+      "jellyfin.local.faviann.com": 200
+    },
+    "redis_seeded_at": "2026-08-26T12:46:29.089369+00:00",
+    "redis_suspended_at": "2026-08-26T12:46:29.133289+00:00",
+    "traefik_container_after": "a722705e0800295c40f02c7b204a29aba03aab770d05fd628d1863a978a70d1a",
+    "traefik_container_before": "a722705e0800295c40f02c7b204a29aba03aab770d05fd628d1863a978a70d1a",
+    "traefik_running_while_redis_suspended": false,
+    "traefik_started_at": "2026-08-26T12:46:32.320808742Z"
+  },
+  "docker_server_version": "29.7.2",
+  "evidence_directory": "/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/remediation-6-final2/compose-redis-replacement",
+  "tracked_compose_sha256": "863925a64700a945b89ecdda86eee6bdcaf2605a82a3d531bd88778753b42f9a",
+  "uncorrected": {
+    "arm": "uncorrected",
+    "closed_watch_tree": true,
+    "compose_project": "portal-traefik-uncorrected-7855864db418",
+    "image_ids": {
+      "redis": "sha256:d75bda00b778ad5e03a639ec36e00f6665a5d7e0f35a6250be5b103fb2117275",
+      "traefik": "sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d"
+    },
+    "local_route_status": 200,
+    "redis_container_after": "55beafe856bc265c753449d7d7b0f4087c92ce90d8b8b75ce357972703dc39d5",
+    "redis_container_before": "ab026853c949f14555607c847c815dc38d2f1703da1179eacb2f0f77696eb608",
+    "redis_healthy_at": null,
+    "redis_provider_started_while_suspended": false,
+    "redis_resumed_at": "2026-08-26T12:46:55.407551+00:00",
+    "redis_route_statuses": {
+      "bazarr.local.faviann.com": 200,
+      "immich.local.faviann.com": 200,
+      "jellyfin.local.faviann.com": 200
+    },
+    "redis_seeded_at": "2026-08-26T12:46:58.745004+00:00",
+    "redis_suspended_at": "2026-08-26T12:46:43.294995+00:00",
+    "traefik_container_after": "c5a6a7d66f6df6d3743028daa0d5dd933f84104e031b1888c16a326df7e52dd5",
+    "traefik_container_before": "c5a6a7d66f6df6d3743028daa0d5dd933f84104e031b1888c16a326df7e52dd5",
+    "traefik_running_while_redis_suspended": true,
+    "traefik_started_at": "2026-08-26T12:46:44.220665512Z"
+  }
+}

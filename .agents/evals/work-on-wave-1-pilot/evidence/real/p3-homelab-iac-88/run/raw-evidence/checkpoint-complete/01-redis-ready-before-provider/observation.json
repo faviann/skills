@@ -1,0 +1,20 @@
+{
+  "attempt_name": "01-redis-ready-before-provider",
+  "closed_watch_tree": false,
+  "docker_server_version": "29.7.2",
+  "evidence_directory": "/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/checkpoint-complete/01-redis-ready-before-provider",
+  "images": {
+    "redis": "sha256:d75bda00b778ad5e03a639ec36e00f6665a5d7e0f35a6250be5b103fb2117275",
+    "traefik": "sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d",
+    "traefik-docker-socket-proxy": "sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459"
+  },
+  "local_route_status": 200,
+  "redis_route_statuses": {
+    "bazarr.test": 200,
+    "immich.test": 200,
+    "jellyfin.test": 200
+  },
+  "scenario": "redis-ready-before-provider",
+  "traefik_container_after": "8423e47884f7178a08705fd1548fe6013813c65955018c6e5e0d9582cfa2420f",
+  "traefik_container_before": "8423e47884f7178a08705fd1548fe6013813c65955018c6e5e0d9582cfa2420f"
+}

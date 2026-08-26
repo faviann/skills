@@ -1,0 +1,35 @@
+{
+  "attempt_name": "03-redis-recreated-during-start-2",
+  "closed_watch_tree": false,
+  "docker_server_version": "29.7.2",
+  "evidence_directory": "/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/remediation-4-committed/attempts/03-redis-recreated-during-start-2",
+  "images": {
+    "redis": "sha256:d75bda00b778ad5e03a639ec36e00f6665a5d7e0f35a6250be5b103fb2117275",
+    "traefik": "sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d",
+    "traefik-docker-socket-proxy": "sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459"
+  },
+  "local_route_status": 200,
+  "redis_container_after": "16d6b64648f8df20ba063a24a129afb3d60d858913b957505e463d529291ddb6",
+  "redis_container_before": "aa52e193ca6de4b68cdfbb785a3ce540eb2a55210949b6a7e5590cf115e61e7c",
+  "redis_healthcheck_command": [
+    "redis-cli",
+    "ping"
+  ],
+  "redis_route_statuses": {
+    "bazarr.local.faviann.com": 200,
+    "immich.local.faviann.com": 200,
+    "jellyfin.local.faviann.com": 200
+  },
+  "redis_routes_before_input": null,
+  "route_timeout_seconds": 30,
+  "scenario": "redis-recreated-during-provider-start",
+  "tracked_config_mounts": {
+    "/etc/traefik/conf.d": "/home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/conf.d",
+    "/etc/traefik/traefik.yaml": "/home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml"
+  },
+  "tracked_dynamic_config_loaded": true,
+  "tracked_static_config_loaded": true,
+  "traefik_container_after": "0b3f1dd028b8f2e7269602b8eb8464abd31e1bf9ba55568e3ce92bbeb140f1e2",
+  "traefik_container_before": "0b3f1dd028b8f2e7269602b8eb8464abd31e1bf9ba55568e3ce92bbeb140f1e2",
+  "traefik_redis_dependency_condition": "service_healthy"
+}

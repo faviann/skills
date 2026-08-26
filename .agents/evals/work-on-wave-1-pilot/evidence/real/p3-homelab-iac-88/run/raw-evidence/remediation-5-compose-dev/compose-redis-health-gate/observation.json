@@ -1,0 +1,21 @@
+{
+  "docker_server_version": "29.7.2",
+  "evidence_directory": "/home/faviann/repos/homelab-iac/.bare/work-on-evidence/20260826T103730Z-9b799001/remediation-5-compose-dev/compose-redis-health-gate",
+  "image_ids": {
+    "redis": "sha256:d75bda00b778ad5e03a639ec36e00f6665a5d7e0f35a6250be5b103fb2117275",
+    "traefik": "sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d"
+  },
+  "override_preserved_health_contract": true,
+  "redis_health_status": "healthy",
+  "redis_healthcheck": [
+    "CMD",
+    "redis-cli",
+    "ping"
+  ],
+  "redis_healthy_at": "2026-08-26T12:23:19.18794579Z",
+  "tracked_compose_sha256": "863925a64700a945b89ecdda86eee6bdcaf2605a82a3d531bd88778753b42f9a",
+  "traefik_redis_dependency_condition": "service_healthy",
+  "traefik_running": true,
+  "traefik_started_at": "2026-08-26T12:23:19.605893774Z",
+  "used_tracked_compose": true
+}

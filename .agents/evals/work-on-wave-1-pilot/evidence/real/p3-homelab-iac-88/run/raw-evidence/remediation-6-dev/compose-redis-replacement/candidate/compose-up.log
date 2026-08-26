@@ -1,0 +1,3 @@
+ Container portal-traefik-candidate-e3fc358934b4-redis-1 Starting 
+ Container portal-traefik-candidate-e3fc358934b4-redis-1 Error response from daemon: cannot start a paused container, try unpause instead 
+Error response from daemon: cannot start a paused container, try unpause instead

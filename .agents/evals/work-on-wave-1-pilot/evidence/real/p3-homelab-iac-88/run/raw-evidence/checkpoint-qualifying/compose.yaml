@@ -1,0 +1,93 @@
+name: traefik3
+services:
+  redis:
+    container_name: redis
+    environment:
+      ALLOW_EMPTY_PASSWORD: 'yes'
+    image: bitnami/redis:latest
+    networks:
+      shared: null
+    ports:
+      - mode: ingress
+        target: 6379
+        published: "6379"
+        protocol: tcp
+    restart: unless-stopped
+  traefik:
+    container_name: traefik
+    depends_on:
+      traefik-docker-socket-proxy:
+        condition: service_started
+        required: true
+    environment:
+      CF_DNS_API_TOKEN: <REPLACE_ME>
+      TRAEFIK_DASHBOARD_CREDENTIALS: '"<REPLACE_ME>"'
+    image: docker.io/library/traefik:v3.6
+    networks:
+      shared: null
+      traefik: null
+    ports:
+      - mode: ingress
+        target: 80
+        published: "80"
+        protocol: tcp
+      - mode: ingress
+        target: 443
+        published: "443"
+        protocol: tcp
+      - mode: ingress
+        target: 443
+        published: "443"
+        protocol: udp
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - type: bind
+        source: /home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml
+        target: /etc/traefik/traefik.yaml
+        read_only: true
+        bind: {}
+      - type: bind
+        source: /home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/config/conf.d
+        target: /etc/traefik/conf.d
+        read_only: true
+        bind: {}
+      - type: bind
+        source: /home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/data/certs
+        target: /var/traefik/certs
+        bind: {}
+      - type: bind
+        source: /home/faviann/repos/homelab-iac/claude-2/stacks/portal/traefik3/appdata/traefik3/logs
+        target: /logs
+        bind: {}
+  traefik-docker-socket-proxy:
+    container_name: traefik-docker-socket-proxy
+    environment:
+      CONTAINERS: "1"
+      EVENTS: "1"
+      INFO: "1"
+      NETWORKS: "1"
+      POST: "0"
+    image: tecnativa/docker-socket-proxy
+    networks:
+      traefik: null
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - type: bind
+        source: /run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+        bind: {}
+networks:
+  shared:
+    name: shared
+    external: true
+  traefik:
+    name: traefik3_traefik
+    driver: bridge
+x-managed-files:
+  - mode: "0600"
+    path: ./appdata/traefik3/data/certs/cloudflare-acme.json

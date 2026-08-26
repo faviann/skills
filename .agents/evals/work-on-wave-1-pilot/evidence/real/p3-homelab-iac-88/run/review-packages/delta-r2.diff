@@ -1,0 +1,198 @@
+diff --git a/tests/regression/portal_traefik_recreation.py b/tests/regression/portal_traefik_recreation.py
+index ec09444..6b094bc 100644
+--- a/tests/regression/portal_traefik_recreation.py
++++ b/tests/regression/portal_traefik_recreation.py
+@@ -13,6 +13,7 @@ import time
+ import urllib.error
+ import urllib.request
+ import uuid
++from collections.abc import Mapping
+ from pathlib import Path
+ 
+ import yaml
+@@ -41,13 +42,27 @@ class AttemptObservation:
+     redis_route_statuses: dict[str, int | None]
+     traefik_container_before: str
+     traefik_container_after: str
++    redis_container_before: str | None
++    redis_container_after: str | None
++    redis_routes_before_input: dict[str, int | None] | None
+     closed_watch_tree: bool
++    historical_incident: bool
+     evidence_directory: str
+     route_timeout_seconds: float
+     docker_server_version: str
+     images: dict[str, str]
+ 
+ 
++def historical_incident_observed(
++    *,
++    closed_watch_tree: bool,
++    redis_route_statuses: Mapping[str, int | None],
++) -> bool:
++    return closed_watch_tree and any(
++        status != 200 for status in redis_route_statuses.values()
++    )
++
++
+ def _docker(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+     result = subprocess.run(
+         ["docker", *args],
+@@ -181,6 +196,9 @@ def run_attempt(
+     socket_proxy = f"portal-traefik-socket-{token}"
+     traefik = f"portal-traefik-edge-{token}"
+     evidence = _evidence_directory(attempt_name)
++    redis_container_before: str | None = None
++    redis_container_after: str | None = None
++    redis_routes_before_input: dict[str, int | None] | None = None
+ 
+     _docker("network", "create", network)
+     try:
+@@ -253,8 +271,14 @@ def run_attempt(
+         container_before = _docker("inspect", "--format", "{{.Id}}", traefik).stdout.strip()
+ 
+         if scenario is AttemptScenario.REDIS_RECREATED:
++            redis_container_before = _docker(
++                "inspect", "--format", "{{.Id}}", redis
++            ).stdout.strip()
+             _docker("rm", "-f", redis)
+             _start_redis(redis, network, images["redis"])
++            redis_container_after = _docker(
++                "inspect", "--format", "{{.Id}}", redis
++            ).stdout.strip()
+             _seed_remote_routes(redis)
+ 
+         port = int(
+@@ -272,6 +296,11 @@ def run_attempt(
+         )["portal-entry.test"]
+ 
+         if scenario is AttemptScenario.INPUT_AFTER_START:
++            redis_routes_before_input = _observe_statuses(
++                port,
++                REMOTE_HOSTS,
++                route_timeout_seconds,
++            )
+             _seed_remote_routes(redis)
+ 
+         redis_statuses = _observe_statuses(
+@@ -281,6 +310,7 @@ def run_attempt(
+         )
+         container_after = _docker("inspect", "--format", "{{.Id}}", traefik).stdout.strip()
+         logs = _container_logs(traefik)
++        closed_watch_tree = "watchtree channel is closed" in logs.lower()
+         (evidence / "traefik.log").write_text(logs, encoding="utf-8")
+ 
+         observation = AttemptObservation(
+@@ -290,7 +320,14 @@ def run_attempt(
+             redis_route_statuses=redis_statuses,
+             traefik_container_before=container_before,
+             traefik_container_after=container_after,
+-            closed_watch_tree="watchtree channel is closed" in logs.lower(),
++            redis_container_before=redis_container_before,
++            redis_container_after=redis_container_after,
++            redis_routes_before_input=redis_routes_before_input,
++            closed_watch_tree=closed_watch_tree,
++            historical_incident=historical_incident_observed(
++                closed_watch_tree=closed_watch_tree,
++                redis_route_statuses=redis_statuses,
++            ),
+             evidence_directory=str(evidence),
+             route_timeout_seconds=route_timeout_seconds,
+             docker_server_version=_docker(
+diff --git a/tests/regression/test_portal_traefik_redis_recreation.py b/tests/regression/test_portal_traefik_redis_recreation.py
+index 01286d4..68be717 100644
+--- a/tests/regression/test_portal_traefik_redis_recreation.py
++++ b/tests/regression/test_portal_traefik_redis_recreation.py
+@@ -5,17 +5,58 @@ from __future__ import annotations
+ 
+ import json
+ import shutil
++import subprocess
+ from pathlib import Path
+ 
+ import pytest
+ 
+-from portal_traefik_recreation import AttemptScenario, run_attempt
++from portal_traefik_recreation import (
++    AttemptScenario,
++    historical_incident_observed,
++    run_attempt,
++)
+ 
+ 
+ @pytest.fixture(scope="module", autouse=True)
+ def require_docker() -> None:
+-    if shutil.which("docker") is None:
+-        pytest.skip("Docker is required for the Portal Traefik recreation")
++    docker = shutil.which("docker")
++    if docker is None:
++        pytest.fail(
++            "Docker executable is required for the Portal Traefik recreation",
++            pytrace=False,
++        )
++    result = subprocess.run(
++        [docker, "version", "--format", "{{.Server.Version}}"],
++        check=False,
++        capture_output=True,
++        text=True,
++        timeout=15,
++    )
++    if result.returncode != 0:
++        detail = result.stderr.strip() or result.stdout.strip()
++        pytest.fail(
++            f"Docker daemon is required for the Portal Traefik recreation: {detail}",
++            pytrace=False,
++        )
++
++
++@pytest.mark.parametrize(
++    ("closed_watch_tree", "route_statuses", "expected"),
++    [
++        (True, {"bazarr.test": 404, "jellyfin.test": 200}, True),
++        (True, {"bazarr.test": 200, "jellyfin.test": 200}, False),
++        (False, {"bazarr.test": 404, "jellyfin.test": 200}, False),
++    ],
++)
++def test_historical_incident_requires_diagnostic_and_missing_route(
++    closed_watch_tree: bool,
++    route_statuses: dict[str, int],
++    expected: bool,
++) -> None:
++    assert historical_incident_observed(
++        closed_watch_tree=closed_watch_tree,
++        redis_route_statuses=route_statuses,
++    ) is expected
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -36,6 +77,7 @@ def test_pinned_redis_routes_survive_portal_recreation(
+     observation = run_attempt(attempt_name, scenario)
+ 
+     assert observation.local_route_status == 200
++    assert not observation.historical_incident
+     assert observation.redis_route_statuses == {
+         "bazarr.test": 200,
+         "jellyfin.test": 200,
+@@ -43,6 +85,16 @@ def test_pinned_redis_routes_survive_portal_recreation(
+     }
+     assert observation.traefik_container_before == observation.traefik_container_after
+     assert observation.docker_server_version
++    if scenario is AttemptScenario.REDIS_RECREATED:
++        assert observation.redis_container_before
++        assert observation.redis_container_after
++        assert observation.redis_container_before != observation.redis_container_after
++    if scenario is AttemptScenario.INPUT_AFTER_START:
++        assert observation.redis_routes_before_input == {
++            "bazarr.test": 404,
++            "jellyfin.test": 404,
++            "immich.test": 404,
++        }
+ 
+ 
+ def test_missing_redis_routes_still_write_complete_observation(
+@@ -79,4 +131,5 @@ def test_missing_redis_routes_still_write_complete_observation(
+     }
+     assert all(recorded["images"].values())
+     assert isinstance(recorded["closed_watch_tree"], bool)
++    assert recorded["historical_incident"] is False
+     assert (evidence / "traefik.log").read_text(encoding="utf-8")

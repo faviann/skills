@@ -1,0 +1,30 @@
+redis: 2026/08/26 12:54:20 pool.go:724: redis: connection pool: failed to dial after 5 attempts: dial tcp: lookup redis on 127.0.0.11:53: no such host
+redis: 2026/08/26 12:54:21 pool.go:724: redis: connection pool: failed to dial after 5 attempts: dial tcp 172.18.0.2:6379: connect: connection refused
+2026-08-26T12:54:04Z WRN Traefik can reject some encoded characters in the request path. When your backend is not fully compliant with [RFC 3986](https://datatracker.ietf.org/doc/html/rfc3986), it is recommended to set these options to `false` to avoid split-view situation. Refer to the documentation for more details: https://doc.traefik.io/traefik/v3.6/migrate/v3/#encoded-characters-configuration-default-values
+2026-08-26T12:54:04Z INF Traefik version 3.6.25 built on 2026-07-31T12:26:16Z version=3.6.25
+2026-08-26T12:54:04Z INF 
+Version check is disabled.
+You will not be notified if a new version is available.
+More details: https://doc.traefik.io/traefik/contributing/data-collection/
+
+2026-08-26T12:54:04Z INF 
+Stats collection is disabled.
+Help us improve Traefik by turning this feature on :)
+More details on: https://doc.traefik.io/traefik/contributing/data-collection/
+
+2026-08-26T12:54:19Z INF Starting provider aggregator *aggregator.ProviderAggregator
+2026-08-26T12:54:19Z INF Starting provider *file.Provider
+2026-08-26T12:54:19Z INF Starting provider *traefik.Provider
+2026-08-26T12:54:19Z INF Starting provider *redis.Provider
+2026-08-26T12:54:19Z INF Starting provider *acme.ChallengeTLSALPN
+2026-08-26T12:54:19Z INF Starting provider *docker.Provider
+2026-08-26T12:54:19Z INF Starting provider *acme.Provider
+2026-08-26T12:54:19Z INF Testing certificate renew... acmeCA=https://acme-v02.api.letsencrypt.org/directory providerName=cloudflare.acme
+2026-08-26T12:54:20Z ERR Provider error, retrying in 314.520599ms error="the WatchTree channel is closed" providerName=redis
+2026-08-26T12:54:20Z WRN maxResponseBodySize is not configured, allowing unlimited response body size which can lead to DoS attacks and memory exhaustion. Please set an appropriate limit. entryPointName=websecure middlewareName=forwardAuth-authentik@file middlewareType=ForwardAuth routerName=ai@file
+2026-08-26T12:54:20Z WRN maxResponseBodySize is not configured, allowing unlimited response body size which can lead to DoS attacks and memory exhaustion. Please set an appropriate limit. entryPointName=websecure middlewareName=forwardAuth-authentik@file middlewareType=ForwardAuth routerName=collie@file
+2026-08-26T12:54:21Z WRN maxResponseBodySize is not configured, allowing unlimited response body size which can lead to DoS attacks and memory exhaustion. Please set an appropriate limit. entryPointName=websecure middlewareName=forwardAuth-authentik@file middlewareType=ForwardAuth routerName=collie@file
+2026-08-26T12:54:21Z WRN maxResponseBodySize is not configured, allowing unlimited response body size which can lead to DoS attacks and memory exhaustion. Please set an appropriate limit. entryPointName=websecure middlewareName=forwardAuth-authentik@file middlewareType=ForwardAuth routerName=ai@file
+2026-08-26T12:54:21Z WRN maxResponseBodySize is not configured, allowing unlimited response body size which can lead to DoS attacks and memory exhaustion. Please set an appropriate limit. entryPointName=websecure middlewareName=forwardAuth-authentik@file middlewareType=ForwardAuth routerName=collie@file
+2026-08-26T12:54:21Z WRN maxResponseBodySize is not configured, allowing unlimited response body size which can lead to DoS attacks and memory exhaustion. Please set an appropriate limit. entryPointName=websecure middlewareName=forwardAuth-authentik@file middlewareType=ForwardAuth routerName=ai@file
+2026-08-26T12:54:21Z ERR Provider error, retrying in 440.837906ms error="the WatchTree channel is closed" providerName=redis
