@@ -1,0 +1,136 @@
+diff --git a/tests/regression/run_lxc_lifecycle_regressions.py b/tests/regression/run_lxc_lifecycle_regressions.py
+index 3c4b268..07466f9 100644
+--- a/tests/regression/run_lxc_lifecycle_regressions.py
++++ b/tests/regression/run_lxc_lifecycle_regressions.py
+@@ -188,23 +188,9 @@ def main(
+ 
+     with tempfile.TemporaryDirectory(prefix="lxc-lifecycle-fixtures-") as temp_dir:
+         temp_root = Path(temp_dir)
+-        # ansible.cfg names a vault password file that must exist, but the
+-        # fixtures decrypt nothing: a placeholder keeps the run credential-free.
+-        vault_placeholder = temp_root / "vault-pass"
+-        vault_placeholder.write_text(
+-            "unused-fixture-placeholder\n", encoding="utf-8"
+-        )
+-        fixture_inventory = temp_root / "inventory.ini"
+-        fixture_inventory.write_text(
+-            "[local]\nlocalhost ansible_connection=local\n", encoding="utf-8"
+-        )
+-        previous_vault_password_file = os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE")
+-        previous_inventory = os.environ.get("ANSIBLE_INVENTORY")
+         previous_cache_plugin_connection = os.environ.get(
+             "ANSIBLE_CACHE_PLUGIN_CONNECTION"
+         )
+-        os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = str(vault_placeholder)
+-        os.environ["ANSIBLE_INVENTORY"] = str(fixture_inventory)
+         # Fixtures add fake hosts (e.g. s1_portal) that fact caching would
+         # otherwise persist for up to the production TTL. Redirect the jsonfile
+         # cache per run instead of forcing memory so within-run caching
+@@ -219,14 +205,6 @@ def main(
+                 launcher=launcher,
+             )
+         finally:
+-            if previous_vault_password_file is None:
+-                os.environ.pop("ANSIBLE_VAULT_PASSWORD_FILE", None)
+-            else:
+-                os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = previous_vault_password_file
+-            if previous_inventory is None:
+-                os.environ.pop("ANSIBLE_INVENTORY", None)
+-            else:
+-                os.environ["ANSIBLE_INVENTORY"] = previous_inventory
+             if previous_cache_plugin_connection is None:
+                 os.environ.pop("ANSIBLE_CACHE_PLUGIN_CONNECTION", None)
+             else:
+diff --git a/tests/regression/test_validate_command.py b/tests/regression/test_validate_command.py
+index 636fbb3..eaf546e 100644
+--- a/tests/regression/test_validate_command.py
++++ b/tests/regression/test_validate_command.py
+@@ -44,7 +44,9 @@ if capture.exists():
+ commands.append({
+     "argv": sys.argv[1:],
+     "cache_connection": os.environ.get("ANSIBLE_CACHE_PLUGIN_CONNECTION"),
++    "inventory": os.environ.get("ANSIBLE_INVENTORY"),
+     "lifecycle_marker": os.environ.get("HOMELAB_IAC_LIFECYCLE_WRAPPER"),
++    "vault_password_file": os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE"),
+ })
+ capture.write_text(json.dumps(commands), encoding="utf-8")
+ if len(commands) == int(os.environ.get("VALIDATE_TEST_FAIL_AT", "0")):
+@@ -105,7 +107,11 @@ def test_validate_runs_the_complete_non_live_suite_from_the_repository_root(
+         {
+             "argv": command,
+             "cache_connection": commands[0]["cache_connection"],
++            "inventory": str(REPO_ROOT / "tests/fixtures/ansible/inventory.yml"),
+             "lifecycle_marker": None,
++            "vault_password_file": str(
++                REPO_ROOT / "tests/fixtures/ansible/vault-pass"
++            ),
+         }
+         for command in VALIDATION_COMMANDS
+     ]
+diff --git a/tests/unit/test_lxc_lifecycle_regression_runner.py b/tests/unit/test_lxc_lifecycle_regression_runner.py
+index d9dec62..b1df2ff 100644
+--- a/tests/unit/test_lxc_lifecycle_regression_runner.py
++++ b/tests/unit/test_lxc_lifecycle_regression_runner.py
+@@ -186,25 +186,22 @@ def test_full_path_without_fail_fast_aggregates_all_launcher_results(
+     )
+ 
+ 
+-def test_targeted_launchers_use_and_restore_isolated_fixture_environment(
++def test_targeted_launchers_inherit_validation_fixture_environment(
+     monkeypatch: pytest.MonkeyPatch,
+ ) -> None:
+     runner = load_runner()
+-    original_vault = "/credential-that-must-not-be-read"
+-    original_inventory = "/inventory-that-must-not-be-read"
++    fixture_root = RUNNER_PATH.parents[1] / "fixtures" / "ansible"
++    original_vault = str(fixture_root / "vault-pass")
++    original_inventory = str(fixture_root / "inventory.yml")
+     original_cache_connection = "/operator-cache-that-must-not-be-written"
+     monkeypatch.setenv("ANSIBLE_VAULT_PASSWORD_FILE", original_vault)
+     monkeypatch.setenv("ANSIBLE_INVENTORY", original_inventory)
+     monkeypatch.setenv("ANSIBLE_CACHE_PLUGIN_CONNECTION", original_cache_connection)
+ 
+     def launch(script: str) -> tuple[str, int, float, str]:
+-        vault_path = Path(os.environ["ANSIBLE_VAULT_PASSWORD_FILE"])
+-        inventory_path = Path(os.environ["ANSIBLE_INVENTORY"])
+         cache_connection = os.environ["ANSIBLE_CACHE_PLUGIN_CONNECTION"]
+-        assert vault_path.read_text(encoding="utf-8") == "unused-fixture-placeholder\n"
+-        assert inventory_path.read_text(encoding="utf-8") == (
+-            "[local]\nlocalhost ansible_connection=local\n"
+-        )
++        assert os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] == original_vault
++        assert os.environ["ANSIBLE_INVENTORY"] == original_inventory
+         assert cache_connection != original_cache_connection
+         return passing_result(script)
+ 
+@@ -218,11 +215,12 @@ def test_targeted_launchers_use_and_restore_isolated_fixture_environment(
+ 
+ def test_targeted_runner_smoke_uses_isolated_ansible_environment() -> None:
+     target = "test_lxc_spec_invalid_guest_bootstrap.py"
++    fixture_root = RUNNER_PATH.parents[1] / "fixtures" / "ansible"
+     environment = os.environ.copy()
+     environment.update(
+         {
+-            "ANSIBLE_VAULT_PASSWORD_FILE": "/credential-that-must-not-be-read",
+-            "ANSIBLE_INVENTORY": "/inventory-that-must-not-be-read",
++            "ANSIBLE_VAULT_PASSWORD_FILE": str(fixture_root / "vault-pass"),
++            "ANSIBLE_INVENTORY": str(fixture_root / "inventory.yml"),
+             "LANG": "en_US.UTF-8",
+             "LC_ALL": "en_US.UTF-8",
+         }
+diff --git a/validate.sh b/validate.sh
+index a635edd..0c141f9 100755
+--- a/validate.sh
++++ b/validate.sh
+@@ -6,6 +6,11 @@ set -euo pipefail
+ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ cd "$PROJECT_ROOT"
+ 
++# Keep every validation child on repository-owned, credential-free Ansible
++# inputs. Individual regression launchers inherit the same boundary.
++export ANSIBLE_INVENTORY="$PROJECT_ROOT/tests/fixtures/ansible/inventory.yml"
++export ANSIBLE_VAULT_PASSWORD_FILE="$PROJECT_ROOT/tests/fixtures/ansible/vault-pass"
++
+ # Isolate non-live validation from the operator's live fact cache (issue #89).
+ VALIDATION_CACHE_DIR="$(mktemp -d)"
+ trap 'rm -rf -- "$VALIDATION_CACHE_DIR"' EXIT

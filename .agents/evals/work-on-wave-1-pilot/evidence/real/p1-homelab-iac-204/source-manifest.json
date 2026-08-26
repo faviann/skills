@@ -1,0 +1,28 @@
+{
+  "base_commit": "93f69bc8044172900952ceda6bf5552bfc7968a3",
+  "telemetry_started_head": "cb7cf7e66ab738fce6ddd0a863993fb897d83e88",
+  "candidate_reconstruction_sha256": "a3a93dfa0939b5a64dd05924bc99c732513d379690201f5aa36e7151580ffb21",
+  "files": {
+    "harness/primary.jsonl": "b8a9ced7305634f76465a8d74e6d35d805af5019310986d5f535ac46e080d277",
+    "harness/implementation.jsonl": "8a6814c338fb410d428872438a07896ac4c3c0267e49f7269cd747ba7b3b1f15",
+    "harness/readiness.jsonl": "2c5e189549f1fe06c8b56f20ccfc9f7df6309cca6d4a63762208eefd041afe0c",
+    "run/frozen-manifest.md": "6fd1a423d448de2181765b7a7aef19a717d4f0e87bd53aea4db3654d345d9b83",
+    "run/trusted-snapshot.json": "1e1722fbe01eeb9bd401d00d53a330bc6b88f56be077dd5be9a840e46e57b152",
+    "run/telemetry.jsonl": "6f507dbc7b849cde62a8a5fc7627d119912cf428ec8fb711e90ef2182c4d4479",
+    "run/registry.json": "0a60e8569ce2364a559b02a5fb02e50ed4dadd79ea9a2944b24fd4d4a1cc8078",
+    "run/adjudication.log": "3bab4ffc6429c8ee79c945cad17c17fd2a28cbc5f031c26cd04823903ad9964b",
+    "run/workflow-provenance.json": "68d4ee8b21c8dded047a50dfc9f994cd5ed627b38275c1cd553a1c882acc18a0",
+    "candidate/tracked.diff": "aaff403951f1b8d24db6e77870e067930fdbf6dcfc30524e29f37ac5be9f9840",
+    "candidate/untracked/docs/adr/0008-enforce-non-live-validation-boundary.md": "c1ce05d3d6aec9022d26009f2d9c61e61ab9fa442bb433882b1d1c0633a6f058",
+    "candidate/untracked/tests/fixtures/ansible/inventory.yml": "86f72719de20f19396966286576268b10ccc5288f410e60d8f686f684941fa49",
+    "candidate/untracked/tests/fixtures/ansible/vault-pass": "e623a7a2d25bde7e99047fdf113a36a0c1e6361a7c5ce21a0b3d0ec77caf7c52",
+    "candidate/untracked/tests/regression/ansible_test_helper.py": "193dee9a36aacbae9d486524885ee00f9b3c42385593bf0591ba73d5e81ec1a7",
+    "candidate/untracked/tests/regression/test_ansible_test_helper.py": "2728886c9ee4116fcc9a4294576a5f73441738a61b2a22db8210b768d27b8fe8"
+  },
+  "github": {
+    "issue": "https://github.com/faviann/homelab-iac/issues/204",
+    "blocking_issue": "https://github.com/faviann/homelab-iac/issues/220",
+    "native_relationship": "homelab-iac#204 is blocked by homelab-iac#220",
+    "pull_requests_for_issue_204_branch": []
+  }
+}
