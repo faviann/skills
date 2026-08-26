@@ -1,0 +1,63 @@
+{
+  "projection_version": "3.0.0",
+  "ledger_sha256": "3a7760e1ed7f0d69e984c43cda9ad92e4c6d8e8e661d8210cda7f1755d67357b",
+  "result": "DO NOT RESUME",
+  "population": {
+    "completed_runs": 2,
+    "repositories": [
+      "faviann/dotfiles",
+      "faviann/homelab-iac"
+    ],
+    "cells": [
+      "contract-dense-remediation-opportunity",
+      "ordinary-clean-expensive-validation"
+    ],
+    "missing_cells": [
+      "timing-concurrency-environment-sensitive",
+      "collection-valued-validation-surface"
+    ]
+  },
+  "controlled_scenarios": {
+    "observed": [
+      {
+        "scenario": "validation-surface-omission",
+        "passed": true
+      },
+      {
+        "scenario": "normative-remediation-semantics",
+        "passed": true
+      }
+    ],
+    "missing": [],
+    "failed": []
+  },
+  "assurance": {
+    "gate1_failures": [
+      {
+        "code": "frozen-manifest-required-instance-omitted",
+        "finding_id": "p1-readiness-resolver-boundary",
+        "contained_by_fail_closed_handback": true
+      }
+    ],
+    "gate2_conclusive_no": []
+  },
+  "mechanisms": {
+    "finite_validation_surface": "INCONCLUSIVE",
+    "validation_reuse_and_phase_ownership": "FAILED",
+    "delta_review": "SUCCESS",
+    "normative_remediation": "INCONCLUSIVE",
+    "convergence": "OBSERVATIONAL_ONLY"
+  },
+  "clean_run_commitment": "YES",
+  "unresolved": {
+    "evidence_or_provenance": false,
+    "required_natural_exposure": true
+  },
+  "validation_violations": [
+    {
+      "attempt": "p1-homelab-iac-204",
+      "code": "unresolved-owning-phase",
+      "obligation": "p1-resolver-boundary-observation"
+    }
+  ]
+}
