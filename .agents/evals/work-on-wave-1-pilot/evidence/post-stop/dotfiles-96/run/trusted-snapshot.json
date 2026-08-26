@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "repository": "faviann/dotfiles",
+  "issue": 96,
+  "captured_from": "GitHub REST issue and comments endpoints",
+  "sources": [
+    {
+      "source": "issue body",
+      "url": "https://github.com/faviann/dotfiles/issues/96",
+      "author": "faviann",
+      "author_association": "OWNER",
+      "title": "Deduplicate the managed harness list in update-agent-tools",
+      "state": "open",
+      "labels": ["ready-for-agent"],
+      "body": "## Problem\n\n`dot_local/bin/executable_update-agent-tools` names the managed npm harnesses in three independent places, with nothing asserting they agree:\n\n1. `MANAGED_NPM_ENGINE_COMPONENTS` — the `\"Component Name|package\"` array used by the engine-floor guard.\n2. The `install_npm_component \"Component Name\" \"package@latest\"` call sequence in the install phase.\n3. `check_toolchain`'s per-package `npm view <package>@latest version` calls and their matching `check_component` / `require_stable_version` lines.\n\nAdding, removing, or renaming a harness is a three-site edit. Dropping an entry from site 1 is invisible to the test suite: only the engine-floor cases touch that array, and they exercise just two of the eight packages.\n\nSites 2 and 3 predate the Bun work; site 1 was added by the branch that moved the Bun runtime onto the updater's track (#TBD — see the Bun ownership PR).\n\n## Also worth folding in\n\n`check_runtime_engines` issues a second registry round trip per package:\n\n```bash\nnpm view \"$package@latest\" engines --json\n```\n\nfor the same eight packages `check_toolchain` already queries with `npm view <package>@latest version`. A single `npm view <package>@latest version engines --json` per package would halve the daily freshness check's network work.\n\nNote this changes the command shape that a number of existing assertions in `tests/update-agent-tools-check.bash` match on (for example `^npm view @openai/codex@latest version$`), and the `wc -l query-log` counts throughout that suite. Expect real test churn — that is why it was not folded into the Bun branch.\n\n## Suggested shape\n\nMake the component/package array the single source and iterate it at the other two sites. A test asserting that every entry in the array is installed and version-checked would close the gap that lets site 1 drift silently.\n\n## Constraints\n\n- `nix flake check` is the sole closeout command (`AGENTS.md`).\n- New or renamed cases must be registered both in the suite's `test_cases` array and in `tests/contracts/suite-dispatch.bash`."
+    }
+  ],
+  "trusted_comments": [],
+  "untrusted_comments_omitted": 0,
+  "native_blocked_by": [],
+  "native_blocking": [],
+  "referenced_parent_or_spec_docs": []
+}

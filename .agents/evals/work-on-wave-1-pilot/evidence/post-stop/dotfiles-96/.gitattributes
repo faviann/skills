@@ -1,0 +1,3 @@
+harness/** binary
+run/telemetry.jsonl binary
+run/adjudication.log binary

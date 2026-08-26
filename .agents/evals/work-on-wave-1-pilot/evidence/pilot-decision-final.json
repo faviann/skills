@@ -1,0 +1,42 @@
+{
+  "kind": "pilot-decision",
+  "subject_id": "wave1-pilot-107",
+  "recorded_at": "2026-08-26T16:40:45Z",
+  "protocol_commit": "266fc77d505b774eb235d4c7c9d11be5d109f127",
+  "projection_version": "3.0.0",
+  "projection_digest": "e6f0782f02a66f025fc17013abe71e016c902f4c25c5dde0860261db87a2307b",
+  "workflow_provenance": "work-on:a9ebf0ae3a77 workflow:1b3cf6d962ac tdd:aa54f63292bf review:1dc4289fabb7 (faviann/skills@4e1a24bb50bc)",
+  "result": "DO NOT RESUME",
+  "authoritative_projection": "projection-after-p1.json",
+  "authoritative_projection_sha256": "36651fee33a152f4ca14271462598d717d3a5a8df89d1b137a81c757b12d6992",
+  "adverse_route": {
+    "fired_after": "p1-homelab-iac-204",
+    "gate1_code": "frozen-manifest-required-instance-omitted",
+    "mechanism": "validation-reuse-and-phase-ownership",
+    "mechanism_result": "FAILED",
+    "non_averaging": true
+  },
+  "maintainer_confirmation": {
+    "confirmed": true,
+    "instruction": "The authoritative pilot result after P1 is already DO NOT RESUME.",
+    "date": "2026-08-26"
+  },
+  "population_stop": {
+    "remaining_selected_runs": {
+      "P2": "stopped",
+      "P3": "stopped",
+      "P4": "stopped"
+    },
+    "reason": "The preregistered adverse routing had already fired; later observations cannot cure, dilute, average away, or reopen it."
+  },
+  "post_stop_observations": [
+    {
+      "subject": "faviann/dotfiles#96",
+      "pull_request": "https://github.com/faviann/dotfiles/pull/104",
+      "classification": "corroborating repair evidence only",
+      "selected_attempt": false,
+      "pilot_cell_credit": false,
+      "source_locator": "post-stop/dotfiles-96/OBSERVATION.md"
+    }
+  ]
+}

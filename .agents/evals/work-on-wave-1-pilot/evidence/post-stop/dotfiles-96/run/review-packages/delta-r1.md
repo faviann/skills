@@ -1,0 +1,20 @@
+# Delta review assignment — issue 96, remediation gate 1
+
+Independently review the exact candidate delta against the full accepted review contract.
+
+- Previous Reviewed-anchor identity: repository `faviann/dotfiles`, commit and tree `a0214ff242aa88dfc8179e8fd4a404e3e65459b6^{tree}`.
+- Exact current Candidate identity: repository `faviann/dotfiles`, clean committed candidate `2850ebc9efc103ef35978c08f440f94ee878c553^{tree}`.
+- Mechanically exact delta: `git diff --no-ext-diff --no-textconv a0214ff242aa88dfc8179e8fd4a404e3e65459b6^{tree} 2850ebc9efc103ef35978c08f440f94ee878c553^{tree}`. Reproduce directly from these endpoints; do not resolve live `HEAD`.
+- Full trusted contract: read the complete exact frozen snapshot at `/home/faviann/repos/dotfiles/.bare/work-on-manifest/20260826T151118Z-34bc65dd.trusted-snapshot.json` and complete exact bound manifest at `/home/faviann/repos/dotfiles/.bare/work-on-manifest/20260826T151118Z-34bc65dd.md`. Do not refetch or rediscover.
+- Binding Standards input: read the complete exact frozen Standards input at `/home/faviann/repos/dotfiles/.bare/work-on-review/20260826T151118Z-34bc65dd.standards.md`. Do not rediscover live standards.
+- Validation-surface manifest: the complete bound manifest named above; it bounds direct evidence, not review scope.
+- Qualifying raw validation evidence for the exact clean candidate, cwd `/home/faviann/repos/dotfiles/main`:
+  1. Telemetry `issue96-stable-consumer-red`: the exact inventory case failed under a temporary worktree mutation bypassing the managed stability consumer; that mutation was fully restored before candidate creation. Use only as mutation-sensitivity evidence, never as candidate pass evidence.
+  2. Telemetry `issue96-stable-consumer-green`: exact command `bash scripts/run-tests --case test_managed_npm_inventory_drives_install_and_version_checks`, exit 0, raw stdout `PASS: update-agent-tools --check`, no stderr, with production restored.
+  3. Telemetry `update-agent-tools-suite`, exact command `bash scripts/run-tests --suite update-agent-tools-check.bash`, exit 0, raw stdout `PASS: update-agent-tools --check`, no stderr, exact clean candidate `2850ebc9efc103ef35978c08f440f94ee878c553` before and after.
+  4. Telemetry `shellcheck`, exact command `nix run .#shellcheck`, exit 0, raw stdout names and builds `/nix/store/qmk9hxps2cvyqvaig7pdd55myp87lcbs-dotfiles-shellcheck.drv`, no stderr, exact same clean candidate before and after.
+- Validation-evidence policy: judge exact Candidate, command, cwd, environment/toolchain, provenance, status, and raw output. Reuse adequate exact-candidate evidence; prior conclusions are not evidence. Execute independently only for a concrete assurance question that existing evidence/static inspection cannot settle, using the narrowest check and recording why. Do not repeat materially costly settled validation. Do not run `nix flake check` or `git diff --check` before Closeout.
+- Telemetry for a necessary validation: `/home/faviann/repos/skills/skills/personal/work-on/scripts/run-telemetry.sh exec --run '20260826T151118Z-34bc65dd@25f9182e37ee4b6fab5fce74b68d653a' --command-id <safe-axis-id> --phase remediation --round 1 -- <command>`.
+- Review scope: begin at the exact correction delta. Inspect unchanged context only for a recorded concrete contract question, changed-mechanism question, reproduced finding/seed, or the same-mechanism neighborhood investigation below. Do not routinely reconstruct or reread the full cumulative candidate.
+- Same-mechanism neighborhood: after reproducing a defect, name its mechanism and criterion; trace only the same boundary's branches/call sites/input shapes, diagnostics from the same untrusted source, or states under the same invariant. Count siblings only at distinct locations/states, state the stop boundary, and stop before another criterion, subsystem, external boundary, or speculative defense. Report reproduced instances only.
+- Blindness: expose no remediation rationale, prior finding/report, directive, adjudication, disposition, ledger, or convenience summary. The frozen inputs, exact delta, and raw evidence above are the entire package.
