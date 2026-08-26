@@ -1,0 +1,47 @@
+{
+  "projection_version": "3.0.0",
+  "ledger_sha256": "dda2d9c232937a9d382e6a4d5bb4f7201852afe004951245f01282a2af2604a5",
+  "result": "INCONCLUSIVE",
+  "population": {
+    "completed_runs": 0,
+    "repositories": [],
+    "cells": [],
+    "missing_cells": [
+      "ordinary-clean-expensive-validation",
+      "contract-dense-remediation-opportunity",
+      "timing-concurrency-environment-sensitive",
+      "collection-valued-validation-surface"
+    ]
+  },
+  "controlled_scenarios": {
+    "observed": [
+      {
+        "scenario": "validation-surface-omission",
+        "passed": true
+      },
+      {
+        "scenario": "normative-remediation-semantics",
+        "passed": true
+      }
+    ],
+    "missing": [],
+    "failed": []
+  },
+  "assurance": {
+    "gate1_failures": [],
+    "gate2_conclusive_no": []
+  },
+  "mechanisms": {
+    "finite_validation_surface": "INCONCLUSIVE",
+    "validation_reuse_and_phase_ownership": "INCONCLUSIVE",
+    "delta_review": "INCONCLUSIVE",
+    "normative_remediation": "INCONCLUSIVE",
+    "convergence": "OBSERVATIONAL_ONLY"
+  },
+  "clean_run_commitment": "MISSING",
+  "unresolved": {
+    "evidence_or_provenance": false,
+    "required_natural_exposure": false
+  },
+  "validation_violations": []
+}

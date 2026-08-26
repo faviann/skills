@@ -1,0 +1,26 @@
+{
+  "repository": "faviann/work-on-wave1-controlled-scenarios",
+  "base_commit": "dea1579185416cfa0bd4198bb2b904bae67d96ba",
+  "scenario_issue": {
+    "number": 2,
+    "state": "OPEN",
+    "url": "https://github.com/faviann/work-on-wave1-controlled-scenarios/issues/2"
+  },
+  "blocking_issue": {
+    "number": 5,
+    "state": "OPEN",
+    "url": "https://github.com/faviann/work-on-wave1-controlled-scenarios/issues/5",
+    "relationship": "issue #2 is blocked by issue #5"
+  },
+  "pull_request": {
+    "number": 6,
+    "state": "OPEN",
+    "outcome": "Progresses",
+    "url": "https://github.com/faviann/work-on-wave1-controlled-scenarios/pull/6",
+    "head": "scenario/normative-remediation-semantics",
+    "commits": [
+      "836989632875cc3020a579b2415601f6f4a29208",
+      "4146125269f0ea351912ab8606825a809b48628e"
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+commit 0b303952842955b2f87cf0fa1042065a2770a131
+Author:     Fav <faviann@gmail.com>
+AuthorDate: Wed Aug 26 00:10:53 2026 +0000
+Commit:     Fav <faviann@gmail.com>
+CommitDate: Wed Aug 26 00:10:53 2026 +0000
+
+    feat: report trusted member collection (#1)
+
+ bin/report-members      |  7 +++++++
+ test.sh                 |  1 +
+ tests/report-members.sh | 11 +++++++++++
+ 3 files changed, 19 insertions(+)

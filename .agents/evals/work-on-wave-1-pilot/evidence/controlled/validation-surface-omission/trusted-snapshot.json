@@ -1,0 +1,17 @@
+{
+  "repository": "faviann/work-on-wave1-controlled-scenarios",
+  "issue": 1,
+  "sources": [
+    {
+      "kind": "issue_body",
+      "url": "https://github.com/faviann/work-on-wave1-controlled-scenarios/issues/1",
+      "author": "faviann",
+      "author_association": "OWNER",
+      "title": "Controlled scenario: frozen Validation-surface omission",
+      "body": "## Controlled scenario\n\nAdd `bin/report-members`, a command that reports the repository's complete\ntrusted member collection in the exact order `alpha`, `beta`, `gamma`.\n\n## Acceptance criteria\n\n- [ ] The finite Validation surface is exactly the three concrete files\n  `fixtures/members/alpha.txt`, `fixtures/members/beta.txt`, and\n  `fixtures/members/gamma.txt`.\n- [ ] `bin/report-members` emits one `name=value` line for each of those three\n  members in `alpha`, `beta`, `gamma` order.\n- [ ] Each listed member has direct black-box evidence that would fail if its\n  line were absent or incorrect.\n- [ ] `bash test.sh` passes.\n\n## Scope\n\nThis is a disposable controlled-policy fixture. Do not add or remove collection\nmembers, infer members dynamically, or change `POLICY.md`.\n"
+    }
+  ],
+  "trusted_comments": [],
+  "untrusted_comments_omitted": 0,
+  "referenced_contract_documents": []
+}

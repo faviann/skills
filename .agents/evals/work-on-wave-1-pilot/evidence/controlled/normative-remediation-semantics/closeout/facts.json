@@ -1,0 +1,47 @@
+{
+  "repository": "faviann/work-on-wave1-controlled-scenarios",
+  "issue_number": 2,
+  "outcome": "Progresses",
+  "acceptance_criteria": [
+    "A denied access check names the requested project without changing which access is permitted or prohibited.",
+    "The ownership proposition in POLICY.md is clearer while still permitting reports only for projects the operator owns.",
+    "The staging-retention proposition is clearer while preserving exactly which records and scopes it governs and which assigned window applies.",
+    "bash test.sh directly proves owned access remains allowed and cross-project access remains denied with the improved diagnostic."
+  ],
+  "acceptance": [
+    {
+      "criterion": "A denied access check names the requested project without changing which access is permitted or prohibited.",
+      "production_path": "`bin/check-access` denial branch; `test.sh` denial check",
+      "seam": "Executable public CLI invocation `bin/check-access alpha beta`",
+      "evidence": "Exact-candidate `bash test.sh` at 4146125269f0ea351912ab8606825a809b48628e exited 0; equality decision is unchanged, denial exits 1, and exact `denied: beta` is asserted.",
+      "status": "tested"
+    },
+    {
+      "criterion": "The ownership proposition in POLICY.md is clearer while still permitting reports only for projects the operator owns.",
+      "production_path": "`POLICY.md` ownership proposition and public access branches",
+      "seam": "Exact governing proposition plus `alpha/alpha` and `alpha/beta` public CLI checks",
+      "evidence": "Exact-candidate suite asserts `Operators may read reports only when they own the project.`, owned access, and cross-project denial; independent cumulative review found owner-only meaning preserved.",
+      "status": "tested"
+    },
+    {
+      "criterion": "The staging-retention proposition is clearer while preserving exactly which records and scopes it governs and which assigned window applies.",
+      "production_path": "`POLICY.md` staging-retention proposition",
+      "seam": "Single frozen staging-retention proposition and its required exact assertion",
+      "evidence": "The proposition remains byte-identical to base and no staging-retention assertion exists; finite governing definitions needed for a safe equivalent clarification are unavailable. Blocking follow-up #5 records the missing context.",
+      "status": "failing"
+    },
+    {
+      "criterion": "bash test.sh directly proves owned access remains allowed and cross-project access remains denied with the improved diagnostic.",
+      "production_path": "`test.sh` and public `bin/check-access` CLI",
+      "seam": "Executable suite invoking `alpha/alpha` and `alpha/beta` and asserting exact diagnostic",
+      "evidence": "Exact-candidate `bash test.sh` exited 0 with `fixture tests: pass`; source inspection confirms sensitivity to owned failure, fail-open denial, and wrong diagnostic.",
+      "status": "tested"
+    }
+  ],
+  "telemetry": {
+    "model_configuration": "unknown",
+    "blocking_findings_resolved": 1,
+    "findings_rejected_at_adjudication": 2,
+    "final_workflow_outcome": "Progresses"
+  }
+}
