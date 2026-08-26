@@ -58,5 +58,6 @@ outcome requirement. The required natural exposure remains missing and adverse
 classification remains intact; neither fact retrospectively changes the clean
 designation rule.
 
-The commitment value is intentionally pending until the maintainer answers the
-frozen question. No aggregate projection has been executed for this ingestion.
+The maintainer recorded `YES`: “it was really exceptional.” The append-only
+ledger correction `attempt-p1-homelab-iac-204-v2` supersedes the pending entry
+without changing any P1 observation or classification.
