@@ -79,10 +79,11 @@ if [[ -n "$previous_source" ]]; then
   [[ -f "$previous_source" ]] || fail "previous body file does not exist: $previous_source"
   previous="$fixture/previous.md"; sed 's/\r$//' "$previous_source" >"$previous"
   previous_entries=()
-  mapfile -t previous_entries < <(awk '
-    $0 == "## Closure gate" { after_gate = 1; next }
-    after_gate && ! selected && $0 == "## Work-on" { selected = "current"; next }
-    after_gate && ! selected && $0 == "## Workflow telemetry" { selected = "legacy"; next }
+  last_gate_line="$(awk '$0 == "## Closure gate" { line = NR } END { print line + 0 }' "$previous")"
+  mapfile -t previous_entries < <(awk -v gate_line="$last_gate_line" '
+    ! gate_line || NR <= gate_line { next }
+    ! selected && $0 == "## Work-on" { selected = "current"; next }
+    ! selected && $0 == "## Workflow telemetry" { selected = "legacy"; next }
     selected && /^## / { exit }
     selected == "current" && /^[[:space:]]*$/ { next }
     selected == "current" { print }

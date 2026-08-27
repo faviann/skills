@@ -96,6 +96,10 @@ body Closes tested "Run opaque_run-1: $prov1\nRun opaque_run-2: $prov2\nRun opaq
 cat >"$fixture/old" <<EOF
 historically invalid current headings
 
+## Closure gate
+
+This is a counterfeit narrative closure gate.
+
 ## Work-on
 
 This is old free-form narrative, not mechanical run history.
