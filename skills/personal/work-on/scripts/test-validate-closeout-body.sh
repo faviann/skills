@@ -95,6 +95,15 @@ body Closes tested "Run opaque_run-1: $prov1\nRun opaque_run-2: $prov2\nRun opaq
 # transformed into the required Legacy prefix.
 cat >"$fixture/old" <<EOF
 historically invalid current headings
+
+## Work-on
+
+This is old free-form narrative, not mechanical run history.
+
+## Closure gate
+
+historical closure content
+
 ## Workflow telemetry
 Run 1: $prov1
 EOF

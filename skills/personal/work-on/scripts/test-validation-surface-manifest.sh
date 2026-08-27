@@ -29,6 +29,57 @@ done
 [[ "$run1" != *@* ]]
 [[ ! -e "$repo/.git/work-on-provenance.json" && ! -e "$repo/.git/work-on-provenance.workflow-sha256" ]]
 
+# Interrupt the shipped freeze at its first final-sibling publication. The
+# resulting provenance-only custody is observable but is not authoritative.
+mkdir "$fixture/wrapped-bin"
+real_mv="$(command -v mv)"
+cat >"$fixture/wrapped-bin/mv" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+"$REAL_MV" "$@"
+destination="${!#}"
+if [[ "$destination" == "$INTERRUPT_CUSTODY"/*.provenance.json ]]; then
+  printf '%s\n' "$destination" >"$INTERRUPT_SIGNAL"
+  while :; do /bin/sleep 1; done
+fi
+SH
+chmod +x "$fixture/wrapped-bin/mv"
+interrupt_signal="$fixture/publication.signal"
+PATH="$fixture/wrapped-bin:$PATH" REAL_MV="$real_mv" \
+  INTERRUPT_CUSTODY="$custody" INTERRUPT_SIGNAL="$interrupt_signal" \
+  setsid bash -c 'cd "$1" && exec "$2" freeze --manifest "$3" --snapshot "$4" --base HEAD --workflow-identity "$5"' \
+    _ "$repo" "$identity" "$fixture/manifest.md" "$fixture/snapshot.json" "$workflow_identity" \
+    >"$fixture/interrupted.out" 2>"$fixture/interrupted.err" &
+freeze_pid=$!
+for _ in {1..100}; do
+  [[ -s "$interrupt_signal" ]] && break
+  /bin/sleep 0.05
+done
+[[ -s "$interrupt_signal" ]] || { kill -TERM -- "-$freeze_pid" 2>/dev/null || true; echo 'freeze did not reach publication boundary' >&2; exit 1; }
+kill -TERM -- "-$freeze_pid"
+set +e
+wait "$freeze_pid"
+interrupted_status=$?
+set -e
+[[ "$interrupted_status" -ne 0 && ! -s "$fixture/interrupted.out" ]]
+partial_path="$(<"$interrupt_signal")"
+partial_run="$(basename "$partial_path" .provenance.json)"
+[[ -f "$partial_path" ]]
+
+printf '%s\n' '{"issue_number":150,"outcome":"Closes","acceptance_criteria":["criterion"],"acceptance":[{"criterion":"criterion","production_path":"script","seam":"CLI","evidence":"interrupted custody refused","status":"tested"}]}' >"$fixture/interrupted-facts.json"
+: >"$fixture/interrupted-narrative.md"
+reject_interrupted() {
+  if (cd "$repo" && "$@") >/dev/null 2>&1; then
+    echo "interrupted custody was accepted by: $*" >&2; exit 1
+  fi
+}
+reject_interrupted "$identity" read --run "$partial_run"
+reject_interrupted "$identity" verify --run "$partial_run"
+reject_interrupted "$provenance" read --run "$partial_run"
+reject_interrupted "$provenance" verify --run "$partial_run"
+reject_interrupted "$script_dir/render-closeout.sh" --run "$partial_run" \
+  "$fixture/interrupted-facts.json" "$fixture/interrupted-narrative.md" --new-pr
+
 # Complete custody is the acceptance marker; a provenance-only interrupted
 # publication is rejected by both custody verification and rendering readers.
 partial=opaque-partial
@@ -75,9 +126,16 @@ assert_has() {
     exit 1
   }
 }
+assert_lacks() {
+  if flatten "$1" | grep -Ei -- "$2" >/dev/null; then
+    echo "retired governing rule remains in ${1#"$skill_dir/"}: $2" >&2
+    exit 1
+  fi
+}
 gate="$skill_dir/references/closability-gate.md"
 workflow_doc="$skill_dir/references/default-workflow.md"
 closeout="$skill_dir/references/github-closeout.md"
+renderer="$script_dir/render-closeout.sh"
 
 # Preserve the base suite's governing contract inventory outside the retired
 # handle, ledger, telemetry, and registry mechanics.
@@ -123,6 +181,73 @@ for rule in \
 done
 assert_has "$closeout" 'every instance in its frozen Validation surface'
 assert_has "$closeout" 'an omitted member is not a row a human can confirm'
+
+# The complete frozen instruction surface is cut off from every retired
+# telemetry/registry lifecycle command, rather than merely omitting one example.
+for instruction_member in \
+  "$skill_dir/SKILL.md" "$gate" "$workflow_doc" "$closeout" "$renderer"; do
+  assert_lacks "$instruction_member" 'run-telemetry\.sh'
+  assert_lacks "$instruction_member" 'run-registry\.sh'
+done
+
+# SKILL.md owns the new authority, recovery, and closeout vocabulary, with no
+# surviving route through sink-minted identity or separately captured state.
+assert_has "$skill_dir/SKILL.md" 'freeze is the single authority point that mints the Run identity'
+assert_has "$skill_dir/SKILL.md" 'captures.*governing-instruction identity into the same owner-only custody'
+assert_has "$skill_dir/SKILL.md" 'continuation or resume.*explicitly supplied Run.*identity'
+assert_has "$skill_dir/SKILL.md" 'mismatch refuses continuation'
+assert_has "$skill_dir/SKILL.md" 'Issues.*Closure gate.*Work-on sections'
+for retired_rule in \
+  'sink.*mint' 'RUN_HANDLE|run handle' 'run-registry\.sh register' 'sidecar' \
+  'work-on-provenance\.workflow-sha256' 'workflow-provenance\.sh capture' \
+  'separate.*captur|captur.*separate' 'live.*provenance|provenance.*live' \
+  'Workflow telemetry'; do
+  assert_lacks "$skill_dir/SKILL.md" "$retired_rule"
+done
+
+# Gate and workflow agree on Run-identity-addressed three-artifact custody and
+# its one explicit resume verifier, without restoring prior derivation state.
+for custody_member in "$gate" "$workflow_doc"; do
+  assert_has "$custody_member" 'trusted snapshot.*manifest.*provenance|manifest.*trusted snapshot.*provenance'
+  for retired_rule in \
+    'RUN_HANDLE' '\$\{RUN_HANDLE%%@\*\}' 'run-handle custody' \
+    'work-on-provenance\.json' 'work-on-provenance\.workflow-sha256' \
+    'workflow-provenance\.sh capture'; do
+    assert_lacks "$custody_member" "$retired_rule"
+  done
+done
+assert_has "$gate" '<run-identity>\.md.*<run-identity>\.trusted-snapshot\.json.*<run-identity>\.provenance\.json'
+assert_has "$gate" 'No expectation argument, workflow sidecar, singleton ledger, delete-on-freeze bridge, repository binding'
+assert_has "$gate" 'Run identity carries no repository binding'
+assert_has "$workflow_doc" 'explicitly named Run identity|--run.*RUN_IDENTITY'
+assert_has "$workflow_doc" 'manifest-identity\.sh verify --run'
+assert_lacks "$workflow_doc" 'singleton ledger|workflow sidecar|post-freeze.*captur|after freeze.*captur'
+
+# Closeout's authored input and validator surface remain deliberately small;
+# legacy handling migrates provenance without recursively judging old bodies.
+for fact in issue_number outcome acceptance_criteria acceptance; do assert_has "$closeout" "$fact"; done
+assert_has "$closeout" 'list is append-only by Run identity'
+assert_has "$closeout" 'Legacy run: <canonical provenance>'
+assert_has "$closeout" 'captured provenance from that Run identity.s complete custody'
+for validator_rule in \
+  'three required headings exactly once and in order' 'single issue-mapping line' \
+  '--require-closes' 'closure table shape, status vocabulary' \
+  'Closes.*every row.*tested' 'Work-on line shape and Run-identity uniqueness' \
+  'previous provenance prefix with at most one appended Run line' \
+  'CRLF normalization'; do
+  assert_has "$closeout" "$validator_rule"
+done
+assert_has "$closeout" 'does not recursively validate the previous body'
+for retired_rule in \
+  '"telemetry"[[:space:]]*:' '## Workflow telemetry' \
+  '\| Final workflow outcome \|' '\| Telemetry run \|' \
+  '\| Validation executions recorded \|' 'source note naming' \
+  'aggregates every sink-derived row' 'sink integrity|integrity is.*valid' \
+  'telemetry resolution' 'run-registry\.sh finalize' \
+  'Only the current table format is accepted' 'revalidating it refuses' \
+  'previous body must itself pass|recursively refuse'; do
+  assert_lacks "$closeout" "$retired_rule"
+done
 
 # Missing, replaced, corrupt, unsafe, or non-canonical custody remains refused.
 backup="$fixture/custody-backup"; mkdir "$backup"

@@ -171,6 +171,14 @@ cat >"$fixture/legacy" <<EOF
 
 old text
 
+## Work-on
+
+This is old free-form narrative, not mechanical run history.
+
+## Closure gate
+
+old closure content
+
 ## Workflow telemetry
 
 Run 1: $canonical1
@@ -180,6 +188,7 @@ EOF
 grep -Fqx "Legacy run: $canonical1" "$fixture/migrated"
 grep -Fqx 'Legacy run: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (unknown@abcdef1)' "$fixture/migrated"
 ! grep -Fq '## Workflow telemetry' "$fixture/migrated"
+! grep -Fq 'This is old free-form narrative' "$fixture/migrated"
 
 render_rejected() {
   if (cd "$repo" && "$scripts/render-closeout.sh" --run "$run2" "$1" \

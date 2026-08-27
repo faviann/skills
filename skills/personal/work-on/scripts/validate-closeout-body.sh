@@ -79,11 +79,17 @@ if [[ -n "$previous_source" ]]; then
   [[ -f "$previous_source" ]] || fail "previous body file does not exist: $previous_source"
   previous="$fixture/previous.md"; sed 's/\r$//' "$previous_source" >"$previous"
   previous_entries=()
-  if grep -Fqx '## Work-on' "$previous"; then
-    mapfile -t previous_entries < <(section '## Work-on' "$previous" | sed '/^[[:space:]]*$/d')
-  else
-    mapfile -t previous_entries < <(awk '$0=="## Workflow telemetry"{inside=1;next} inside&&/^## /{exit} inside&&/^Run [1-9][0-9]*: /{sub(/^Run [1-9][0-9]*: /, "Legacy run: "); print}' "$previous")
-  fi
+  mapfile -t previous_entries < <(awk '
+    $0 == "## Closure gate" { after_gate = 1; next }
+    after_gate && ! selected && $0 == "## Work-on" { selected = "current"; next }
+    after_gate && ! selected && $0 == "## Workflow telemetry" { selected = "legacy"; next }
+    selected && /^## / { exit }
+    selected == "current" && /^[[:space:]]*$/ { next }
+    selected == "current" { print }
+    selected == "legacy" && /^Run [1-9][0-9]*: / {
+      sub(/^Run [1-9][0-9]*: /, "Legacy run: "); print
+    }
+  ' "$previous")
   [[ "${#entries[@]}" -ge "${#previous_entries[@]}" ]] || fail 'Work-on history dropped previous entries'
   for ((index=0; index<${#previous_entries[@]}; index++)); do
     [[ "${entries[$index]}" == "${previous_entries[$index]}" ]] || fail "Work-on history rewrote previous entry $((index + 1))"

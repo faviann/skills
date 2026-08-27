@@ -49,11 +49,17 @@ current_line="Run $run_identity: $provenance"
 entries=()
 if [[ "$mode" == previous ]]; then
   normalized_previous="$fixture/previous.md"; sed 's/\r$//' "$previous_body" >"$normalized_previous"
-  if grep -Fqx '## Work-on' "$normalized_previous"; then
-    mapfile -t entries < <(awk '$0=="## Work-on"{inside=1;next} inside&&/^## /{exit} inside&&/^[[:space:]]*$/{next} inside{print}' "$normalized_previous")
-  else
-    mapfile -t entries < <(awk '$0=="## Workflow telemetry"{inside=1;next} inside&&/^## /{exit} inside&&/^Run [1-9][0-9]*: /{sub(/^Run [1-9][0-9]*: /,"Legacy run: "); print}' "$normalized_previous")
-  fi
+  mapfile -t entries < <(awk '
+    $0 == "## Closure gate" { after_gate = 1; next }
+    after_gate && ! selected && $0 == "## Work-on" { selected = "current"; next }
+    after_gate && ! selected && $0 == "## Workflow telemetry" { selected = "legacy"; next }
+    selected && /^## / { exit }
+    selected == "current" && /^[[:space:]]*$/ { next }
+    selected == "current" { print }
+    selected == "legacy" && /^Run [1-9][0-9]*: / {
+      sub(/^Run [1-9][0-9]*: /, "Legacy run: "); print
+    }
+  ' "$normalized_previous")
 fi
 found=false
 for entry in "${entries[@]}"; do
