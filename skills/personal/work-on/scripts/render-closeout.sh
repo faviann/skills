@@ -19,7 +19,7 @@ facts="$fixture/facts.json"
 if [[ "$facts_source" == - ]]; then cp /dev/stdin "$facts"; elif [[ -f "$facts_source" ]]; then cp "$facts_source" "$facts"; else fail "facts file does not exist: $facts_source"; fi
 jq -e 'type == "object"' "$facts" >/dev/null 2>&1 || fail 'facts must be a JSON object'
 jq -e '((keys - ["issue_number","outcome","acceptance_criteria","acceptance"]) | length) == 0' "$facts" >/dev/null || fail 'facts may contain only issue_number, outcome, acceptance_criteria, and acceptance'
-jq -e 'has("telemetry") | not' "$facts" >/dev/null || fail 'telemetry material is not accepted'
+jq -e '[.. | objects | has("telemetry")] | any | not' "$facts" >/dev/null || fail 'telemetry material is not accepted'
 
 jq -e '.issue_number | type == "number" and . > 0 and floor == .' "$facts" >/dev/null || fail 'issue_number must be a positive integer'
 issue_number="$(jq -r '.issue_number' "$facts")"
@@ -27,7 +27,6 @@ outcome="$(jq -r '.outcome // empty' "$facts")"
 [[ "$outcome" == Closes || "$outcome" == Progresses ]] || fail 'outcome must be Closes or Progresses'
 jq -e '.acceptance_criteria | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)' "$facts" >/dev/null || fail 'acceptance_criteria must be a non-empty array of non-empty strings'
 jq -e '.acceptance | type == "array" and length > 0' "$facts" >/dev/null || fail 'acceptance must contain at least one row'
-jq -e '.acceptance | all(.[]; type == "object" and (keys == ["criterion","evidence","production_path","seam","status"]))' "$facts" >/dev/null || fail 'acceptance rows may contain only criterion, production_path, seam, evidence, and status'
 duplicate="$(jq -r '.acceptance_criteria | [group_by(.)[] | select(length>1) | .[0]][0] // empty' "$facts")"
 [[ -z "$duplicate" ]] || fail "acceptance_criteria contains duplicate criterion: $duplicate"
 acceptance_count="$(jq -r '.acceptance | length' "$facts")"

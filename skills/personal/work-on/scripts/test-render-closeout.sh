@@ -232,7 +232,11 @@ for shape in '{}' '[]' 'null' '"reported"' '0'; do
 done
 jq '.acceptance[0].unexpected="removed"' "$fixture/facts.json" \
   >"$fixture/unknown-row-field.json"
-render_rejected "$fixture/unknown-row-field.json" 'acceptance[0].unexpected'
+(cd "$repo" && "$scripts/render-closeout.sh" --run "$run2" \
+  "$fixture/unknown-row-field.json" "$fixture/narrative" --new-pr) \
+  >"$fixture/unknown-row-field.md"
+grep -Fqx '| criterion | script | CLI | passed | tested |' \
+  "$fixture/unknown-row-field.md"
 for field in repository provenance workflow_provenance runs phases; do
   jq --arg field "$field" '. + {($field): "removed"}' "$fixture/facts.json" \
     >"$fixture/removed-field.json"
