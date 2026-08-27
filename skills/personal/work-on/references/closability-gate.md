@@ -89,6 +89,14 @@ workflow does not deterministically resolve an obligation's phase, condition 4
 fails and the unresolved phase aborts Closability. Infer no implementation,
 earliest, next-gate, or Closeout default.
 
+Where an enumerated owed obligation is a command the manifest records as the
+discharging action for a criterion's Validation surface, what is owed is that
+surface's enumerated members' required observations. The command is the default
+vehicle that produces them and carries the obligation's owning phase.
+Re-executing that exact command is not itself the discharge condition; the
+obligation is discharged when every owed member of that surface has qualifying
+evidence at the owning phase.
+
 ## Conditions
 
 The gate passes only when all six hold.

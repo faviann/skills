@@ -139,6 +139,17 @@ has "$GATE" 'merely turns out to touch never' \
   'implementation-only artifacts never join a surface'
 echo "ok - an authorized-to-be-created member is admitted only when the contract determines it"
 
+## A recorded command is the vehicle for the surface's owed observations
+has "$GATE" 'command.*records as the discharging action.*surface.*required observations' \
+  'a recorded discharging command owes the surface observations'
+has "$GATE" 'default vehicle.*carries the obligation.s owning phase' \
+  'the recorded vehicle carries the obligation owning phase'
+has "$GATE" 'Re-executing that exact command is not itself the discharge condition' \
+  'the recorded command is not itself the discharge condition'
+has "$GATE" 'discharged when every owed member.*qualifying evidence.*owning phase' \
+  'every owed surface member needs qualifying evidence at the owning phase'
+echo "ok - a recorded command carries phase as the default vehicle, not the discharge condition"
+
 ## Freeze timing and identity
 has "$GATE" 'freezes when the complete gate passes' \
   'the manifest freezes on a complete gate pass'

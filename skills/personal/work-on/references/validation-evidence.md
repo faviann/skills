@@ -44,6 +44,35 @@ When qualifying evidence for the exact current Candidate identity and Validation
 identity settles the concrete assurance question, another execution is not
 required. When it does not, execute the narrowest check that settles it.
 
+A command is a vehicle, not the unit of sufficiency. Where one execution
+produces several independently meaningful observations and the repository
+documents narrower invocations that directly produce them, apply the identity
+and sufficiency rules at the observation level. Execute the narrowest documented
+invocation set covering the owed members whose qualifying evidence is absent or
+invalid for the exact current Candidate identity. **Documented** means an
+invocation the repository's own authority already exposes through its
+agent-facing docs, its test-runner interface, or the manifest's own named
+validation action. Never infer, discover, or construct an addressing scheme.
+
+Narrow reuse is permitted only when the agent can positively establish, from
+the candidate change, the validation definitions, and available repository
+authority, which owed observations remain qualifying and which are invalidated.
+When that cannot be established with sufficient confidence, the agent does not
+guess or invent a dependency mapping: execute the broader adequate check. This
+optimization may fail conservative and waste execution; it must never fail
+aggressive and leave required evidence unexecuted.
+
+The broad vehicle is assurance-required when the repository exposes no adequate
+narrower addressing; narrower invocations cannot cover every owed unqualified
+member; the agent cannot establish which owed members remain qualifying versus
+invalidated; or a distinct assurance question, or a documented hard rule that
+requires that exact command, genuinely requires the broad execution. Assurance
+sufficiency alone determines what execution is required; cost is considered
+only afterward. Never characterize the broad vehicle as the narrowest adequate
+check because the narrow set is not materially cheaper. Where broad and narrow
+execution are assurance-equivalent and repetition is not materially costly, the
+existing discretionary-cheap-check policy applies.
+
 Independent execution is required when existing evidence cannot settle a
 concrete assurance question involving timing, concurrency, nondeterminism,
 environment- or host-sensitive behavior, uncertain identity or provenance,
