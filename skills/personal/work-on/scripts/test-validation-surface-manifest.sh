@@ -70,7 +70,7 @@ flat_workflow="$(flatten "$skill_dir/references/default-workflow.md")"
 [[ "$flat_workflow" == *'positively name the Run identity'* && "$flat_workflow" == *'mismatch refuses continuation outright'* ]]
 
 assert_has() {
-  flatten "$1" | grep -Eqi -- "$2" || {
+  flatten "$1" | grep -Ei -- "$2" >/dev/null || {
     echo "missing governing rule in ${1#"$skill_dir/"}: $2" >&2
     exit 1
   }
