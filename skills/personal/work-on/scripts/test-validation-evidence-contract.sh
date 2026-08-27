@@ -165,6 +165,35 @@ requires_contract "$POLICY" \
 echo 'ok - sufficiency alone requires execution and stage transitions never do'
 
 requires_contract "$POLICY" \
+  'commands are vehicles while independently meaningful observations are the sufficiency unit' \
+  'command is a vehicle, not the unit of sufficiency' \
+  'one execution produces several independently meaningful observations.*identity and sufficiency rules.*observation level' \
+  'narrowest documented invocation set.*owed members.*qualifying evidence is absent or invalid.*exact current Candidate identity' \
+  'Documented.*repository.s own authority.*agent-facing docs.*test-runner interface.*manifest.s.*named validation action' \
+  'never infer.*discover.*construct.*addressing scheme'
+echo 'ok - sufficiency is evaluated at independently meaningful observations'
+
+requires_contract "$POLICY" \
+  'observation-level reuse fails conservative unless the affected set is positively established' \
+  'Narrow reuse is permitted only when.*positively establish.*candidate change.*validation definitions.*repository authority.*remain qualifying.*invalidated' \
+  'cannot be established with sufficient confidence.*does not guess.*invent.*dependency mapping.*broader adequate check' \
+  'fail conservative.*waste execution.*never fail aggressive.*required evidence.*unexecuted'
+echo 'ok - narrow reuse requires a positively established affected set'
+
+requires_contract "$POLICY" \
+  'the broad vehicle is assurance-required in all four fallback conditions' \
+  'broad vehicle is assurance-required.*no adequate narrower addressing' \
+  'narrower invocations cannot cover every owed unqualified member' \
+  'cannot establish which owed members remain qualifying.*invalidated' \
+  'distinct assurance question.*documented hard rule.*exact command.*requires.*broad execution' \
+  'assurance sufficiency alone determines what execution is required.*cost is considered only afterward'
+forbids_contract "$POLICY" \
+  'cost cannot relabel the broad vehicle as the narrowest adequate check' \
+  'broad vehicle is (the )?narrowest adequate check[^.]{0,160}(cost|cheap|cheaper|materially)' \
+  '(cost|cheap|cheaper|materially)[^.]{0,160}makes the broad vehicle (the )?narrowest adequate check'
+echo 'ok - assurance requires the broad fallback before cost is considered'
+
+requires_contract "$POLICY" \
   'the cost guardrail is an efficiency directive reachable only after sufficiency' \
   'Only after sufficiency is established.*do not repeat materially costly deterministic validation already covered by qualifying evidence that settles the current assurance question' \
   'Materially costly means repeating the validation would meaningfully add workflow latency or consume a scarce resource' \
@@ -187,6 +216,9 @@ cost_predicates=(
   '(duration|telemetry)[^.]{0,60}(decides whether|determines whether|classifies)'
   '(recorded|prior|measured) (duration|runtime|run time)[^.]{0,60}(decid|determin|classif)'
   '(over|under|exceeds|exceeding|more than|less than|longer than) (a|an|one|[0-9]+) (minute|minutes|second|seconds|ms|millisecond)'
+  'use (a |the )?duration threshold[^.]{0,120}(decid|select|determin)[^.]{0,80}(validation|vehicle|runs?)'
+  'consult[^.]{0,80}(timing|history)[^.]{0,80}(prior|previous|earlier) executions[^.]{0,80}(decid|select|determin)[^.]{0,80}(validation|vehicle)'
+  '(build|consult) (a |the )?cost database[^.]{0,100}(decid|select|determin)[^.]{0,80}(validation|vehicle)'
 )
 
 # The surfaces that can impose, override, or contradict re-execution. Telemetry
@@ -248,6 +280,44 @@ done
 if (( counterfactual_caught == 0 )); then
   fail 'the forbidden-predicate patterns catch a telemetry-driven skip rule'
 fi
+
+# The positive prohibition must not mask a later competing rule that makes
+# duration, prior-run history, or a cost database select the validation vehicle.
+duration_threshold_rule="$fixture_dir/rejected-duration-threshold-rule.md"
+cat >"$duration_threshold_rule" <<'REJECTED'
+Never consult or build a duration threshold, timing history, or cost database.
+Use a duration threshold to select whether the suite vehicle or targeted
+validation runs.
+REJECTED
+timing_history_rule="$fixture_dir/rejected-timing-history-rule.md"
+cat >"$timing_history_rule" <<'REJECTED'
+Never consult or build a duration threshold, timing history, or cost database.
+Consult the timing history of prior executions to select the validation vehicle.
+REJECTED
+cost_database_rule="$fixture_dir/rejected-cost-database-rule.md"
+cat >"$cost_database_rule" <<'REJECTED'
+Never consult or build a duration threshold, timing history, or cost database.
+Build a cost database to select the validation vehicle.
+REJECTED
+
+selection_counterfactuals=(
+  "$duration_threshold_rule:duration-threshold selection"
+  "$timing_history_rule:prior-execution timing selection"
+  "$cost_database_rule:cost-database selection"
+)
+for entry in "${selection_counterfactuals[@]}"; do
+  fixture="${entry%%:*}"
+  description="${entry#*:}"
+  fixture_caught=0
+  for pattern in "${cost_predicates[@]}"; do
+    if grep -Eqi -- "$pattern" "$(flatten "$fixture")"; then
+      fixture_caught=1
+    fi
+  done
+  if (( fixture_caught == 0 )); then
+    fail "the forbidden-predicate patterns catch $description rules"
+  fi
+done
 
 # The guardrail is reachable only after sufficiency, and clause order is the
 # whole mitigation for reading it as licence to skip a required execution. A

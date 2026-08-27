@@ -68,7 +68,7 @@ _Avoid_: pass assertion, validation summary
 
 **Validation surface**:
 The complete finite set of concrete artifact, mode, host, or public-boundary instances whose behavior an acceptance criterion requires direct evidence about for its **Issue** to close. It names evidence targets, not the criterion's potentially unbounded input or state space, the validation seams or actions used to observe them, or every file an implementation may touch.
-_Avoid_: acceptance surface
+_Avoid_: acceptance surface, suite obligation, discharging command
 
 **Validation-surface manifest**:
 The run-local materialization of every acceptance criterion's **Validation surface**, frozen when the **Closability gate** passes after the trusted snapshot and selected workflow are read. Its recoverable identity binds the exact trusted snapshot and pre-implementation base; the selected workflow remains an invalidation input identified by **Workflow provenance**, and the manifest remains contract state for evidence rather than a limit on implementation or review scope.
