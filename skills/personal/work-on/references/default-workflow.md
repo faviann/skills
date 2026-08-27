@@ -28,31 +28,30 @@ discover.
 ## Validation-surface manifest custody
 
 The manifest frozen by `references/closability-gate.md` is this run's complete
-direct-evidence obligation. At the start of every continuation or resume, run
-this skill's `scripts/workflow-provenance.sh verify` from the target repository
-before any manifest reuse, whether before or after delegation. Reuse is
-available only when it succeeds: because manifest freeze removes the previous
-ledger, success proves provenance was captured after this manifest froze and
-that the selected workflow has not changed. If provenance was not captured
-after this manifest froze because the interruption preceded capture, or
-verification reports drift, the manifest cannot be reused.
+direct-evidence obligation. At the start of every continuation or resume,
+positively name the Run identity whose custody is intended for reuse. Ambiguity
+fails closed. From the target repository run
+`scripts/manifest-identity.sh verify --run "$RUN_IDENTITY"` before reuse,
+whether before or after delegation. It accepts only complete custody whose
+current governing-instruction identity exactly matches the captured one. A
+mismatch refuses continuation outright; it is never classified as authorized
+or unrelated and `/work-on` does not repair it.
 
-Whether before or after delegation, recover the retained trusted-snapshot and
-manifest files for this run from the gate's custody location. Do not refetch
-current trusted GitHub comments or recreate either file from conversational
-memory. From the target repository, run this skill's identity helper before
-reuse; the path below is relative to the skill root:
+Whether before or after delegation, recover the retained trusted snapshot,
+manifest, and provenance for the explicitly named Run identity from the gate's
+custody location. Do not refetch current trusted GitHub comments or recreate
+any custody artifact from conversational memory. The verifier prints the base
+SHA for the resumed workflow:
 
 ```bash
 pre_implementation_base="$(scripts/manifest-identity.sh verify \
-  --manifest "$manifest_file" \
-  --snapshot "$trusted_snapshot_file")"
+  --run "$RUN_IDENTITY")"
 ```
 
-A successful verification proves that the retained frozen snapshot matches the
-manifest's snapshot digest, the recorded full base SHA still names a commit,
-both files remain owner-only run-local state, and the snapshot/base/body binding
-is intact; it prints that base SHA for the resumed workflow. A newly arrived
+A successful verification proves that the retained snapshot and provenance
+match the manifest's binding, the recorded full base SHA still names a commit,
+all three files remain owner-only run-local state, and the current instruction
+identity matches the captured one. A newly arrived
 trusted comment does not join this frozen snapshot or invalidate it merely by
 existing. Only an explicit trusted-maintainer contract change takes the
 invalidation path below. Only after verification read the same snapshot and
@@ -60,11 +59,10 @@ manifest back, supply them verbatim to the implementation delegate and to the
 readiness, Standards, Spec, and closure contexts, and keep them available for
 adjudication.
 
-Before delegation, a missing or failing Workflow provenance ledger or a missing,
-malformed, corrupt, replaced, or mismatched frozen snapshot or manifest is
-invalid frozen preflight state: discard both files and take the gate's settled
-complete trusted-snapshot/Closability/manifest recomputation path. After
-delegation, either Workflow provenance or frozen-state verification failure
+Before delegation, missing, malformed, corrupt, replaced, or mismatched custody
+is invalid frozen preflight state: take the gate's settled complete
+trusted-snapshot/Closability/freeze recomputation path. After delegation, a
+custody verification failure
 takes the fail-closed hand-back below because the run's contract is immutable;
 do not rebuild, patch, or silently reuse it.
 

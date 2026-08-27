@@ -5,15 +5,15 @@ delegated — not after code, review, and remediation have already been spent on
 a criterion that was never observable.
 
 Run this once, after the trusted snapshot and the selected workflow have been
-read, and before workflow-provenance capture, implementation delegation,
-production or test edits, implementation commits, and any pull request.
+read, and before contract freeze, implementation delegation, production or test
+edits, implementation commits, and any pull request.
 
 The gate decides only whether the issue is closable in this run. It changes no
 readiness, Standards, Spec, closure, remediation, validation, or closeout
 semantics, and adds no tracked artifact, ledger, or telemetry field of its own.
-A pass records nothing beyond the run-local Validation-surface manifest it
-freezes. An abort resolves the run's existing outcome as
-`preflight-aborted`, as the abort steps below require.
+A pass records nothing beyond the custody that contract freeze authors. An abort
+hands back as `preflight-aborted`, as the abort steps below require; no contract
+froze and there is no Run identity or lifecycle to finalize.
 
 ## The reasoning the primary produces
 
@@ -162,12 +162,12 @@ direct, available validation passes.
 
 ## Freeze and custody
 
-The manifest freezes when the complete gate passes — after the trusted snapshot
-and the selected workflow have been read, and before workflow-provenance capture
-and implementation delegation. Identify it with the trusted snapshot and the
-pre-implementation base it was materialized from. The selected workflow remains
-an invalidation input below; Workflow provenance owns its instruction-version
-identity rather than duplicating it in the manifest.
+The contract freezes when the complete gate passes — after the trusted snapshot
+and the selected workflow have been read, and before implementation delegation.
+That successful freeze is the single authority point that mints the Run identity
+and makes the complete custody visible: the Validation-surface manifest, trusted
+snapshot, and captured Workflow provenance. It identifies the manifest with the
+trusted snapshot and the pre-implementation base it was materialized from.
 
 Before applying the gate, retain the exact selected-workflow identity in the
 primary's working context; the path below is relative to the skill root:
@@ -177,9 +177,9 @@ selected_workflow_identity="$(scripts/workflow-provenance.sh identify-workflow)"
 ```
 
 This shell value is not manifest identity or another durable record. It is the
-comparison input for the post-freeze capture. Losing it before capture
-invalidates the not-yet-delegated manifest and takes complete recomputation;
-identifying the workflow again cannot authorize a manifest already derived.
+comparison input for the atomic freeze. Losing it before freeze takes complete
+recomputation; identifying the workflow again cannot authorize a contract
+already derived.
 
 Before applying the gate, retain the exact source-labelled trusted snapshot it
 will read. Preserve each trusted source's attribution and body in that one
@@ -187,75 +187,40 @@ snapshot; it is the run's contract, not a serialization a later context must
 recreate. Record the committed base before the gate as
 `pre_implementation_base="$(git rev-parse HEAD)"`.
 
-Keep that snapshot and the manifest in two untracked run-local files in the
-target repository's Git common directory:
+Materialize the snapshot and manifest in owner-only untracked scratch files.
+The successful freeze moves their exact content and the captured provenance
+into owner-only custody in the target repository's Git common directory:
 
 ```text
 $(git rev-parse --path-format=absolute --git-common-dir)/work-on-manifest/
-  <run-id>.trusted-snapshot.json
-  <run-id>.md
+  <run-identity>.md
+  <run-identity>.trusted-snapshot.json
+  <run-identity>.provenance.json
 ```
 
-using the bare run id from `$RUN_HANDLE`, before its `@`. Both survive a branch
-switch and every supported continuation or resume of the run, and never reach a
-published artifact. They are run-local semantic contract state: not telemetry,
-not Workflow provenance, not Run registry state, and never tracked repository
-artifacts. Provenance fingerprints the instructions this run read; it carries
-neither object.
-
-Create the directory and both files for their owner only — `0700` and `0600`.
-Create each in the shell first, guarded so re-running this step never truncates
-what a resume still needs:
+The Run identity carries no repository binding. Consumers treat it as an opaque
+`[A-Za-z0-9._-]{8,64}` token; the mint currently uses
+`<UTC timestamp>-<16 hex>`. Custody survives branch switches and linked-worktree
+removal, never becomes tracked state, and remains `0700`/`0600` for its owner.
+From the target repository, freeze the materialized scratch inputs; the path
+below is relative to the skill root:
 
 ```bash
-manifest_dir="$(git rev-parse --path-format=absolute --git-common-dir)/work-on-manifest"
-run_id="${RUN_HANDLE%%@*}"
-trusted_snapshot_file="$manifest_dir/$run_id.trusted-snapshot.json"
-manifest_file="$manifest_dir/$run_id.md"
-[[ -d "$manifest_dir" ]] || (umask 077 && mkdir -p "$manifest_dir")
-chmod 700 "$manifest_dir"
-[[ -e "$trusted_snapshot_file" ]] || (umask 077 && : >"$trusted_snapshot_file")
-[[ -e "$manifest_file" ]] || (umask 077 && : >"$manifest_file")
-chmod 600 "$trusted_snapshot_file"
-chmod 600 "$manifest_file"
-```
-
-The guards protect frozen state a resume still needs from a repeated creation
-step; a rebuild before delegation still overwrites both paths' contents
-outright, as invalidation requires. Create each file in the shell before writing
-it, then reapply `0600`: the umask closes the creation-to-chmod window only for
-shell-created files, while an editor may replace an inode at its default mode.
-Write the exact source-labelled snapshot before applying the gate, and write the
-materialized manifest when the complete gate passes. Then, from the target
-repository, run this skill's identity helper; the path below is relative to the
-skill root:
-
-```bash
-scripts/manifest-identity.sh freeze \
-  --manifest "$manifest_file" \
-  --snapshot "$trusted_snapshot_file" \
+RUN_IDENTITY="$(scripts/manifest-identity.sh freeze \
+  --manifest "$materialized_manifest" \
+  --snapshot "$trusted_snapshot" \
   --base "$pre_implementation_base" \
-  --workflow-identity "$selected_workflow_identity"
+  --workflow-identity "$selected_workflow_identity")"
 ```
 
-The command requires both frozen files to be owner-only, prepends the full base
-SHA, the snapshot's SHA-256 digest, and one binding digest over both identities
-plus the manifest body, and atomically replaces the manifest at `0600`.
-Immediately before replacement, it removes the
-target worktree's previous Workflow provenance ledger, so only a capture after
-this freeze can authorize reuse. It also seals the retained workflow identity
-in Workflow provenance's owner-only sidecar, not in the manifest; a later
-identity cannot be substituted for it during capture. The binding makes
-malformed identity fields, a changed manifest body, or a missing, replaced, or
-changed snapshot fail verification. Retain both files for the run's supported
-continuation/resume lifetime. A run's record of a workstation's work is not
-group- or world-readable.
-
-After the freeze, return to the procedure with the retained identity. The later
-capture in `SKILL.md` step 7 compares the current selected workflow with that
-retained identity before it writes the provenance ledger. A mismatch invalidates
-the manifest and takes complete recomputation before delegation; a later
-identity obtained from the changed workflow cannot authorize the old manifest.
+The helper verifies that the selected workflow still has the retained identity,
+captures the complete governing-instruction identity, binds all three custody
+artifacts, and prints the minted Run identity only after publication succeeds.
+It publishes the manifest last; incomplete staging or interrupted publication
+never verifies or renders as frozen custody. A failure before delegation takes
+complete recomputation. No expectation argument, workflow sidecar, singleton
+ledger, delete-on-freeze bridge, repository binding, or mutable current-run
+pointer participates.
 
 The selected workflow supplies the manifest to the implementation delegate and
 to the readiness, Standards, Spec, and closure contexts, and keeps it available
@@ -284,7 +249,7 @@ require an omitted member.
 ## Pass
 
 Keep the compact criterion-to-seam reasoning in the primary's working context,
-write the frozen manifest, capture workflow provenance, and continue the
+freeze the complete custody, retain the printed Run identity, and continue the
 selected workflow unchanged. A pass records nothing else; the run's outcome
 remains the closure gate's to resolve.
 
@@ -293,18 +258,14 @@ remains the closure gate's to resolve.
 Launch no implementation delegate, make no implementation edit, and create no
 implementation commit or pull request. Then:
 
-1. finalize the run this hand-back ends, with
-   `scripts/run-registry.sh finalize --run "$RUN_HANDLE" --outcome preflight-aborted`,
-   which resolves that outcome in the sink this run already opened, seals it,
-   and discharges the run's registered lifecycle in one step;
-2. name the exact criterion, prerequisite, command, unmaterializable validation
+1. name the exact criterion, prerequisite, command, unmaterializable validation
    surface, or contract conflict that failed;
-3. explain why direct `tested` evidence is unavailable;
-4. name the one narrow route out — return to triage; split or amend the issue;
+2. explain why direct `tested` evidence is unavailable;
+3. name the one narrow route out — return to triage; split or amend the issue;
    complete a blocking prerequisite; obtain the explicitly required
    human/manual environment; create or identify a blocking tracker issue; or
    request a trusted-maintainer contract correction; and
-5. stop.
+4. stop.
 
 Do not convert the failure into a speculative implementation plan, weaken the
 criterion to continue, or manufacture a seam.
