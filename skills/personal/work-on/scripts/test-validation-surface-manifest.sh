@@ -250,6 +250,7 @@ for instruction_member in \
   "$skill_dir/SKILL.md" "$gate" "$workflow_doc" "$closeout" "$renderer"; do
   assert_lacks "$instruction_member" 'run-telemetry\.sh'
   assert_lacks "$instruction_member" 'run-registry\.sh'
+  assert_lacks "$instruction_member" '--kind full|--kind delta|--phase gate|--phase remediation'
 done
 
 # SKILL.md owns the new authority, recovery, and closeout vocabulary, with no

@@ -205,8 +205,8 @@ Validation identity. Later-phase evidence remains visible under its owner.
 
 Apply the initial cumulative gate in `references/review-state-machine.md`.
 Standards and Spec come from `code-review`; the closure sweep comes from
-`references/github-closeout.md`. Record each atomic delegation as `--kind full
---phase gate`. The closure table remains provisional until final validation.
+`references/github-closeout.md`. The closure table remains provisional until
+final validation.
 
 ## 5. Adjudicate and remediate through delta review
 
@@ -265,9 +265,8 @@ existing workflow without launching a semantic reader or constructing a
 semantic-reader package.
 
 Apply the remediation delta loop and fresh cumulative confirmation in
-`references/review-state-machine.md`. Record each delta-axis delegation as
-`--kind delta --phase remediation` and each cumulative confirmation axis as
-`--kind full --phase gate`. Run no full regression in the remediation loop.
+`references/review-state-machine.md`. Run no full regression in the remediation
+loop.
 After a remediation commit stabilizes the Candidate and Validation identity,
 execute only invalidated members of the pre-gate or initial-gate evidence
 population; reuse every unchanged qualifying member under
