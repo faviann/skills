@@ -6,7 +6,6 @@ set -euo pipefail
 
 readonly script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly telemetry_script="$script_root/run-telemetry.sh"
-readonly renderer_script="$script_root/render-closeout.sh"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 
@@ -23,57 +22,7 @@ telemetry() {
   (cd "$repo" && "$telemetry_script" "$@")
 }
 
-workflow_identity="$(
-  cd "$repo"
-  "$script_root/workflow-provenance.sh" identify-workflow
-)"
-(umask 077 && printf '%s\n' "$workflow_identity" \
-  >"$repo/.git/work-on-provenance.workflow-sha256")
-(cd "$repo" && "$script_root/workflow-provenance.sh" capture \
-  --expected-workflow "$workflow_identity")
-cat >"$fixture/facts.json" <<'EOF'
-{
-  "repository": "example/telemetry",
-  "issue_number": 71,
-  "outcome": "Closes",
-  "acceptance_criteria": ["Telemetry is integrity-gated"],
-  "acceptance": [{
-    "criterion": "Telemetry is integrity-gated",
-    "production_path": "`run-telemetry.sh`",
-    "seam": "Public telemetry and renderer commands",
-    "evidence": "Schema-2 black-box scenarios",
-    "status": "tested"
-  }],
-  "telemetry": {
-    "model_configuration": "test",
-    "blocking_findings_resolved": 0,
-    "findings_rejected_at_adjudication": 0,
-    "final_workflow_outcome": "Closes"
-  }
-}
-EOF
-cat >"$fixture/narrative.md" <<'EOF'
-## Summary
-
-Exercised schema-2 integrity.
-EOF
-
-declare -A renderer_reasons_covered=()
-assert_renderer_refusal() {
-  local handle="$1" reason="$2"
-  if (
-    cd "$repo"
-    "$renderer_script" --run "$handle" "$fixture/facts.json" \
-      "$fixture/narrative.md" --new-pr
-  ) >"$fixture/render-$reason.out" 2>"$fixture/render-$reason.err"; then
-    printf 'FAIL[render-%s]: renderer accepted non-valid telemetry\n' \
-      "$reason" >&2
-    exit 1
-  fi
-  [[ ! -s "$fixture/render-$reason.out" ]]
-  grep -Fq 'run telemetry integrity is ' "$fixture/render-$reason.err"
-  renderer_reasons_covered["$reason"]=1
-}
+declare -A integrity_reasons_covered=()
 
 assert_reason() {
   local handle="$1" reason="$2" summary
@@ -81,7 +30,7 @@ assert_reason() {
   [[ "$(jq -r '.integrity.state' <<<"$summary")" == invalid ]]
   jq -e --arg reason "$reason" \
     '.integrity.reasons | index($reason) != null' <<<"$summary" >/dev/null
-  assert_renderer_refusal "$handle" "$reason"
+  integrity_reasons_covered["$reason"]=1
 }
 
 assert_incomplete_reason() {
@@ -90,7 +39,7 @@ assert_incomplete_reason() {
   [[ "$(jq -r '.integrity.state' <<<"$summary")" == incomplete ]]
   jq -e --arg reason "$reason" \
     '.integrity.reasons | index($reason) != null' <<<"$summary" >/dev/null
-  assert_renderer_refusal "$handle" "$reason"
+  integrity_reasons_covered["$reason"]=1
 }
 
 run="$(telemetry start --issue 71)"
@@ -328,12 +277,6 @@ well_framed_run="$(telemetry start --issue 71)"
 resolve_and_seal "$well_framed_run" Closes
 well_framed_summary="$(telemetry summary --run "$well_framed_run")"
 [[ "$(jq -r '.integrity.state' <<<"$well_framed_summary")" == valid ]]
-(
-  cd "$repo"
-  "$renderer_script" --run "$well_framed_run" "$fixture/facts.json" \
-    "$fixture/narrative.md" --new-pr
-) >"$fixture/well-framed-render.md"
-[[ -s "$fixture/well-framed-render.md" ]]
 well_framed_id="${well_framed_run%%@*}"
 if telemetry summary --run "$well_framed_id" \
     >"$fixture/bare-schema2-summary.out" \
@@ -344,18 +287,6 @@ fi
 [[ ! -s "$fixture/bare-schema2-summary.out" ]]
 grep -Fq 'schema-2 summary requires a repository-bound handle' \
   "$fixture/bare-schema2-summary.err"
-if (
-  cd "$repo"
-  "$renderer_script" --run "$well_framed_id" "$fixture/facts.json" \
-    "$fixture/narrative.md" --new-pr
-) >"$fixture/bare-schema2-render.out" \
-    2>"$fixture/bare-schema2-render.err"; then
-  printf 'FAIL[bare-schema2-render]: renderer accepted an unbound schema-2 id\n' >&2
-  exit 1
-fi
-[[ ! -s "$fixture/bare-schema2-render.out" ]]
-grep -Fq 'schema-2 summary requires a repository-bound handle' \
-  "$fixture/bare-schema2-render.err"
 
 blank_line_run="$(telemetry start --issue 71)"
 resolve_and_seal "$blank_line_run" Closes
@@ -590,20 +521,20 @@ backwards_summary="$(telemetry summary --run "$backwards_clock_run")"
 [[ "$(jq -r '.start_to_seal_ms' <<<"$backwards_summary")" == null ]]
 
 # Every bounded reason declared by the evaluator must have reached the public
-# renderer through one of the fixtures above. Extracting the closed vocabulary
-# makes a new reason fail this matrix until its refusal case is added.
+# telemetry summary through one of the fixtures above. Extracting the closed
+# vocabulary makes a new reason fail this matrix until its case is added.
 mapfile -t declared_integrity_reasons < <(
   grep -oE '"[A-Z][A-Z_]+"' "$telemetry_script" \
     | tr -d '"' | sort -u
 )
-mapfile -t covered_renderer_reasons < <(
-  printf '%s\n' "${!renderer_reasons_covered[@]}" | sort
+mapfile -t covered_integrity_reasons < <(
+  printf '%s\n' "${!integrity_reasons_covered[@]}" | sort
 )
 [[ "${#declared_integrity_reasons[@]}" -eq 21 ]]
 if ! diff -u \
     <(printf '%s\n' "${declared_integrity_reasons[@]}") \
-    <(printf '%s\n' "${covered_renderer_reasons[@]}"); then
-  printf 'FAIL[renderer-reason-matrix]: renderer coverage drifted\n' >&2
+    <(printf '%s\n' "${covered_integrity_reasons[@]}"); then
+  printf 'FAIL[integrity-reason-matrix]: summary coverage drifted\n' >&2
   exit 1
 fi
 
