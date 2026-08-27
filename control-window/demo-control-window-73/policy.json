@@ -1,0 +1,31 @@
+{
+  "arm": {
+    "id": "demo"
+  },
+  "control_id": "demo-control-window-73",
+  "hooks": {
+    "classify": "registry-lifecycle-v1",
+    "match": "never-v1"
+  },
+  "lease": {
+    "authority": "run-registry-v1",
+    "maximum_active_runs": 1,
+    "scope": "control"
+  },
+  "mode": "demo",
+  "observer_id": "control-window-publisher",
+  "population": {
+    "issues": [],
+    "repositories": []
+  },
+  "results": {
+    "base_branch": "main",
+    "branch": "demo/control-window-73",
+    "repository": "faviann/skills"
+  },
+  "schema": 1,
+  "target": {
+    "issue": 73,
+    "repository": "faviann/skills"
+  }
+}
