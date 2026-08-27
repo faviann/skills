@@ -29,8 +29,20 @@ done
 [[ "$run1" != *@* ]]
 [[ ! -e "$repo/.git/work-on-provenance.json" && ! -e "$repo/.git/work-on-provenance.workflow-sha256" ]]
 
-# Interrupt the shipped freeze at its first final-sibling publication. The
-# resulting provenance-only custody is observable but is not authoritative.
+# Renaming complete owner-only custody cannot mint a second Run identity.
+renamed_run=opaque-renamed-150
+for suffix in .md .trusted-snapshot.json .provenance.json; do
+  cp -p "$custody/$run1$suffix" "$custody/$renamed_run$suffix"
+done
+for command in read verify; do
+  if (cd "$repo" && "$identity" "$command" --run "$renamed_run") >/dev/null 2>&1; then
+    echo "renamed custody was accepted by manifest $command" >&2; exit 1
+  fi
+done
+
+# Interrupt the shipped freeze after each sibling publication. The manifest
+# first appears pending; only its later atomic replacement marks irreversible
+# acceptance, so every killed publication remains unreadable.
 mkdir "$fixture/wrapped-bin"
 real_mv="$(command -v mv)"
 cat >"$fixture/wrapped-bin/mv" <<'SH'
@@ -38,34 +50,12 @@ cat >"$fixture/wrapped-bin/mv" <<'SH'
 set -euo pipefail
 "$REAL_MV" "$@"
 destination="${!#}"
-if [[ "$destination" == "$INTERRUPT_CUSTODY"/*.provenance.json ]]; then
+if [[ "$destination" == "$INTERRUPT_CUSTODY"/*"$INTERRUPT_SUFFIX" ]]; then
   printf '%s\n' "$destination" >"$INTERRUPT_SIGNAL"
   while :; do /bin/sleep 1; done
 fi
 SH
 chmod +x "$fixture/wrapped-bin/mv"
-interrupt_signal="$fixture/publication.signal"
-PATH="$fixture/wrapped-bin:$PATH" REAL_MV="$real_mv" \
-  INTERRUPT_CUSTODY="$custody" INTERRUPT_SIGNAL="$interrupt_signal" \
-  setsid bash -c 'cd "$1" && exec "$2" freeze --manifest "$3" --snapshot "$4" --base HEAD --workflow-identity "$5"' \
-    _ "$repo" "$identity" "$fixture/manifest.md" "$fixture/snapshot.json" "$workflow_identity" \
-    >"$fixture/interrupted.out" 2>"$fixture/interrupted.err" &
-freeze_pid=$!
-for _ in {1..100}; do
-  [[ -s "$interrupt_signal" ]] && break
-  /bin/sleep 0.05
-done
-[[ -s "$interrupt_signal" ]] || { kill -TERM -- "-$freeze_pid" 2>/dev/null || true; echo 'freeze did not reach publication boundary' >&2; exit 1; }
-kill -TERM -- "-$freeze_pid"
-set +e
-wait "$freeze_pid"
-interrupted_status=$?
-set -e
-[[ "$interrupted_status" -ne 0 && ! -s "$fixture/interrupted.out" ]]
-partial_path="$(<"$interrupt_signal")"
-partial_run="$(basename "$partial_path" .provenance.json)"
-[[ -f "$partial_path" ]]
-
 printf '%s\n' '{"issue_number":150,"outcome":"Closes","acceptance_criteria":["criterion"],"acceptance":[{"criterion":"criterion","production_path":"script","seam":"CLI","evidence":"interrupted custody refused","status":"tested"}]}' >"$fixture/interrupted-facts.json"
 : >"$fixture/interrupted-narrative.md"
 reject_interrupted() {
@@ -73,12 +63,39 @@ reject_interrupted() {
     echo "interrupted custody was accepted by: $*" >&2; exit 1
   fi
 }
-reject_interrupted "$identity" read --run "$partial_run"
-reject_interrupted "$identity" verify --run "$partial_run"
-reject_interrupted "$provenance" read --run "$partial_run"
-reject_interrupted "$provenance" verify --run "$partial_run"
-reject_interrupted "$script_dir/render-closeout.sh" --run "$partial_run" \
-  "$fixture/interrupted-facts.json" "$fixture/interrupted-narrative.md" --new-pr
+
+interrupt_freeze() {
+  local label="$1" suffix="$2" interrupt_signal="$fixture/$1-publication.signal"
+  PATH="$fixture/wrapped-bin:$PATH" REAL_MV="$real_mv" \
+    INTERRUPT_CUSTODY="$custody" INTERRUPT_SIGNAL="$interrupt_signal" INTERRUPT_SUFFIX="$suffix" \
+    setsid bash -c 'cd "$1" && exec "$2" freeze --manifest "$3" --snapshot "$4" --base HEAD --workflow-identity "$5"' \
+      _ "$repo" "$identity" "$fixture/manifest.md" "$fixture/snapshot.json" "$workflow_identity" \
+      >"$fixture/$label-interrupted.out" 2>"$fixture/$label-interrupted.err" &
+  freeze_pid=$!
+  for _ in {1..100}; do
+    [[ -s "$interrupt_signal" ]] && break
+    /bin/sleep 0.05
+  done
+  [[ -s "$interrupt_signal" ]] || { kill -KILL -- "-$freeze_pid" 2>/dev/null || true; echo "freeze did not reach $label publication boundary" >&2; exit 1; }
+  kill -KILL -- "-$freeze_pid"
+  set +e
+  wait "$freeze_pid" 2>/dev/null
+  interrupted_status=$?
+  set -e
+  [[ "$interrupted_status" -ne 0 && ! -s "$fixture/$label-interrupted.out" ]]
+  partial_path="$(<"$interrupt_signal")"
+  partial_run="$(basename "$partial_path" "$suffix")"
+  [[ -f "$partial_path" ]]
+  reject_interrupted "$identity" read --run "$partial_run"
+  reject_interrupted "$identity" verify --run "$partial_run"
+  reject_interrupted "$provenance" read --run "$partial_run"
+  reject_interrupted "$provenance" verify --run "$partial_run"
+  reject_interrupted "$script_dir/render-closeout.sh" --run "$partial_run" \
+    "$fixture/interrupted-facts.json" "$fixture/interrupted-narrative.md" --new-pr
+}
+interrupt_freeze provenance .provenance.json
+interrupt_freeze snapshot .trusted-snapshot.json
+interrupt_freeze manifest .md
 
 # Complete custody is the acceptance marker; a provenance-only interrupted
 # publication is rejected by both custody verification and rendering readers.
@@ -280,11 +297,11 @@ mv "$custody" "$fixture/real-custody"
 ln -s "$fixture/real-custody" "$custody"
 reject_read symlink-custody-directory
 rm "$custody"; mv "$fixture/real-custody" "$custody"
-sed -i '2cpre-implementation-base 0000000000000000000000000000000000000000' "$custody/$run1.md"
+sed -i '4cpre-implementation-base 0000000000000000000000000000000000000000' "$custody/$run1.md"
 reject_read unavailable-base
 cp -p "$backup/run.md" "$custody/$run1.md"
 short_base="$(git -C "$repo" rev-parse --short HEAD)"
-sed -i "2cpre-implementation-base $short_base" "$custody/$run1.md"
+sed -i "4cpre-implementation-base $short_base" "$custody/$run1.md"
 reject_read noncanonical-base
 cp -p "$backup/run.md" "$custody/$run1.md"
 

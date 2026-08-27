@@ -16,6 +16,12 @@ sed 's/$/\r/' "$fixture/good" | "$script" 150 -
 
 reject() { if "$script" "$@" >/dev/null 2>&1; then echo "validator accepted invalid fixture: $*" >&2; exit 1; fi; }
 body Progresses tested "Run opaque_run-1: $prov1" >"$fixture/progress"; "$script" 150 "$fixture/progress"; reject --require-closes 150 "$fixture/progress"
+sed $'s/Closes #150/Closes\t#150/' "$fixture/good" >"$fixture/tab-issue"; reject 150 "$fixture/tab-issue"
+sed $'s/Run opaque_run-1:/Run\topaque_run-1:/' "$fixture/good" >"$fixture/tab-run-prefix"; reject 150 "$fixture/tab-run-prefix"
+sed $'s/Run opaque_run-1: /Run opaque_run-1:\t/' "$fixture/good" >"$fixture/tab-run-provenance"; reject 150 "$fixture/tab-run-provenance"
+body Closes tested "Legacy run: $prov1" >"$fixture/legacy-spaces"
+sed $'s/Legacy run:/Legacy\trun:/' "$fixture/legacy-spaces" >"$fixture/tab-legacy-prefix"; reject 150 "$fixture/tab-legacy-prefix"
+sed $'s/Legacy run: /Legacy run:\t/' "$fixture/legacy-spaces" >"$fixture/tab-legacy-provenance"; reject 150 "$fixture/tab-legacy-provenance"
 sed 's/Closes #150/Closes #151/' "$fixture/good" >"$fixture/wrong-issue"; reject 150 "$fixture/wrong-issue"
 sed 's/| tested |/| guessed |/' "$fixture/good" >"$fixture/status"; reject 150 "$fixture/status"
 body Closes inferred "Run opaque_run-1: $prov1" >"$fixture/not-tested"; reject 150 "$fixture/not-tested"

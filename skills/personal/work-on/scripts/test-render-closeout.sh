@@ -32,17 +32,22 @@ grep -Fqx '## Issues' "$fixture/body1"; grep -Fqx '## Closure gate' "$fixture/bo
 canonical1="$(cd "$repo" && "$scripts/workflow-provenance.sh" read --run "$run1")"
 grep -Fqx "Run $run1: $canonical1" "$fixture/body1"
 
-# Consumers treat Run identity as opaque. The manifest binding covers custody
-# content, not the encoding of the filename that addresses the trio.
-opaque_run='opaque.run_150'
-for suffix in .md .trusted-snapshot.json .provenance.json; do
-  cp "$repo/.git/work-on-manifest/$run1$suffix" \
-    "$repo/.git/work-on-manifest/$opaque_run$suffix"
-  chmod 600 "$repo/.git/work-on-manifest/$opaque_run$suffix"
-done
+# Consumers treat the genuinely frozen Run identity as an opaque token, but
+# custody cannot be renamed to mint a second identity.
+opaque_run="$run1"
 (cd "$repo" && "$scripts/render-closeout.sh" --run "$opaque_run" \
   "$fixture/facts.json" "$fixture/narrative" --new-pr) >"$fixture/opaque"
 grep -Fqx "Run $opaque_run: $canonical1" "$fixture/opaque"
+renamed_run='opaque.run_150'
+for suffix in .md .trusted-snapshot.json .provenance.json; do
+  cp "$repo/.git/work-on-manifest/$run1$suffix" \
+    "$repo/.git/work-on-manifest/$renamed_run$suffix"
+  chmod 600 "$repo/.git/work-on-manifest/$renamed_run$suffix"
+done
+if (cd "$repo" && "$scripts/render-closeout.sh" --run "$renamed_run" \
+    "$fixture/facts.json" "$fixture/narrative" --new-pr) >/dev/null 2>&1; then
+  echo 'renamed custody was accepted by renderer' >&2; exit 1
+fi
 
 # Facts may arrive on stdin, and narrative Markdown remains byte-preserved
 # behind the renderer-owned boundary for paragraph, list, and code shapes.

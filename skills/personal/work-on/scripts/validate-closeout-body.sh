@@ -37,7 +37,8 @@ section() {
 }
 mapfile -t issue_lines < <(section '## Issues' "$body" | sed '/^[[:space:]]*$/d')
 [[ "${#issue_lines[@]}" -eq 1 ]] || fail 'Issues section must contain exactly one issue outcome'
-if [[ "${issue_lines[0]}" =~ ^(Closes|Progresses)[[:space:]]#${issue_number}$ ]]; then issue_outcome="${BASH_REMATCH[1]}"; else fail "Issues section must map exactly Closes #$issue_number or Progresses #$issue_number"; fi
+issue_pattern="^(Closes|Progresses) #${issue_number}$"
+if [[ "${issue_lines[0]}" =~ $issue_pattern ]]; then issue_outcome="${BASH_REMATCH[1]}"; else fail "Issues section must map exactly Closes #$issue_number or Progresses #$issue_number"; fi
 if [[ "$require_closes" == true && "$issue_outcome" != Closes ]]; then fail "unattended closeout requires Closes #$issue_number; found $issue_outcome #$issue_number"; fi
 
 mapfile -t gate_lines < <(section '## Closure gate' "$body" | sed '/^[[:space:]]*$/d')
@@ -59,16 +60,18 @@ for ((index=2; index<${#gate_lines[@]}; index++)); do
 done
 
 canonical='work-on:[0-9a-f]{12}\*? workflow:[0-9a-f]{12}\*? tdd:[0-9a-f]{12}\*? review:[0-9a-f]{12}\*? \(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+|unknown)@[0-9a-f]{7,40}\)'
+run_pattern="^Run ([A-Za-z0-9._-]{8,64}): ($canonical)$"
+legacy_pattern="^Legacy run: ($canonical)$"
 mapfile -t entries < <(section '## Work-on' "$body" | sed '/^[[:space:]]*$/d')
 [[ "${#entries[@]}" -gt 0 ]] || fail 'Work-on section must contain at least one run'
 declare -A seen=()
 for ((index=0; index<${#entries[@]}; index++)); do
   line="${entries[$index]}"
-  if [[ "$line" =~ ^Run[[:space:]]([A-Za-z0-9._-]{8,64}):[[:space:]]($canonical)$ ]]; then
+  if [[ "$line" =~ $run_pattern ]]; then
     identity="${BASH_REMATCH[1]}"
     [[ -z "${seen[$identity]:-}" ]] || fail "Work-on Run identity is duplicated: $identity"
     seen[$identity]=1
-  elif [[ "$line" =~ ^Legacy[[:space:]]run:[[:space:]]($canonical)$ ]]; then
+  elif [[ "$line" =~ $legacy_pattern ]]; then
     :
   else
     fail "Work-on line $((index + 1)) is malformed"
