@@ -27,6 +27,7 @@ outcome="$(jq -r '.outcome // empty' "$facts")"
 [[ "$outcome" == Closes || "$outcome" == Progresses ]] || fail 'outcome must be Closes or Progresses'
 jq -e '.acceptance_criteria | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)' "$facts" >/dev/null || fail 'acceptance_criteria must be a non-empty array of non-empty strings'
 jq -e '.acceptance | type == "array" and length > 0' "$facts" >/dev/null || fail 'acceptance must contain at least one row'
+jq -e '.acceptance | all(.[]; type == "object" and (keys == ["criterion","evidence","production_path","seam","status"]))' "$facts" >/dev/null || fail 'acceptance rows may contain only criterion, production_path, seam, evidence, and status'
 duplicate="$(jq -r '.acceptance_criteria | [group_by(.)[] | select(length>1) | .[0]][0] // empty' "$facts")"
 [[ -z "$duplicate" ]] || fail "acceptance_criteria contains duplicate criterion: $duplicate"
 acceptance_count="$(jq -r '.acceptance | length' "$facts")"

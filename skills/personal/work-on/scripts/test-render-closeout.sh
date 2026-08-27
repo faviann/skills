@@ -225,7 +225,14 @@ for shape in '{}' '[]' 'null' '"reported"' '0'; do
   jq --argjson shape "$shape" '.telemetry=$shape' "$fixture/facts.json" \
     >"$fixture/telemetry.json"
   render_rejected "$fixture/telemetry.json" "telemetry=$shape"
+  jq --argjson shape "$shape" '.acceptance[0].telemetry=$shape' \
+    "$fixture/facts.json" >"$fixture/nested-telemetry.json"
+  render_rejected "$fixture/nested-telemetry.json" \
+    "acceptance[0].telemetry=$shape"
 done
+jq '.acceptance[0].unexpected="removed"' "$fixture/facts.json" \
+  >"$fixture/unknown-row-field.json"
+render_rejected "$fixture/unknown-row-field.json" 'acceptance[0].unexpected'
 for field in repository provenance workflow_provenance runs phases; do
   jq --arg field "$field" '. + {($field): "removed"}' "$fixture/facts.json" \
     >"$fixture/removed-field.json"
