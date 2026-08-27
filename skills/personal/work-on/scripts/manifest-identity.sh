@@ -2,12 +2,16 @@
 set -euo pipefail
 
 # Contract freeze is the authority point for Run identity and complete custody.
-# A pending manifest is published after its siblings. Its atomic replacement
-# with the accepted manifest is the irreversible success point for readers.
+# A pending manifest is published after its siblings. After cleanup and output
+# delivery, accepted replacement is the final operation and success point.
 
 script_root="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 staging_dir=""
-cleanup() { [[ -z "$staging_dir" ]] || rm -rf -- "$staging_dir"; }
+acceptance_candidate=""
+cleanup() {
+  [[ -z "$staging_dir" ]] || rm -rf -- "$staging_dir"
+  [[ -z "$acceptance_candidate" ]] || rm -f -- "$acceptance_candidate"
+}
 trap cleanup EXIT
 
 fail() { printf 'manifest identity: %s\n' "$1" >&2; exit 1; }
@@ -90,14 +94,16 @@ if [[ "$subcommand" == freeze ]]; then
   chmod 600 "$staged_accepted_manifest"
   printf 'run-identity %s\nfreeze-state pending\n' "$run_identity" >"$staged_pending_manifest"
   chmod 600 "$staged_pending_manifest"
+  acceptance_candidate="$custody_dir/.freeze-accept.$run_identity"
+  [[ ! -e "$acceptance_candidate" && ! -L "$acceptance_candidate" ]] || fail 'acceptance staging path is unsafe'
+  mv -- "$staged_accepted_manifest" "$acceptance_candidate"
   mv -- "$staged_provenance" "$provenance"
   mv -- "$staged_snapshot" "$snapshot"
   mv -- "$staged_pending_manifest" "$manifest"
-  mv -- "$staged_accepted_manifest" "$manifest"
   rmdir -- "$staging_dir"
   staging_dir=""
   printf '%s\n' "$run_identity"
-  exit 0
+  exec mv -- "$acceptance_candidate" "$manifest"
 fi
 
 manifest="$custody_dir/$run_identity.md"

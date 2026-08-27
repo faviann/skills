@@ -215,12 +215,13 @@ RUN_IDENTITY="$(scripts/manifest-identity.sh freeze \
 
 The helper verifies that the selected workflow still has the retained identity,
 captures the complete governing-instruction identity, binds all three custody
-artifacts, and prints the minted Run identity only after publication succeeds.
-It publishes the manifest last; incomplete staging or interrupted publication
-never verifies or renders as frozen custody. A failure before delegation takes
-complete recomputation. No expectation argument, workflow sidecar, singleton
-ledger, delete-on-freeze bridge, repository binding, or mutable current-run
-pointer participates.
+artifacts, delivers the minted Run identity only after pending publication and
+cleanup succeed, then makes atomic accepted-manifest replacement its final
+operation. It publishes the pending manifest after its siblings; incomplete
+staging or interrupted publication never verifies or renders as frozen custody.
+A failure before delegation takes complete recomputation. No expectation
+argument, workflow sidecar, singleton ledger, delete-on-freeze bridge,
+repository binding, or mutable current-run pointer participates.
 
 The selected workflow supplies the manifest to the implementation delegate and
 to the readiness, Standards, Spec, and closure contexts, and keeps it available

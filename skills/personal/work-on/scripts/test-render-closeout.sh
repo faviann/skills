@@ -32,12 +32,26 @@ grep -Fqx '## Issues' "$fixture/body1"; grep -Fqx '## Closure gate' "$fixture/bo
 canonical1="$(cd "$repo" && "$scripts/workflow-provenance.sh" read --run "$run1")"
 grep -Fqx "Run $run1: $canonical1" "$fixture/body1"
 
-# Consumers treat the genuinely frozen Run identity as an opaque token, but
-# custody cannot be renamed to mint a second identity.
-opaque_run="$run1"
+# Consumers treat a genuinely frozen Run identity as an opaque token. Wrapping
+# only the mint inputs proves the public freeze seam binds a non-default shape.
+mkdir "$fixture/opaque-mint-bin"
+cat >"$fixture/opaque-mint-bin/date" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' 'opaque.run'
+SH
+cat >"$fixture/opaque-mint-bin/od" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' 'identity_150'
+SH
+chmod +x "$fixture/opaque-mint-bin/date" "$fixture/opaque-mint-bin/od"
+opaque_run="$(cd "$repo" && PATH="$fixture/opaque-mint-bin:$PATH" \
+  "$scripts/manifest-identity.sh" freeze --manifest "$fixture/manifest" \
+  --snapshot "$fixture/snapshot" --base HEAD --workflow-identity "$workflow")"
+[[ "$opaque_run" == opaque.run-identity_150 ]]
 (cd "$repo" && "$scripts/render-closeout.sh" --run "$opaque_run" \
   "$fixture/facts.json" "$fixture/narrative" --new-pr) >"$fixture/opaque"
-grep -Fqx "Run $opaque_run: $canonical1" "$fixture/opaque"
+opaque_canonical="$(cd "$repo" && "$scripts/workflow-provenance.sh" read --run "$opaque_run")"
+grep -Fqx "Run $opaque_run: $opaque_canonical" "$fixture/opaque"
 renamed_run='opaque.run_150'
 for suffix in .md .trusted-snapshot.json .provenance.json; do
   cp "$repo/.git/work-on-manifest/$run1$suffix" \

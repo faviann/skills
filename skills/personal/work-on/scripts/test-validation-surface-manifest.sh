@@ -29,6 +29,51 @@ done
 [[ "$run1" != *@* ]]
 [[ ! -e "$repo/.git/work-on-provenance.json" && ! -e "$repo/.git/work-on-provenance.workflow-sha256" ]]
 
+# Freeze failures after pending publication must not cross acceptance. Wrapped
+# public dependencies make stdout delivery and cleanup fail deterministically.
+mkdir "$fixture/failure-bin"
+real_rmdir="$(command -v rmdir)"
+cat >"$fixture/failure-bin/date" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$MINT_PREFIX"
+SH
+cat >"$fixture/failure-bin/od" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$MINT_SUFFIX"
+SH
+cat >"$fixture/failure-bin/rmdir" <<'SH'
+#!/usr/bin/env bash
+if [[ "${FAIL_FREEZE_CLEANUP:-}" == true ]]; then exit 91; fi
+exec "$REAL_RMDIR" "$@"
+SH
+chmod +x "$fixture/failure-bin/date" "$fixture/failure-bin/od" "$fixture/failure-bin/rmdir"
+stdout_failure_run=stdout.failure-token150
+set +e
+(cd "$repo" && PATH="$fixture/failure-bin:$PATH" MINT_PREFIX=stdout.failure \
+  MINT_SUFFIX=token150 REAL_RMDIR="$real_rmdir" "$identity" freeze \
+  --manifest "$fixture/manifest.md" --snapshot "$fixture/snapshot.json" \
+  --base HEAD --workflow-identity "$workflow_identity") >/dev/full 2>/dev/null
+stdout_failure_status=$?
+set -e
+[[ "$stdout_failure_status" -ne 0 ]]
+if (cd "$repo" && "$identity" read --run "$stdout_failure_run") >/dev/null 2>&1; then
+  echo 'stdout failure left accepted custody' >&2; exit 1
+fi
+
+cleanup_failure_run=cleanup.failure-token150
+set +e
+(cd "$repo" && PATH="$fixture/failure-bin:$PATH" MINT_PREFIX=cleanup.failure \
+  MINT_SUFFIX=token150 REAL_RMDIR="$real_rmdir" FAIL_FREEZE_CLEANUP=true \
+  "$identity" freeze --manifest "$fixture/manifest.md" \
+  --snapshot "$fixture/snapshot.json" --base HEAD \
+  --workflow-identity "$workflow_identity") >"$fixture/cleanup-failure.out" 2>/dev/null
+cleanup_failure_status=$?
+set -e
+[[ "$cleanup_failure_status" -ne 0 && ! -s "$fixture/cleanup-failure.out" ]]
+if (cd "$repo" && "$identity" read --run "$cleanup_failure_run") >/dev/null 2>&1; then
+  echo 'post-publication cleanup failure left accepted custody' >&2; exit 1
+fi
+
 # Renaming complete owner-only custody cannot mint a second Run identity.
 renamed_run=opaque-renamed-150
 for suffix in .md .trusted-snapshot.json .provenance.json; do
@@ -97,8 +142,8 @@ interrupt_freeze provenance .provenance.json
 interrupt_freeze snapshot .trusted-snapshot.json
 interrupt_freeze manifest .md
 
-# Complete custody is the acceptance marker; a provenance-only interrupted
-# publication is rejected by both custody verification and rendering readers.
+# Accepted manifest state is the authority marker; a provenance-only
+# interrupted publication is rejected by custody and rendering readers.
 partial=opaque-partial
 cp "$custody/$run1.provenance.json" "$custody/$partial.provenance.json"
 chmod 600 "$custody/$partial.provenance.json"
