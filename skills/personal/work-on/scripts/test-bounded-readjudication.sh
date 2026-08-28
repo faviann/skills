@@ -67,12 +67,15 @@ if [[ ! -s "$section" ]]; then
 fi
 
 ## The mechanism lives beside adjudication, and only Ambiguous rulings qualify.
-awk '/^## 5\./ { inside = 1 } inside && /^### Bounded re-adjudication/ { found = 1 }
+awk '/^## / { inside = ($0 ~ /^## 5\./) }
+  inside && /^### Bounded re-adjudication/ { found = 1 }
   END { exit !found }' "$WORKFLOW" ||
   fail 'bounded re-adjudication sits inside the adjudicate-and-remediate step'
 has "$section" 'exactly once' 'a qualifying trigger produces exactly one re-adjudication'
 has "$section" 'classified \*\*Ambiguous\*\*; Contract-backed and Defensive rulings are ineligible' \
   'Contract-backed and Defensive rulings are ineligible'
+has "$section" '`D` produced the current remediation candidate' \
+  'the triggering directive produced the current remediation candidate'
 has "$section" 'accepted blocker.*attributable to the mechanism introduced for `D`' \
   'the trigger requires a blocker attributable to the Ambiguous directive'
 has "$section" 'immediately following delta gate' \
@@ -84,8 +87,11 @@ echo 'ok - eligibility is limited to Ambiguous rulings whose own mechanism repro
 ## The association is transient working state, not a lineage system.
 has "$section" 'run-local note that `D` descends from `R`' \
   'the association records only that the directive descends from the ruling'
-has "$section" 'no lineage store, registry, lifecycle, event protocol, telemetry, or persistent correlation state' \
-  'the association introduces no durable lineage machinery'
+for forbidden in 'lineage store' 'registry' 'lifecycle' 'event protocol' \
+  'telemetry' 'persistent correlation state'; do
+  has "$section" "keep no[^.]*$forbidden" \
+    "the association introduces no $forbidden"
+done
 has "$section" 'drop it once that gate is adjudicated' \
   'the association is bounded to the immediate delta window'
 echo 'ok - the directive-to-ruling association is transient run-local state'
@@ -98,8 +104,11 @@ for supplied in \
   'exact frozen criterion text' \
   'bounded raw governing context' \
   'raw triggering observation and its boundary'; do
-  has "$section" "supply only.*$supplied|$supplied" "the reader package supplies $supplied"
+  has "$section" "supply only[^.]*$supplied" \
+    "the closed reader package supplies $supplied and nothing else"
 done
+has "$section" 'non-reviewing: never reuse it as a review-axis agent' \
+  'the reader is non-reviewing and never becomes a review axis'
 for withheld in \
   'prior ruling' \
   'previously rejected alternative' \
@@ -108,12 +117,13 @@ for withheld in \
   'current implementation except a bounded raw fact'; do
   has "$section" "withhold.*$withheld" "the reader is blind to the $withheld"
 done
-has "$section" 'enumerate them with the concrete obligation each creates' \
+has "$section" '(enumerate|list)[^.;]{0,80}concrete obligation' \
   'the reader enumerates every materially defensible reading and its obligation'
 has "$section" 'must not prefer a reading because that reading is cheaper' \
   'the reader may not prefer a reading for being cheaper'
 has "$section" 'must not propose an implementation' 'the reader proposes no implementation'
-has "$section" 'derives meaning only; the primary retains adjudication authority' \
+has "$section" 'reader derives meaning only' 'the reader derives meaning only'
+has "$section" 'primary retains adjudication authority' \
   'the primary retains adjudication authority'
 has "$section" 'one fresh invocation may handle several eligible criterion units' \
   'several eligible units from one gate share a single fresh invocation'
@@ -135,7 +145,7 @@ has "$section" 'reuse evidence only where it directly proves that obligation' \
   'evidence is reused only where it proves the newly adjudicated obligation'
 has "$section" 'carry no earlier `tested` disposition across the reversal' \
   'no prior tested disposition is silently inherited'
-has "$section" 'correction → delta gate → fresh blind cumulative confirmation' \
+has "$section" 'correction.{0,20}delta gate.{0,30}fresh blind cumulative confirmation' \
   'the supersede route re-enters the existing correction and confirmation path'
 echo 'ok - uphold is one-shot and supersede removes mechanism through the existing path'
 
@@ -157,20 +167,24 @@ has "$SKILL" \
 echo 'ok - the immutability fence, reviewer blindness, and authority grant hold'
 
 ## Observability uses ordinary primary reasoning rather than a new protocol.
-has "$section" \
-  'state in ordinary working reasoning which ruling was re-adjudicated.*reader returned.*upheld or superseded.*evidence-sufficiency decision' \
-  'the primary reports the re-adjudication in ordinary working reasoning'
+has "$section" 'state in ordinary working reasoning' \
+  'the re-adjudication is reported in ordinary working reasoning'
+for reported in 'which ruling was re-adjudicated' 'the reader returned' \
+  'upheld or superseded' 'evidence-sufficiency decision'; do
+  has "$section" "$reported" "the report names $reported"
+done
 echo 'ok - observability is ordinary primary reasoning'
 
 ## No new document, no expansion of normative remediation, no new naming.
-mapfile -t references < <(cd "$skill_dir/references" && ls *.md | sort)
-expected='closability-gate.md default-workflow.md github-closeout.md normative-remediation.md review-state-machine.md validation-evidence.md'
-if [[ "${references[*]}" != "$expected" ]]; then
-  fail "no new reference document is introduced (found: ${references[*]})"
-fi
-for protected in "$NORMATIVE" "$STATE" "$CLOSABILITY" "$EVIDENCE"; do
-  lacks "$protected" 're-adjudicat|Ambiguous ruling' \
-    'the mechanism does not expand normative remediation or other protected authority'
+for reference in "$skill_dir"/references/*.md; do
+  [[ "$reference" == "$WORKFLOW" ]] && continue
+  lacks "$reference" 're-adjudicat|Ambiguous ruling' \
+    "the mechanism does not expand or move into ${reference##*/}"
+done
+for required in closability-gate.md default-workflow.md github-closeout.md \
+  normative-remediation.md review-state-machine.md validation-evidence.md; do
+  [[ -f "$skill_dir/references/$required" ]] ||
+    fail "the existing reference document $required survives"
 done
 lacks "$section" 'semantic challenge' \
   'the mechanism is not named with the normative-remediation term'

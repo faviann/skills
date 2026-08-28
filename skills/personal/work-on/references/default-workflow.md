@@ -299,18 +299,19 @@ route instead and is never re-adjudicated here.
 
 Before ordinary remediation continues, launch one fresh blind reader. Reuse the
 isolation pattern of `references/normative-remediation.md` without invoking or
-extending that mechanism. Supply only the exact frozen criterion text, the
-bounded raw governing context needed to interpret it, and the raw triggering
-observation and its boundary. Withhold the prior ruling, any previously rejected
-alternative, the adjudication ledger, prior reviewer conclusions and
-dispositions, and the current implementation except a bounded raw fact needed to
-understand the triggering boundary. Ask it to derive the governing consequence
-at the observed boundary and, where several materially defensible readings
-exist, to enumerate them with the concrete obligation each creates; it must not
-prefer a reading because that reading is cheaper and must not propose an
-implementation. The reader derives meaning only; the primary retains
-adjudication authority. One fresh invocation may handle several eligible
-criterion units from the same gate independently.
+extending that mechanism. The reader is non-reviewing: never reuse it as a
+review-axis agent in this chain. Supply only the exact frozen criterion text,
+the bounded raw governing context needed to interpret it, and the raw
+triggering observation and its boundary. Withhold the prior ruling, any
+previously rejected alternative, the adjudication ledger, prior reviewer
+conclusions and dispositions, and the current implementation except a bounded
+raw fact needed to understand the triggering boundary. Ask it to derive the
+governing consequence at the observed boundary and, where several materially
+defensible readings exist, to enumerate them with the concrete obligation each
+creates; it must not prefer a reading because that reading is cheaper and must
+not propose an implementation. The reader derives meaning only; the primary
+retains adjudication authority. One fresh invocation may handle several
+eligible criterion units from the same gate independently.
 
 Then adjudicate:
 
