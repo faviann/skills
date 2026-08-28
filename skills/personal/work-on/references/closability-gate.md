@@ -13,7 +13,7 @@ readiness, Standards, Spec, closure, remediation, validation, or closeout
 semantics, and adds no tracked artifact, ledger, or telemetry field of its own.
 A pass records nothing beyond the custody that contract freeze authors. An abort
 hands back as `preflight-aborted`, as the abort steps below require; no contract
-froze and there is no Run identity or lifecycle to finalize.
+froze and there is no Run identity.
 
 ## The reasoning the primary produces
 

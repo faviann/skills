@@ -163,17 +163,15 @@ fi
 [[ ! -s "$fixture/drift.out" ]]
 grep -Fq 'scripted validator drift' "$fixture/drift.err"
 
-# Closeout consumes custody after an authorized live self-change and with the
-# telemetry and registry implementations absent.
+# Closeout consumes custody after an authorized live self-change.
 printf '\nself change\n' >>"$skills/skills/personal/work-on/SKILL.md"
-rm "$scripts/run-telemetry.sh" "$scripts/run-registry.sh"
 mv "$skills/skills/personal/work-on/references/default-workflow.md" \
   "$fixture/removed-default-workflow.md"
 (cd "$repo" && "$scripts/render-closeout.sh" --run "$run1" "$fixture/facts.json" "$fixture/narrative" --previous-body "$fixture/body1") >"$fixture/same"
 cmp -s "$fixture/body1" "$fixture/same"
 
 # Restore governing bytes only to mint a distinct second run.
-git -C "$skills" restore skills/personal/work-on/SKILL.md skills/personal/work-on/references/default-workflow.md skills/personal/work-on/scripts/run-telemetry.sh skills/personal/work-on/scripts/run-registry.sh
+git -C "$skills" restore skills/personal/work-on/SKILL.md skills/personal/work-on/references/default-workflow.md
 run2="$(freeze)"
 (cd "$repo" && "$scripts/render-closeout.sh" --run "$run2" "$fixture/facts.json" "$fixture/narrative" --previous-body "$fixture/body1") >"$fixture/body2"
 mapfile -t run_lines < <(awk '$0=="## Work-on"{x=1;next}x&&/^Run /{print}' "$fixture/body2")

@@ -113,7 +113,7 @@ requires_contract "$POLICY" \
   'unsafe or unrecoverable.*non-reusable.*safe qualifying evidence' \
   'ordinary reviewer report.*Reusable-evidence identity.*provenance locator.*Independent.*judgment' \
   'execution claimed as necessary for Independent assurance.*assurance question.*insufficient.*narrowest adequate' \
-  'Do not copy raw (output|evidence).*Run telemetry sink.*another.*subsystem'
+  'Do not create another evidence subsystem'
 echo 'ok - privacy constraints govern reuse and reports carry only safe reasoning'
 
 requires_contract "$SKILL" \
@@ -221,10 +221,7 @@ cost_predicates=(
   '(build|consult) (a |the )?cost database[^.]{0,100}(decid|select|determin)[^.]{0,80}(validation|vehicle)'
 )
 
-# The surfaces that can impose, override, or contradict re-execution. Telemetry
-# and the registry are excluded on their own terms — each records the run and
-# never decides what it does — and they are where sanctioned duration
-# measurement legitimately lives.
+# The surfaces that can impose, override, or contradict re-execution.
 governing_surfaces=(
   "$SKILL"
   "$POLICY"
@@ -242,8 +239,7 @@ for surface in "${governing_surfaces[@]}"; do
     "${cost_predicates[@]}"
 done
 
-# Observational duration legitimately exists in telemetry and in the rendered
-# closeout. What may not exist is an executable decision keyed to it.
+# What may not exist is an executable decision keyed to observed duration.
 script_cost_predicates=(
   'expensive'
   'materially costly'
@@ -261,7 +257,7 @@ for candidate_script in "$skill_dir"/scripts/*.sh; do
 done
 
 # The guard has teeth only if the rule #122 rejects actually trips it: skipping
-# unresolved required validation because prior telemetry called it costly.
+# unresolved required validation because prior observation called it costly.
 counterfactual="$fixture_dir/rejected-cost-rule.md"
 cat >"$counterfactual" <<'REJECTED'
 ## Cost exemption
@@ -269,7 +265,7 @@ cat >"$counterfactual" <<'REJECTED'
 When a validation is materially costly, skip it and accept the existing
 evidence, even when the assurance question is unresolved. Classify each
 validation as cheap or materially costly from its recorded prior run duration
-in the run telemetry sink before deciding.
+in prior observations before deciding.
 REJECTED
 counterfactual_caught=0
 for pattern in "${cost_predicates[@]}"; do
@@ -278,7 +274,7 @@ for pattern in "${cost_predicates[@]}"; do
   fi
 done
 if (( counterfactual_caught == 0 )); then
-  fail 'the forbidden-predicate patterns catch a telemetry-driven skip rule'
+  fail 'the forbidden-predicate patterns catch an observation-driven skip rule'
 fi
 
 # The positive prohibition must not mask a later competing rule that makes

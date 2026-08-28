@@ -14,7 +14,6 @@ CONTRACT="$skill_dir/references/normative-remediation.md"
 STATE="$skill_dir/references/review-state-machine.md"
 CLOSABILITY="$skill_dir/references/closability-gate.md"
 EVIDENCE="$skill_dir/references/validation-evidence.md"
-TELEMETRY="$skill_dir/references/run-telemetry.md"
 GLOSSARY="$skill_dir/../../../CONTEXT.md"
 EVAL="$skill_dir/../../../.agents/evals/work-on-normative-remediation.md"
 STATIC="$script_dir/test-normative-remediation.sh"
@@ -249,13 +248,11 @@ has "$CONTRACT" 'existence and output never enter.*cumulative or delta package' 
   'the semantic reader is fenced from the review chain'
 has "$WORKFLOW" 'one fresh semantic reader.*every qualifying unit.*one invocation' \
   'the workflow preserves the fresh-reader batch fence'
-has "$CONTRACT" 'No telemetry schema change|no new telemetry kind' \
-  'the mechanism introduces no telemetry semantics'
-for protected in "$STATE" "$CLOSABILITY" "$EVIDENCE" "$TELEMETRY"; do
+for protected in "$STATE" "$CLOSABILITY" "$EVIDENCE"; do
   lacks "$protected" 'Authority delta|Pre-candidate semantic challenge|normative-remediation' \
     'the mechanism does not enter protected authority'
 done
-echo 'ok - the semantic challenge does not modify review, manifest, evidence, or telemetry authority'
+echo 'ok - the semantic challenge does not modify review, manifest, or evidence authority'
 
 ## Domain language is named without turning sequencing prose into a term.
 has "$GLOSSARY" '^\*\*Authority delta\*\*:' \
