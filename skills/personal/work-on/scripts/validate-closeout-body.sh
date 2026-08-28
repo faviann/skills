@@ -1,291 +1,106 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Validate the canonical closeout sections in a rendered pull-request body.
-# This checks shape and consistency only; afk-merge.sh remains responsible for
-# independently deciding whether the evidence merits an unattended merge.
+# Validate only the mechanically owned facts the rendered body states.
 
 require_closes=false
 previous_source=""
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
-    --require-closes)
-      require_closes=true
-      shift
-      ;;
+    --require-closes) require_closes=true; shift ;;
     --previous)
-      [[ "$#" -ge 2 ]] || {
-        printf 'closeout body invalid: --previous requires a body file\n' >&2
-        exit 1
-      }
-      previous_source="$2"
-      shift 2
+      [[ "$#" -ge 2 ]] || { printf 'closeout body invalid: --previous requires a body file\n' >&2; exit 1; }
+      previous_source="$2"; shift 2
       ;;
-    *)
-      printf 'closeout body invalid: unknown option: %s\n' "$1" >&2
-      exit 1
-      ;;
+    *) printf 'closeout body invalid: unknown option: %s\n' "$1" >&2; exit 1 ;;
   esac
 done
 issue_number="${1:?usage: validate-closeout-body.sh [--require-closes] [--previous <old-body.md>] <issue-number> [body-file|-]}"
 body_source="${2:--}"
+fail() { printf 'closeout body invalid: %s\n' "$1" >&2; exit 1; }
+[[ "$issue_number" =~ ^[1-9][0-9]*$ ]] || fail 'issue number must be a positive integer'
 
-fail() {
-  printf 'closeout body invalid: %s\n' "$1" >&2
-  exit 1
-}
-
-[[ "$issue_number" =~ ^[1-9][0-9]*$ ]] \
-  || fail "issue number must be a positive integer"
-
-fixture="$(mktemp -d)"
-trap 'rm -rf "$fixture"' EXIT
+fixture="$(mktemp -d)"; trap 'rm -rf "$fixture"' EXIT
 body="$fixture/body.md"
-# GitHub stores bodies edited through its web UI with CRLF line endings and
-# returns them verbatim, so normalize the scratch copy the checks read. Only
-# this copy is affected; the validator never re-emits the body.
-if [[ "$body_source" == - ]]; then
-  sed 's/\r$//' /dev/stdin >"$body"
-elif [[ -f "$body_source" ]]; then
-  sed 's/\r$//' "$body_source" >"$body"
-else
-  fail "body file does not exist: $body_source"
-fi
+if [[ "$body_source" == - ]]; then sed 's/\r$//' /dev/stdin >"$body"; elif [[ -f "$body_source" ]]; then sed 's/\r$//' "$body_source" >"$body"; else fail "body file does not exist: $body_source"; fi
 
-for heading in "## Issues" "## Closure gate" "## Workflow telemetry"; do
-  heading_count="$(grep -Fxc "$heading" "$body" || true)"
-  [[ "$heading_count" -eq 1 ]] || fail "missing canonical heading: $heading"
+for heading in '## Issues' '## Closure gate' '## Work-on'; do
+  [[ "$(grep -Fxc "$heading" "$body" || true)" -eq 1 ]] || fail "missing canonical heading: $heading"
 done
 issues_line="$(grep -Fn '## Issues' "$body" | cut -d: -f1)"
 gate_line="$(grep -Fn '## Closure gate' "$body" | cut -d: -f1)"
-telemetry_line="$(grep -Fn '## Workflow telemetry' "$body" | cut -d: -f1)"
-(( issues_line < gate_line && gate_line < telemetry_line )) \
-  || fail "canonical closeout headings are out of order"
+work_on_line="$(grep -Fn '## Work-on' "$body" | cut -d: -f1)"
+(( issues_line < gate_line && gate_line < work_on_line )) || fail 'canonical closeout headings are out of order'
 
 section() {
-  local heading="$1"
-  awk -v heading="$heading" '
-    $0 == heading { found = 1; next }
-    found && /^## / { exit }
-    found { print }
-  ' "$body"
+  awk -v heading="$1" '$0 == heading { found = 1; next } found && /^## / { exit } found { print }' "$2"
 }
+mapfile -t issue_lines < <(section '## Issues' "$body" | sed '/^[[:space:]]*$/d')
+[[ "${#issue_lines[@]}" -eq 1 ]] || fail 'Issues section must contain exactly one issue outcome'
+issue_pattern="^(Closes|Progresses) #${issue_number}$"
+if [[ "${issue_lines[0]}" =~ $issue_pattern ]]; then issue_outcome="${BASH_REMATCH[1]}"; else fail "Issues section must map exactly Closes #$issue_number or Progresses #$issue_number"; fi
+if [[ "$require_closes" == true && "$issue_outcome" != Closes ]]; then fail "unattended closeout requires Closes #$issue_number; found $issue_outcome #$issue_number"; fi
 
-mapfile -t issue_lines < <(section "## Issues" | sed '/^[[:space:]]*$/d')
-[[ "${#issue_lines[@]}" -eq 1 ]] \
-  || fail "Issues section must contain exactly one issue outcome"
-if [[ "${issue_lines[0]}" =~ ^(Closes|Progresses)[[:space:]]#${issue_number}$ ]]; then
-  issue_outcome="${BASH_REMATCH[1]}"
-else
-  fail "Issues section must map exactly Closes #$issue_number or Progresses #$issue_number"
-fi
-if [[ "$require_closes" == true && "$issue_outcome" != Closes ]]; then
-  fail "unattended closeout requires Closes #$issue_number; found $issue_outcome #$issue_number"
-fi
-
-mapfile -t gate_lines < <(section "## Closure gate" | sed '/^[[:space:]]*$/d')
+mapfile -t gate_lines < <(section '## Closure gate' "$body" | sed '/^[[:space:]]*$/d')
 readonly gate_header='| Acceptance criterion | Production path | Exact artifact/mode/seam | Evidence | Status |'
 readonly gate_separator='|---|---|---|---|---|'
-[[ "${gate_lines[0]:-}" == "$gate_header" ]] \
-  || fail "missing canonical closure gate table header"
-[[ "${gate_lines[1]:-}" == "$gate_separator" ]] \
-  || fail "missing canonical closure gate table separator"
-[[ "${#gate_lines[@]}" -gt 2 ]] \
-  || fail "closure gate must contain at least one acceptance row"
-
-for ((index = 2; index < ${#gate_lines[@]}; index++)); do
-  row_number=$((index - 1))
-  row="${gate_lines[$index]}"
-  [[ "$row" =~ ^\|.*\|$ ]] \
-    || fail "closure gate row $row_number is not a Markdown table row"
-  field_count="$(awk -F'|' '{ print NF }' <<<"$row")"
-  [[ "$field_count" -eq 7 ]] \
-    || fail "closure gate row $row_number must contain five columns"
+[[ "${gate_lines[0]:-}" == "$gate_header" ]] || fail 'missing canonical closure gate table header'
+[[ "${gate_lines[1]:-}" == "$gate_separator" ]] || fail 'missing canonical closure gate table separator'
+[[ "${#gate_lines[@]}" -gt 2 ]] || fail 'closure gate must contain at least one acceptance row'
+for ((index=2; index<${#gate_lines[@]}; index++)); do
+  row_number=$((index - 1)); row="${gate_lines[$index]}"
+  [[ "$row" =~ ^\|.*\|$ && "$(awk -F'|' '{print NF}' <<<"$row")" -eq 7 ]] || fail "closure gate row $row_number must contain five columns"
   for column in {2..6}; do
-    value="$(awk -F'|' -v column="$column" '{
-      value = $column
-      gsub(/^[ \t]+|[ \t]+$/, "", value)
-      print value
-    }' <<<"$row")"
-    [[ -n "$value" ]] \
-      || fail "closure gate row $row_number has an empty column"
+    value="$(awk -F'|' -v column="$column" '{value=$column; gsub(/^[ \t]+|[ \t]+$/, "", value); print value}' <<<"$row")"
+    [[ -n "$value" ]] || fail "closure gate row $row_number has an empty column"
   done
-  status="$(awk -F'|' '{
-    value = $(NF - 1)
-    gsub(/^[ \t]+|[ \t]+$/, "", value)
-    print value
-  }' <<<"$row")"
-  case "$status" in
-    tested|failing|inferred|unverified) ;;
-    *) fail "closure gate row $row_number has invalid status: $status" ;;
-  esac
-  if [[ "$issue_outcome" == Closes && "$status" != tested ]]; then
-    fail "Closes requires every closure gate row to be tested; row $row_number is $status"
-  fi
+  status="$(awk -F'|' '{value=$(NF-1); gsub(/^[ \t]+|[ \t]+$/, "", value); print value}' <<<"$row")"
+  case "$status" in tested|failing|inferred|unverified) ;; *) fail "closure gate row $row_number has invalid status: $status" ;; esac
+  [[ "$issue_outcome" != Closes || "$status" == tested ]] || fail "Closes requires every closure gate row to be tested; row $row_number is $status"
 done
 
-mapfile -t telemetry_lines < <(section "## Workflow telemetry" | sed '/^[[:space:]]*$/d')
-readonly telemetry_header='| Field | Observed value |'
-readonly telemetry_separator='|---|---|'
-[[ "${telemetry_lines[0]:-}" == "$telemetry_header" ]] \
-  || fail "missing canonical workflow telemetry table header"
-[[ "${telemetry_lines[1]:-}" == "$telemetry_separator" ]] \
-  || fail "missing canonical workflow telemetry table separator"
-
-telemetry_fields=(
-  "Model configuration"
-  "Start-to-seal elapsed"
-  "Implementation rounds"
-  "Independent-review rounds"
-  "Remediation implementation launches"
-  "Validation executions"
-  "Blocking findings resolved"
-  "Findings rejected at adjudication"
-  "Final workflow outcome"
-  "Telemetry run"
-  "Subagent launches"
-  "Reviews recorded"
-  "Reviewed artifact bytes"
-  "Validation executions recorded"
-  "Recorded validation duration"
-  "Measured phase elapsed"
-  "Workflow provenance"
-)
-readonly telemetry_row_count="${#telemetry_fields[@]}"
-readonly telemetry_source_note='> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.'
-readonly telemetry_run_pattern='^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8} \(schema (1, integrity legacy-unverifiable|2, integrity valid)\)$'
-readonly elapsed_ms_pattern='^(unknown|[0-9]+ ms)$'
-readonly artifact_bytes_pattern='^(unknown|[0-9]+ bytes)$'
-readonly subagent_launches_pattern='^(0|[1-9][0-9]* \([a-z-]+=[1-9][0-9]*(, [a-z-]+=[1-9][0-9]*)*\))$'
-readonly reviews_pattern='^[0-9]+ \(readiness=[0-9]+, full=[0-9]+, delta=[0-9]+\)$'
-readonly validations_pattern='^[0-9]+ \(passed=[0-9]+, failed=[0-9]+(, interrupted=[1-9][0-9]*)?(, incomplete=[1-9][0-9]*)?\)$'
-readonly phase_elapsed_pattern='^(unknown|[a-z-]+=[0-9]+s(, [a-z-]+=[0-9]+s)*)$'
-# Only this format is accepted. A body written under the earlier telemetry
-# format stays in place as a historical record and is not migrated, so
-# revalidating one — as a `/work-on` update of that pull request does — refuses
-# here rather than rendering a second supported shape.
-[[ "${#telemetry_lines[@]}" -ge $((telemetry_row_count + 3)) ]] \
-  || fail "workflow telemetry must contain seventeen canonical rows"
-
-for ((index = 0; index < ${#telemetry_fields[@]}; index++)); do
-  row="${telemetry_lines[$((index + 2))]}"
-  [[ "$row" =~ ^\|.*\|$ && "$(awk -F'|' '{ print NF }' <<<"$row")" -eq 4 ]] \
-    || fail "workflow telemetry row $((index + 1)) must contain two columns"
-  field="$(awk -F'|' '{
-    value = $2
-    gsub(/^[ \t]+|[ \t]+$/, "", value)
-    print value
-  }' <<<"$row")"
-  value="$(awk -F'|' '{
-    value = $3
-    gsub(/^[ \t]+|[ \t]+$/, "", value)
-    print value
-  }' <<<"$row")"
-  [[ "$field" == "${telemetry_fields[$index]}" ]] \
-    || fail "workflow telemetry row $((index + 1)) must be ${telemetry_fields[$index]}"
-  [[ -n "$value" ]] \
-    || fail "workflow telemetry row $((index + 1)) has an empty observed value"
-  case "$field" in
-    "Implementation rounds"|"Independent-review rounds"|"Remediation implementation launches"|"Validation executions"|"Blocking findings resolved"|"Findings rejected at adjudication")
-      [[ "$value" == unknown || "$value" =~ ^[0-9]+$ ]] \
-        || fail "workflow telemetry $field must be a nonnegative integer or unknown"
-      ;;
-    "Start-to-seal elapsed"|"Recorded validation duration")
-      [[ "$value" =~ $elapsed_ms_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-    "Reviewed artifact bytes")
-      [[ "$value" =~ $artifact_bytes_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-    "Telemetry run")
-      [[ "$value" =~ $telemetry_run_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-    "Subagent launches")
-      [[ "$value" =~ $subagent_launches_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-    "Reviews recorded")
-      [[ "$value" =~ $reviews_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-    "Validation executions recorded")
-      [[ "$value" =~ $validations_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-    "Measured phase elapsed")
-      [[ "$value" =~ $phase_elapsed_pattern ]] \
-        || fail "workflow telemetry $field is malformed"
-      ;;
-  esac
-  if [[ "$field" == "Final workflow outcome" ]]; then
-    telemetry_outcome="$value"
+canonical='work-on:[0-9a-f]{12}\*? workflow:[0-9a-f]{12}\*? tdd:[0-9a-f]{12}\*? review:[0-9a-f]{12}\*? \(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+|unknown)@[0-9a-f]{7,40}\)'
+run_pattern="^Run ([A-Za-z0-9._-]{8,64}): ($canonical)$"
+legacy_pattern="^Legacy run: ($canonical)$"
+mapfile -t entries < <(section '## Work-on' "$body" | sed '/^[[:space:]]*$/d')
+[[ "${#entries[@]}" -gt 0 ]] || fail 'Work-on section must contain at least one run'
+declare -A seen=()
+for ((index=0; index<${#entries[@]}; index++)); do
+  line="${entries[$index]}"
+  if [[ "$line" =~ $run_pattern ]]; then
+    identity="${BASH_REMATCH[1]}"
+    [[ -z "${seen[$identity]:-}" ]] || fail "Work-on Run identity is duplicated: $identity"
+    seen[$identity]=1
+  elif [[ "$line" =~ $legacy_pattern ]]; then
+    :
+  else
+    fail "Work-on line $((index + 1)) is malformed"
   fi
-  if [[ "$field" == "Workflow provenance" ]]; then
-    provenance_value="$value"
-  fi
-done
-
-# The source note names which rows a human reported and which the sink derived.
-# It is mechanically owned, exact, and sits directly below the table, so a body
-# can never present a primary-reported value as a measured one.
-[[ "${telemetry_lines[$((telemetry_row_count + 2))]}" == "$telemetry_source_note" ]] \
-  || fail "workflow telemetry is missing the canonical source note"
-
-[[ "$telemetry_outcome" == Closes || "$telemetry_outcome" == Progresses ]] \
-  || fail "workflow telemetry outcome must be Closes or Progresses"
-[[ "$telemetry_outcome" == "$issue_outcome" ]] \
-  || fail "issue outcome $issue_outcome contradicts telemetry outcome $telemetry_outcome"
-
-canonical_provenance_pattern='^work-on:[0-9a-f]{12}\*? workflow:[0-9a-f]{12}\*? tdd:[0-9a-f]{12}\*? review:[0-9a-f]{12}\*? \(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+|unknown)@[0-9a-f]{7,40}\)$'
-
-[[ "$provenance_value" =~ ^([1-9][0-9]*)[[:space:]]runs?$ ]] \
-  || fail "workflow provenance is malformed"
-run_count="${BASH_REMATCH[1]}"
-if [[ "$run_count" -eq 1 ]]; then
-  [[ "$provenance_value" == '1 run' ]] || fail "workflow provenance is malformed"
-else
-  [[ "$provenance_value" == "$run_count runs" ]] \
-    || fail "workflow provenance is malformed"
-fi
-[[ "${#telemetry_lines[@]}" -eq $((telemetry_row_count + 3 + run_count)) ]] \
-  || fail "workflow provenance run count does not match run lines"
-
-provenance_runs=()
-for ((index = 1; index <= run_count; index++)); do
-  run_line="${telemetry_lines[$((telemetry_row_count + 2 + index))]}"
-  run_prefix="Run $index: "
-  [[ "$run_line" == "$run_prefix"* ]] \
-    || fail "workflow provenance run $index is malformed or out of order"
-  run="${run_line#"$run_prefix"}"
-  [[ "$run" =~ $canonical_provenance_pattern ]] \
-    || fail "workflow provenance run $index is malformed"
-  provenance_runs+=("$run")
 done
 
 if [[ -n "$previous_source" ]]; then
-  [[ -f "$previous_source" ]] \
-    || fail "previous body file does not exist: $previous_source"
-  previous_body="$fixture/previous.md"
-  sed 's/\r$//' "$previous_source" >"$previous_body"
-  "$0" "$issue_number" "$previous_body"
-  mapfile -t previous_runs < <(awk '
-    $0 == "## Workflow telemetry" { in_telemetry = 1; next }
-    in_telemetry && /^## / { exit }
-    in_telemetry && /^Run [1-9][0-9]*: / {
-      sub(/^Run [1-9][0-9]*: /, "")
-      print
+  [[ -f "$previous_source" ]] || fail "previous body file does not exist: $previous_source"
+  previous="$fixture/previous.md"; sed 's/\r$//' "$previous_source" >"$previous"
+  previous_entries=()
+  last_gate_line="$(awk '$0 == "## Closure gate" { line = NR } END { print line + 0 }' "$previous")"
+  mapfile -t previous_entries < <(awk -v gate_line="$last_gate_line" '
+    ! gate_line || NR <= gate_line { next }
+    ! selected && $0 == "## Work-on" { selected = "current"; next }
+    ! selected && $0 == "## Workflow telemetry" { selected = "legacy"; next }
+    selected && /^## / { exit }
+    selected == "current" && /^[[:space:]]*$/ { next }
+    selected == "current" { print }
+    selected == "legacy" && /^Run [1-9][0-9]*: / {
+      sub(/^Run [1-9][0-9]*: /, "Legacy run: "); print
     }
-  ' "$previous_body")
-  [[ "${#provenance_runs[@]}" -ge "${#previous_runs[@]}" ]] \
-    || fail "workflow provenance dropped previous runs"
-  for ((index = 0; index < ${#previous_runs[@]}; index++)); do
-    [[ "${provenance_runs[$index]}" == "${previous_runs[$index]}" ]] \
-      || fail "workflow provenance rewrote previous run $((index + 1))"
+  ' "$previous")
+  [[ "${#entries[@]}" -ge "${#previous_entries[@]}" ]] || fail 'Work-on history dropped previous entries'
+  for ((index=0; index<${#previous_entries[@]}; index++)); do
+    [[ "${entries[$index]}" == "${previous_entries[$index]}" ]] || fail "Work-on history rewrote previous entry $((index + 1))"
   done
-  # One root run contributes one ledger value. More than one appended entry
-  # cannot have come from a single run's ledger.
-  [[ "${#provenance_runs[@]}" -eq $((${#previous_runs[@]} + 1)) ]] \
-    || fail "workflow provenance must append exactly one run"
+  appended=$((${#entries[@]} - ${#previous_entries[@]}))
+  (( appended <= 1 )) || fail 'Work-on history appended more than one run'
+  if (( appended == 1 )); then
+    [[ "${entries[-1]}" == Run\ * ]] || fail 'Work-on history appended a non-Run entry'
+  fi
 fi

@@ -1,372 +1,123 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly command_under_test="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/validate-closeout-body.sh"
-fixture="$(mktemp -d)"
-trap 'rm -rf "$fixture"' EXIT
+script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/validate-closeout-body.sh"
+fixture="$(mktemp -d)"; trap 'rm -rf "$fixture"' EXIT
+prov1='work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (unknown@abcdef1)'
+prov2='work-on:aaaaaaaaaaaa* workflow:bbbbbbbbbbbb tdd:cccccccccccc review:dddddddddddd (owner/repo@123456789abc)'
+body() {
+  local outcome="$1" status="$2" entries="$3"
+  printf '## Issues\n\n%s #150\n\n## Closure gate\n\n| Acceptance criterion | Production path | Exact artifact/mode/seam | Evidence | Status |\n|---|---|---|---|---|\n| criterion | script | CLI | passed | %s |\n\n## Work-on\n\n%b\n' "$outcome" "$status" "$entries"
+}
+body Closes tested "Run opaque_run-1: $prov1" >"$fixture/good"
+"$script" 150 "$fixture/good"
+sed 's/$/\r/' "$fixture/good" >"$fixture/crlf"; "$script" 150 "$fixture/crlf"
+sed 's/$/\r/' "$fixture/good" | "$script" 150 -
 
-cat >"$fixture/canonical.md" <<'EOF'
-## Issues
-
-Closes #164
-
-## Summary
-
-Readable narrative stays readable.
-
+reject() { if "$script" "$@" >/dev/null 2>&1; then echo "validator accepted invalid fixture: $*" >&2; exit 1; fi; }
+body Progresses tested "Run opaque_run-1: $prov1" >"$fixture/progress"; "$script" 150 "$fixture/progress"; reject --require-closes 150 "$fixture/progress"
+sed $'s/Closes #150/Closes\t#150/' "$fixture/good" >"$fixture/tab-issue"; reject 150 "$fixture/tab-issue"
+sed $'s/Run opaque_run-1:/Run\topaque_run-1:/' "$fixture/good" >"$fixture/tab-run-prefix"; reject 150 "$fixture/tab-run-prefix"
+sed $'s/Run opaque_run-1: /Run opaque_run-1:\t/' "$fixture/good" >"$fixture/tab-run-provenance"; reject 150 "$fixture/tab-run-provenance"
+body Closes tested "Legacy run: $prov1" >"$fixture/legacy-spaces"
+sed $'s/Legacy run:/Legacy\trun:/' "$fixture/legacy-spaces" >"$fixture/tab-legacy-prefix"; reject 150 "$fixture/tab-legacy-prefix"
+sed $'s/Legacy run: /Legacy run:\t/' "$fixture/legacy-spaces" >"$fixture/tab-legacy-provenance"; reject 150 "$fixture/tab-legacy-provenance"
+sed 's/Closes #150/Closes #151/' "$fixture/good" >"$fixture/wrong-issue"; reject 150 "$fixture/wrong-issue"
+sed 's/| tested |/| guessed |/' "$fixture/good" >"$fixture/status"; reject 150 "$fixture/status"
+body Closes inferred "Run opaque_run-1: $prov1" >"$fixture/not-tested"; reject 150 "$fixture/not-tested"
+sed '/## Work-on/i ## Closure gate\n' "$fixture/good" >"$fixture/duplicate-heading"; reject 150 "$fixture/duplicate-heading"
+cat >"$fixture/out-of-order" <<EOF
 ## Closure gate
 
 | Acceptance criterion | Production path | Exact artifact/mode/seam | Evidence | Status |
 |---|---|---|---|---|
-| First criterion | `render-closeout.sh` | Public CLI | Literal output | tested |
+| criterion | script | CLI | passed | tested |
 
-## Workflow telemetry
+## Issues
 
-| Field | Observed value |
-|---|---|
-| Model configuration | gpt-5 |
-| Start-to-seal elapsed | 42000 ms |
-| Implementation rounds | 1 |
-| Independent-review rounds | 1 |
-| Remediation implementation launches | 0 |
-| Validation executions | 3 |
-| Blocking findings resolved | 0 |
-| Findings rejected at adjudication | 0 |
-| Final workflow outcome | Closes |
-| Telemetry run | 20260813T101500Z-0123abcd (schema 1, integrity legacy-unverifiable) |
-| Subagent launches | 4 (implementation=2, review-standards=1, review-spec=1) |
-| Reviews recorded | 2 (readiness=1, full=1, delta=0) |
-| Reviewed artifact bytes | 91234 bytes |
-| Validation executions recorded | 3 (passed=3, failed=0) |
-| Recorded validation duration | 61000 ms |
-| Measured phase elapsed | implementation=120s, gate=60s |
-| Workflow provenance | 1 run |
+Closes #150
 
-> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.
+## Work-on
 
-Run 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
+Run opaque_run-1: $prov1
 EOF
+reject 150 "$fixture/out-of-order"
+sed 's/| criterion | script | CLI | passed | tested |/| criterion | script | CLI | tested |/' \
+  "$fixture/good" >"$fixture/malformed-table"
+reject 150 "$fixture/malformed-table"
+body Closes tested "Run short: $prov1" >"$fixture/bad-id"; reject 150 "$fixture/bad-id"
+body Closes tested "Run opaque_run-1: $prov1\nRun opaque_run-1: $prov1" >"$fixture/duplicate-id"; reject 150 "$fixture/duplicate-id"
 
-"$command_under_test" 164 "$fixture/canonical.md"
-"$command_under_test" 164 - <"$fixture/canonical.md"
+# Every unchanged heading, issue-mapping, closure-table, and provenance-shape
+# branch from the base suite remains discriminating.
+for heading in '## Issues' '## Closure gate' '## Work-on'; do
+  grep -Fvx "$heading" "$fixture/good" >"$fixture/missing-heading"
+  reject 150 "$fixture/missing-heading"
+  { cat "$fixture/good"; printf '\n%s\n' "$heading"; } >"$fixture/duplicate-any-heading"
+  reject 150 "$fixture/duplicate-any-heading"
+done
+sed '/Closes #150/a Progresses #150' "$fixture/good" >"$fixture/two-issues"; reject 150 "$fixture/two-issues"
+sed 's/Closes #150/Close #150/' "$fixture/good" >"$fixture/bad-outcome"; reject 150 "$fixture/bad-outcome"
+sed 's/Closes #150/Closes  #150/' "$fixture/good" >"$fixture/bad-spacing"; reject 150 "$fixture/bad-spacing"
+sed 's/| Acceptance criterion | Production path | Exact artifact\/mode\/seam | Evidence | Status |/| wrong | header |/' "$fixture/good" >"$fixture/bad-header"; reject 150 "$fixture/bad-header"
+sed 's/|---|---|---|---|---|/|---|---|/' "$fixture/good" >"$fixture/bad-separator"; reject 150 "$fixture/bad-separator"
+grep -Fv '| criterion | script | CLI | passed | tested |' "$fixture/good" >"$fixture/no-rows"; reject 150 "$fixture/no-rows"
+empty_rows=(
+  '|  | script | CLI | passed | tested |'
+  '| criterion |  | CLI | passed | tested |'
+  '| criterion | script |  | passed | tested |'
+  '| criterion | script | CLI |  | tested |'
+  '| criterion | script | CLI | passed |  |'
+)
+for empty_row in "${empty_rows[@]}"; do
+  sed "s/| criterion | script | CLI | passed | tested |/$empty_row/" \
+    "$fixture/good" >"$fixture/empty-column"
+  reject 150 "$fixture/empty-column"
+done
+for status in tested failing inferred unverified; do
+  body Progresses "$status" "Run opaque_run-1: $prov1" >"$fixture/status-$status"
+  "$script" 150 "$fixture/status-$status"
+done
+body Closes tested "Legacy run: $prov1" >"$fixture/legacy-only"; "$script" 150 "$fixture/legacy-only"
+for malformed in \
+  'Run opaque_run-1: work-on:short workflow:222222222222 tdd:333333333333 review:444444444444 (unknown@abcdef1)' \
+  'Run opaque_run-1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (bad pointer@abcdef1)' \
+  'Legacy run: not canonical'; do
+  body Closes tested "$malformed" >"$fixture/malformed-provenance"
+  reject 150 "$fixture/malformed-provenance"
+done
+if "$script" --unknown 150 "$fixture/good" >/dev/null 2>&1; then echo 'unknown validator option accepted' >&2; exit 1; fi
+if "$script" zero "$fixture/good" >/dev/null 2>&1; then echo 'invalid issue number accepted' >&2; exit 1; fi
 
-# A body edited through GitHub's web UI reads back with CRLF line endings, in
-# both documented input modes.
-sed 's/$/\r/' "$fixture/canonical.md" >"$fixture/crlf.md"
-"$command_under_test" 164 "$fixture/crlf.md"
-"$command_under_test" 164 - <"$fixture/crlf.md"
-"$command_under_test" --require-closes 164 "$fixture/crlf.md"
+body Closes tested "Run opaque_run-1: $prov1\nRun opaque_run-2: $prov2" >"$fixture/appended"
+"$script" --previous "$fixture/good" 150 "$fixture/appended"
+"$script" --previous "$fixture/good" 150 "$fixture/good"
+body Closes tested "" >"$fixture/dropped"; reject --previous "$fixture/good" 150 "$fixture/dropped"
+body Closes tested "Run opaque_run-1: $prov2" >"$fixture/rewritten"; reject --previous "$fixture/good" 150 "$fixture/rewritten"
+body Closes tested "Run opaque_run-2: $prov2\nRun opaque_run-1: $prov1" >"$fixture/reordered"; reject --previous "$fixture/good" 150 "$fixture/reordered"
+body Closes tested "Run opaque_run-1: $prov1\nRun opaque_run-2: $prov2\nRun opaque_run-3: $prov1" >"$fixture/two-appended"; reject --previous "$fixture/good" 150 "$fixture/two-appended"
 
-sed \
-  -e 's/^Closes #164$/Progresses #164/' \
-  -e 's/| Final workflow outcome | Closes |/| Final workflow outcome | Progresses |/' \
-  "$fixture/canonical.md" >"$fixture/progresses.md"
-"$command_under_test" 164 "$fixture/progresses.md"
+# The old body is not recursively judged. Only its ordered Run N provenance is
+# transformed into the required Legacy prefix.
+cat >"$fixture/old" <<EOF
+historically invalid current headings
 
-if "$command_under_test" --require-closes 164 "$fixture/progresses.md" \
-    >"$fixture/require-closes.out" 2>"$fixture/require-closes.err"; then
-  printf 'FAIL[require-closes]: Progresses was accepted for unattended closeout\n' >&2
-  exit 1
-fi
-[[ ! -s "$fixture/require-closes.out" ]]
-grep -Fqx \
-  'closeout body invalid: unattended closeout requires Closes #164; found Progresses #164' \
-  "$fixture/require-closes.err"
-"$command_under_test" --require-closes 164 "$fixture/canonical.md"
-
-expect_failure() {
-  local name="$1" diagnostic="$2" body="${3:-$1}" previous="${4:-}"
-  local previous_args=()
-  [[ -z "$previous" ]] || previous_args=(--previous "$fixture/$previous.md")
-  if "$command_under_test" "${previous_args[@]}" 164 "$fixture/$body.md" \
-      >"$fixture/$name.out" 2>"$fixture/$name.err"; then
-    printf 'FAIL[%s]: malformed body was accepted\n' "$name" >&2
-    exit 1
-  fi
-  [[ ! -s "$fixture/$name.out" ]]
-  grep -Fqx "closeout body invalid: $diagnostic" "$fixture/$name.err" || {
-    printf 'FAIL[%s]: expected diagnostic: %s\n' "$name" "$diagnostic" >&2
-    cat "$fixture/$name.err" >&2
-    exit 1
-  }
-}
-
-# PR #160 shape: renamed heading/header and bullet telemetry.
-sed \
-  -e 's/^## Closure gate$/## Acceptance closure/' \
-  -e 's/| Acceptance criterion |/| Criterion |/' \
-  -e '/^## Workflow telemetry$/,$d' \
-  "$fixture/canonical.md" >"$fixture/pr-160.md"
-cat >>"$fixture/pr-160.md" <<'EOF'
-## Workflow telemetry
-
-- Final workflow outcome: Closes
-EOF
-expect_failure pr-160 "missing canonical heading: ## Closure gate"
-
-# PR #162 shape: a mechanism trace table exists but has no closure statuses.
-sed '/^## Closure gate$/,$d' "$fixture/canonical.md" >"$fixture/pr-162.md"
-cat >>"$fixture/pr-162.md" <<'EOF'
 ## Closure gate
 
-| Mechanism | Acceptance criterion |
-|---|---|
-| Renderer | First criterion |
+This is a counterfeit narrative closure gate.
+
+## Work-on
+
+This is old free-form narrative, not mechanical run history.
+
+## Closure gate
+
+historical closure content
 
 ## Workflow telemetry
-
-| Field | Observed value |
-|---|---|
-| Model configuration | gpt-5 |
-| Start-to-seal elapsed | 42000 ms |
-| Implementation rounds | 1 |
-| Independent-review rounds | 1 |
-| Remediation implementation launches | 0 |
-| Validation executions | 3 |
-| Blocking findings resolved | 0 |
-| Findings rejected at adjudication | 0 |
-| Final workflow outcome | Closes |
-| Telemetry run | 20260813T101500Z-0123abcd (schema 1, integrity legacy-unverifiable) |
-| Subagent launches | 4 (implementation=2, review-standards=1, review-spec=1) |
-| Reviews recorded | 2 (readiness=1, full=1, delta=0) |
-| Reviewed artifact bytes | 91234 bytes |
-| Validation executions recorded | 3 (passed=3, failed=0) |
-| Recorded validation duration | 61000 ms |
-| Measured phase elapsed | implementation=120s, gate=60s |
-| Workflow provenance | 1 run |
-
-> **Source note:** Model configuration, Blocking findings resolved, and Findings rejected at adjudication are primary-reported. The remaining run telemetry is sink-derived; workflow provenance is verified from the frozen run ledger.
-
-Run 1: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)
+Run 1: $prov1
 EOF
-expect_failure pr-162 "missing canonical closure gate table header"
+body Closes tested "Legacy run: $prov1\nRun opaque_run-2: $prov2" >"$fixture/from-old"
+"$script" --previous "$fixture/old" 150 "$fixture/from-old"
 
-sed 's/| tested |$/| instructional |/' "$fixture/canonical.md" >"$fixture/invalid-status.md"
-expect_failure invalid-status "closure gate row 1 has invalid status: instructional"
-
-for status in failing inferred unverified; do
-  sed "s/| tested |\$/| $status |/" "$fixture/canonical.md" \
-    >"$fixture/closes-$status.md"
-  expect_failure "closes-$status" \
-    "Closes requires every closure gate row to be tested; row 1 is $status"
-done
-
-sed 's/| Final workflow outcome | Closes |/| Final workflow outcome | Progresses |/' \
-  "$fixture/canonical.md" >"$fixture/contradiction.md"
-expect_failure contradiction "issue outcome Closes contradicts telemetry outcome Progresses"
-
-sed '/| First criterion /d' "$fixture/canonical.md" >"$fixture/missing-row.md"
-expect_failure missing-row "closure gate must contain at least one acceptance row"
-
-count_fields=(
-  "Implementation rounds"
-  "Independent-review rounds"
-  "Remediation implementation launches"
-  "Validation executions"
-  "Blocking findings resolved"
-  "Findings rejected at adjudication"
-)
-for ((index = 0; index < ${#count_fields[@]}; index++)); do
-  field="${count_fields[$index]}"
-  sed "s/| $field | [^|]* |/| $field | banana |/" \
-    "$fixture/canonical.md" >"$fixture/invalid-count-$index.md"
-  expect_failure "invalid-count-$index" \
-    "workflow telemetry $field must be a nonnegative integer or unknown"
-done
-
-cp "$fixture/canonical.md" "$fixture/unknown-counts.md"
-for field in "${count_fields[@]}"; do
-  sed "s/| $field | [^|]* |/| $field | unknown |/" \
-    "$fixture/unknown-counts.md" >"$fixture/unknown-counts.next"
-  mv "$fixture/unknown-counts.next" "$fixture/unknown-counts.md"
-done
-"$command_under_test" 164 "$fixture/unknown-counts.md"
-
-sed -e '/| Workflow provenance |/d' -e '/^Run 1: /d' "$fixture/canonical.md" \
-  >"$fixture/short-telemetry-table.md"
-expect_failure short-telemetry-table \
-  "workflow telemetry must contain seventeen canonical rows"
-
-# The sink-derived rows are mechanically rendered, so a hand-written value in
-# any of them is rejected rather than published as observed telemetry.
-sink_rows=(
-  "Telemetry run|not-a-run-id (schema 1, integrity legacy-unverifiable)"
-  "Telemetry run|20260813T101500Z-0123abcd"
-  "Subagent launches|four"
-  "Subagent launches|4 (implementation=2"
-  "Reviews recorded|2 (readiness=1, full=1)"
-  "Reviews recorded|several"
-  "Validation executions recorded|3"
-  "Validation executions recorded|3 (passed=3, failed=0, flaky=1)"
-  "Measured phase elapsed|implementation=120"
-  "Measured phase elapsed|about two minutes"
-  "Start-to-seal elapsed|42 seconds"
-  "Start-to-seal elapsed|42000"
-  "Start-to-seal elapsed|-1 ms"
-  "Reviewed artifact bytes|91234"
-  "Reviewed artifact bytes|about 90 KB"
-  "Recorded validation duration|61 s"
-  "Recorded validation duration|61000"
-)
-for ((index = 0; index < ${#sink_rows[@]}; index++)); do
-  field="${sink_rows[$index]%%|*}"
-  value="${sink_rows[$index]#*|}"
-  awk -v field="$field" -v value="$value" -F'|' '
-    {
-      cell = $2
-      gsub(/^[ \t]+|[ \t]+$/, "", cell)
-      if (cell == field) { printf "| %s | %s |\n", field, value; next }
-      print
-    }
-  ' "$fixture/canonical.md" >"$fixture/malformed-sink-$index.md"
-  expect_failure "malformed-sink-$index" \
-    "workflow telemetry $field is malformed"
-done
-
-# A run that recorded nothing in any phase still renders a valid row.
-sed 's/| Measured phase elapsed | [^|]* |/| Measured phase elapsed | unknown |/' \
-  "$fixture/canonical.md" >"$fixture/unmeasured-phases.md"
-"$command_under_test" 164 "$fixture/unmeasured-phases.md"
-
-# A run with no launches renders a bare zero rather than an empty breakdown.
-sed 's/| Subagent launches | [^|]* |/| Subagent launches | 0 |/' \
-  "$fixture/canonical.md" >"$fixture/no-launches.md"
-"$command_under_test" 164 "$fixture/no-launches.md"
-
-# The source note is mechanically owned, exact, and directly below the table.
-# Without it a reader cannot tell a primary-reported value from a measured one.
-sed '/^> \*\*Source note:\*\*/d' "$fixture/canonical.md" \
-  >"$fixture/no-source-note.md"
-expect_failure no-source-note \
-  "workflow telemetry is missing the canonical source note"
-
-sed 's/^> \*\*Source note:\*\* Model configuration, /> **Source note:** All of /' \
-  "$fixture/canonical.md" >"$fixture/reworded-source-note.md"
-expect_failure reworded-source-note \
-  "workflow telemetry is missing the canonical source note"
-
-# Only the current format is accepted. A body written under the earlier
-# telemetry format stays in place as a historical record and is not migrated,
-# so a `/work-on` run updating such a pull request refuses previous-body
-# validation rather than rendering a second supported shape.
-sed -e 's/| Start-to-seal elapsed | 42000 ms |/| Wall-clock elapsed | 42 seconds |/' \
-  -e '/| Reviewed artifact bytes |/d' \
-  -e '/| Recorded validation duration |/d' \
-  -e '/^> \*\*Source note:\*\*/d' \
-  "$fixture/canonical.md" >"$fixture/legacy-format.md"
-expect_failure legacy-format \
-  "workflow telemetry must contain seventeen canonical rows"
-expect_failure legacy-previous \
-  "workflow telemetry must contain seventeen canonical rows" \
-  canonical legacy-format
-
-sed 's/work-on:111111111111/work-on:NOT-A-DIGEST/' \
-  "$fixture/canonical.md" >"$fixture/malformed-provenance.md"
-expect_failure malformed-provenance "workflow provenance run 1 is malformed"
-
-sed $'/^Run 1: /s/ /\t/3g' \
-  "$fixture/canonical.md" >"$fixture/tab-separated-provenance.md"
-expect_failure tab-separated-provenance "workflow provenance run 1 is malformed"
-
-# The trailing pointer always carries a commit, and the workflow digest never
-# carries a repository suffix.
-sed 's/(example\/skills@abcdef123456)/(example\/skills)/' \
-  "$fixture/canonical.md" >"$fixture/pointer-without-sha.md"
-expect_failure pointer-without-sha "workflow provenance run 1 is malformed"
-sed 's/workflow:222222222222/workflow:222222222222@example\/target/' \
-  "$fixture/canonical.md" >"$fixture/workflow-suffix.md"
-expect_failure workflow-suffix "workflow provenance run 1 is malformed"
-
-# An unknown skills origin still carries a commit.
-sed 's/(example\/skills@abcdef123456)/(unknown@abcdef123456)/' \
-  "$fixture/canonical.md" >"$fixture/unknown-pointer.md"
-"$command_under_test" 164 "$fixture/unknown-pointer.md"
-
-# The run count agrees with its plural and with the number of run lines.
-for malformed_count in '0 runs' '1 runs' 'mixed (2 phases)'; do
-  sed "s/| Workflow provenance |.*|/| Workflow provenance | $malformed_count |/" \
-    "$fixture/canonical.md" >"$fixture/malformed-count.md"
-  expect_failure malformed-count "workflow provenance is malformed"
-done
-
-sed 's/| Workflow provenance |.*|/| Workflow provenance | 2 runs |/' \
-  "$fixture/canonical.md" >"$fixture/run-count.md"
-expect_failure run-count \
-  "workflow provenance run count does not match run lines"
-
-sed 's/| Workflow provenance |.*|/| Workflow provenance | 2 runs |/' \
-  "$fixture/canonical.md" >"$fixture/two-runs.md"
-cat >>"$fixture/two-runs.md" <<'EOF'
-Run 2: work-on:aaaaaaaaaaaa* workflow:bbbbbbbbbbbb* tdd:cccccccccccc* review:dddddddddddd* (example/skills@123456789abc)
-EOF
-"$command_under_test" --previous "$fixture/canonical.md" 164 "$fixture/two-runs.md"
-
-sed 's/^Run 2: /Run 3: /' "$fixture/two-runs.md" >"$fixture/out-of-order.md"
-expect_failure out-of-order \
-  "workflow provenance run 2 is malformed or out of order"
-
-sed 's/| Workflow provenance |.*|/| Workflow provenance | 10 runs |/' \
-  "$fixture/canonical.md" >"$fixture/ten-runs.md"
-sed -i '/^Run 1: /d' "$fixture/ten-runs.md"
-for run_number in {1..10}; do
-  printf 'Run %s: work-on:111111111111 workflow:222222222222 tdd:333333333333 review:444444444444 (example/skills@abcdef123456)\n' \
-    "$run_number" >>"$fixture/ten-runs.md"
-done
-"$command_under_test" 164 "$fixture/ten-runs.md"
-
-expect_failure unchanged-body \
-  "workflow provenance must append exactly one run" canonical canonical
-
-# One root run appends one entry. Two at once cannot have come from a single
-# ledger, so the extra entry is unattributable.
-sed 's/| Workflow provenance |.*|/| Workflow provenance | 3 runs |/' \
-  "$fixture/two-runs.md" >"$fixture/three-runs.md"
-cat >>"$fixture/three-runs.md" <<'EOF'
-Run 3: work-on:eeeeeeeeeeee workflow:ffffffffffff tdd:111111111111 review:222222222222 (example/skills@456789abcdef)
-EOF
-"$command_under_test" 164 "$fixture/three-runs.md"
-expect_failure two-appended \
-  "workflow provenance must append exactly one run" three-runs canonical
-
-# The table describes the latest run, not the pull request's cumulative
-# history, so a later run may legitimately report smaller counts — or report
-# `unknown` where an earlier run reported a number. Neither is a lost bound,
-# because no bound was ever established.
-sed 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
-  "$fixture/two-runs.md" >"$fixture/count-to-unknown.md"
-"$command_under_test" --previous "$fixture/canonical.md" \
-  164 "$fixture/count-to-unknown.md"
-
-sed 's/| Validation executions | 3 |/| Validation executions | 2 |/' \
-  "$fixture/two-runs.md" >"$fixture/decreased-count.md"
-"$command_under_test" --previous "$fixture/canonical.md" \
-  164 "$fixture/decreased-count.md"
-
-sed -e 's/| Implementation rounds | 1 |/| Implementation rounds | 0 |/' \
-  -e 's/| Independent-review rounds | 1 |/| Independent-review rounds | 0 |/' \
-  -e 's/| Start-to-seal elapsed | 42000 ms |/| Start-to-seal elapsed | 11 ms |/' \
-  "$fixture/two-runs.md" >"$fixture/smaller-latest-run.md"
-"$command_under_test" --previous "$fixture/canonical.md" \
-  164 "$fixture/smaller-latest-run.md"
-
-# An unknown count may still stay unknown, and may become known.
-sed -e 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
-  "$fixture/canonical.md" >"$fixture/unknown-previous.md"
-"$command_under_test" --previous "$fixture/unknown-previous.md" \
-  164 "$fixture/two-runs.md"
-sed 's/| Validation executions | 3 |/| Validation executions | unknown |/' \
-  "$fixture/two-runs.md" >"$fixture/unknown-both.md"
-"$command_under_test" --previous "$fixture/unknown-previous.md" \
-  164 "$fixture/unknown-both.md"
-
-# The provenance-prefix checks are independent of the retired count rule and
-# stay in force.
-expect_failure dropped-runs \
-  "workflow provenance dropped previous runs" canonical two-runs
-
-sed 's/^Run 1: work-on:111111111111/Run 1: work-on:999999999999/' \
-  "$fixture/two-runs.md" >"$fixture/rewritten.md"
-expect_failure rewritten-run \
-  "workflow provenance rewrote previous run 1" rewritten two-runs
-
-printf 'work-on closeout body validator black-box scenarios passed\n'
+echo 'validate-closeout-body black-box scenarios passed'

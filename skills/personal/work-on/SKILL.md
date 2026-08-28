@@ -50,13 +50,11 @@ Authority invariants (bind regardless of workflow):
   adoption.
 - Reuse that snapshot for delegation, review, and evidence. Change requirements
   only through an explicit trusted-maintainer contract change.
-- Record every implementation-agent launch, atomic reviewer delegation, and
-  validation command in the run's telemetry sink as it happens, following
-  `references/run-telemetry.md`.
-  Telemetry observes the run; it never decides what the run does.
 - Freeze every acceptance criterion's Validation surface into this run's
-  Validation-surface manifest when the closability gate passes, before workflow
-  provenance capture and implementation delegation; supply it to every
+  Validation-surface manifest when the closability gate passes. That successful
+  freeze is the single authority point that mints the Run identity and captures
+  the complete governing-instruction identity into the same owner-only custody,
+  before implementation delegation; supply the manifest to every
   implementation and review delegate and keep it available for adjudication. It
   bounds the direct-evidence obligation only — never authorized implementation,
   ordinary review, defect reporting, or same-mechanism investigation — and after
@@ -81,44 +79,36 @@ Authority invariants (bind regardless of workflow):
   Authority delta, fresh blind semantic reader, and blocking checkpoint before
   the normative correction is committed as the candidate reviewed by the next
   delta gate, without becoming review-chain or lifecycle state.
-- Register the run's lifecycle before implementation and finalize it on every
-  hand-back, following `references/run-registry.md`. Registration may refuse a
-  run whose predecessor left an unfinished obligation; it never changes what an
-  admitted run does.
 
 Procedure:
 1. Continue only in a fresh or issue-focused context; otherwise require user
    approval. Done when fresh, issue-focused, or explicitly approved.
 2. Resolve the input above. Done with exactly one in-repo issue.
-3. Check the current worktree status, record the telemetry start time, start
-   this run's telemetry sink with this skill's `scripts/run-telemetry.sh` using
-   `start --issue N` (adding `--continues-run HANDLE` only for explicit
-   continuity),
-   and retain the printed repository-bound handle for every later telemetry and
-   closeout operation. Register that handle with this skill's
-   `scripts/run-registry.sh register --run "$RUN_HANDLE"` and abort if it
-   refuses. Fetch the remote default branch and update the current
-   branch. Abort if unrelated changes cannot be avoided or the update is unsafe.
-   Done on a safely updated branch and a registered run.
+3. Check the current worktree status. Fetch the remote default branch and update
+   the current branch. Abort if unrelated changes cannot be avoided or the
+   update is unsafe. Done on a safely updated branch.
 4. For a new run without frozen contract state, build the trusted snapshot
    through GitHub's REST comments endpoint (`gh issue view` omits association).
    On a supported continuation or resume, do not refetch current comments or
    rebuild the snapshot; defer recovery of the retained frozen snapshot and
    manifest to their selected-workflow owner in step 5. Done when either the new
    snapshot contains no untrusted body/link, reports the omitted count, gives
-   every contract source trusted authority, and is retained under the owner-only
-   run-local custody in `references/closability-gate.md`, or the existing frozen
-   pair is ready for selected-workflow recovery without a GitHub refetch.
+   every contract source trusted authority, and is ready for the atomic freeze
+   in `references/closability-gate.md`, or the explicitly named Run identity's
+   frozen custody is ready for selected-workflow recovery without a GitHub
+   refetch.
 5. Use `docs/workflow.md` when present and announce it; otherwise use this
    skill's `references/default-workflow.md`. Read the selected source and treat
    it as binding. Retain its full identity with
    `scripts/workflow-provenance.sh identify-workflow` for the gate and the
-   post-freeze capture. On continuation or resume, follow that workflow's
-   frozen-snapshot/manifest custody now; proceed only when it recovers and
-   verifies the exact retained pair without refetching or reconstruction, using
-   the established pre-/post-delegation failure routing. Done when read,
+   freeze. On continuation or resume, require an explicitly supplied Run
+   identity and follow that workflow's frozen custody now; proceed only when it
+   recovers the exact retained manifest, trusted snapshot, and provenance and
+   verifies an exact match with the current governing-instruction identity,
+   without refetching or reconstruction. A mismatch refuses continuation and is
+   never reclassified or repaired in-run. Done when read,
    identified, recovered when applicable, and, for a repo workflow, announced.
-6. Before capturing provenance, and before any implementation delegation, edit,
+6. Before any implementation delegation, edit,
    commit, or pull request, apply this skill's `references/closability-gate.md`
    to the trusted snapshot and the selected workflow. Done when every
    acceptance criterion has an available direct validation seam, no criterion is
@@ -127,23 +117,20 @@ Procedure:
    contract is consistent, and every criterion's direct-evidence obligation is
    materialized as a finite frozen Validation surface, and every definitely owed
    obligation has a deterministically resolved owning phase; otherwise
-   finalize the run as `preflight-aborted` and hand back as that reference
-   requires.
-7. Immediately before delegating implementation, run this skill's
-   `scripts/workflow-provenance.sh capture`, passing the retained
-   `$selected_workflow_identity` as `--expected-workflow`, to freeze the
-   governing instructions this run read and prove the selected workflow still
-   matches the gate's input. If capture reports invalidated frozen inputs,
-   discard the manifest and rerun complete preflight/Closability. If valid
-   replacement state cannot be established, finalize as `preflight-aborted` and
-   hand back as the gate reference requires. Route a genuinely unrecoverable
-   failure through the applicable existing fail-closed handling. Done when
-   capture succeeds.
+   hand back as `preflight-aborted` as that reference requires.
+7. Immediately before delegating implementation, use
+   `scripts/manifest-identity.sh freeze` as `references/closability-gate.md`
+   specifies. It compares the retained selected-workflow identity, mints and
+   prints the Run identity, and atomically makes the manifest, trusted snapshot,
+   and captured provenance visible in that Run identity's custody. If freeze
+   reports invalidated inputs, rerun complete preflight/Closability. If valid
+   replacement state cannot be established, hand back as `preflight-aborted`.
+   Done when freeze succeeds and `$RUN_IDENTITY` holds its printed value.
 8. Follow it without broadening the issue, including the review state machine
    required by the authority invariants. When code changes are ready for a
    pull request, read and follow `references/github-closeout.md`. Build the
    closeout through `scripts/render-closeout.sh`; never hand-compose its Issues,
-   Closure gate, or Workflow telemetry sections. After that body is read back
+   Closure gate, or Work-on sections. After that body is read back
    and validated, apply the `work-on` label with
    `scripts/ensure-work-on-label.sh`; its failures warn and never block
    hand-back. Done when the workflow's completion criteria are met and, on the

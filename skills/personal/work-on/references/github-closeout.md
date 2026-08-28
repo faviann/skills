@@ -124,199 +124,109 @@ backlog file.
 
 Preserve the repository's pull-request template. Free-form summary,
 implementation explanation, validation, finding adjudications, and follow-ups
-remain ordinary Markdown. Put that content in an untracked narrative file,
-excluding the mechanically owned `## Issues`, `## Closure gate`, and
-`## Workflow telemetry` sections.
+remain ordinary Markdown. Put them in an untracked narrative file, excluding
+the mechanically owned `## Issues`, `## Closure gate`, and `## Work-on`
+sections. `## Follow-ups` and `## Finding adjudications` are ordinary narrative
+Markdown, not required sections.
 
 For every non-empty narrative, the renderer adds a mechanically owned
 `## Narrative` boundary before copying the narrative Markdown verbatim, apart
-from normalizing terminal blank lines. The narrative may begin with any
-Markdown block; do not add or require a heading merely to satisfy the
-validator.
+from normalizing terminal blank lines.
 
-Put the closeout facts in an untracked JSON file with this shape:
+Put only the four authored facts in an untracked JSON file:
 
 ```json
 {
-  "repository": "owner/repository",
   "issue_number": 123,
   "outcome": "Closes",
-  "acceptance_criteria": [
-    "The acceptance criterion"
-  ],
-  "acceptance": [
-    {
-      "criterion": "The acceptance criterion",
-      "production_path": "`path/to/artifact`",
-      "seam": "The exact public artifact, mode, or seam",
-      "evidence": "The observed evidence",
-      "status": "tested"
-    }
-  ],
-  "telemetry": {
-    "model_configuration": "observed value or unknown",
-    "blocking_findings_resolved": 0,
-    "findings_rejected_at_adjudication": 0,
-    "final_workflow_outcome": "Closes"
-  }
+  "acceptance_criteria": ["The acceptance criterion"],
+  "acceptance": [{
+    "criterion": "The acceptance criterion",
+    "production_path": "`path/to/artifact`",
+    "seam": "The exact public artifact, mode, or seam",
+    "evidence": "The observed evidence",
+    "status": "tested"
+  }]
 }
 ```
 
 The primary supplies `acceptance_criteria` from the authoritative issue
 snapshot. It must be a non-empty array of unique, non-empty strings, and the
-`acceptance` rows must match that set exactly once: no missing, extra, or
-duplicate criteria. This mechanically checks completeness against the
-primary-supplied contract data; it does not establish that the supplied
-criteria are truthful.
+`acceptance` rows must match that set exactly once. The renderer refuses any
+`telemetry` key, any facts-supplied provenance or run history, and any other
+top-level field. Provenance comes only from Run custody.
 
-Render the complete human-readable pull-request body:
+Render the complete human-readable body with the Run identity minted by
+contract freeze:
 
 ```sh
 ~/.agents/skills/work-on/scripts/render-closeout.sh \
-  --run "$RUN_HANDLE" <untracked-facts.json> <untracked-narrative.md> --new-pr \
+  --run "$RUN_IDENTITY" <untracked-facts.json> <untracked-narrative.md> --new-pr \
   > <untracked-pr-body.md>
 ```
 
-For an existing pull request, first save its live body, then render with
-`--previous-body <old-body.md>` in place of `--new-pr`. Exactly one mode is
-required. The renderer accepts `-` instead of the facts path to read facts from
-stdin. It fails before writing any body when the run's frozen provenance cannot
-be verified, the run has no telemetry sink, schema-2 integrity is not valid,
-repository/issue/outcome identity differs, the facts are malformed, the
-authoritative criteria and
-closure rows do not match exactly once, a required acceptance row or telemetry
-value is absent, a status is outside
-`tested`/`failing`/`inferred`/`unverified`, a `Closes` row is not `tested`, the
-two outcome fields contradict each other, or the shipped read-back validator
-rejects the rendered candidate. Inspect the rendered Markdown as the actual PR
-body; manual `work-on` does not depend on the AFK watcher or on a human reading
-JSON.
+For an existing pull request, first save its live body, then use
+`--previous-body <old-body.md>` instead of `--new-pr`. The renderer reads the
+captured provenance from that Run identity's complete custody; it never verifies
+live instruction files. Thus an authorized change to governing instructions in
+the same uninterrupted invocation does not invalidate closeout.
 
-Every render appends exactly one run from the frozen provenance of the current
-run, even when it equals the prior run. In `--previous-body` mode the prior runs
-come only from the saved live pull-request body and survive as an exact prefix.
-Facts never supply provenance or prior runs.
-
-The renderer generates this issue mapping:
+The mechanically owned sections are, in order:
 
 ```md
 ## Issues
 
-Closes #<issue>
-Progresses #<issue>
+Closes #123
 
-## Follow-ups
+## Closure gate
 
-- #<issue> - <short description>
+| Acceptance criterion | Production path | Exact artifact/mode/seam | Evidence | Status |
+|---|---|---|---|---|
+| The acceptance criterion | `path/to/artifact` | public seam | observed evidence | tested |
+
+## Work-on
+
+Run 20260827T182139Z-3f9ac1b2a4d6e8f0: work-on:a1b2c3d4e5f6* workflow:0f1e2d3c4b5a tdd:9a8b7c6d5e4f review:112233445566 (faviann/skills@0a1b2c3d4e5f)
 ```
 
-Rules:
+`Closes` means the pull request fully satisfies the issue contract and requires
+every closure row to be `tested`; `Progresses` is every other safe partial
+outcome. The input issue appears exactly once.
 
-- `Closes` — only when the gate resolved to it; means the pull request fully
-  satisfies the issue contract.
-- `Progresses` — every other case; means it contributes without completing
-  the contract.
-- The input issue appears in exactly one of those groups.
-- Include related issues only when the change materially addresses them.
-- Issue category and labels do not change these semantics.
-- Omit `Follow-ups` when empty.
+Each run that renders the body contributes one line joining its opaque Run
+identity to its exact captured canonical provenance. The identity syntax
+accepted by consumers is `[A-Za-z0-9._-]{8,64}`. It records render order only:
+no predecessor/successor relation, continuation, lifecycle, or completeness
+claim. The `(owner/repo@sha)` pointer belongs to provenance, not to Run identity.
+A published identity may outlive its custody; it is an opaque correlation token
+into git, GitHub, and the harness corpus, never a lookup key into a live store.
 
-Retain the gate's one result as `OUTCOME` (`Closes` or `Progresses`) and use it
-for both outcome fields in the facts file and the telemetry resolution below.
+The list is append-only by Run identity. Re-rendering the same identity requires
+its whole line to match and appends nothing. A new identity appends exactly one
+line. Contradictory provenance for an existing identity fails, and all earlier
+lines survive byte-for-byte in order. When an old-format body is actually
+re-rendered, only canonical provenance from its `Run N:` lines is carried
+forward, in order, as `Legacy run: <canonical provenance>` ahead of the current
+line. No identity is invented and no telemetry value migrates. Finished old
+pull requests are otherwise left alone and never revalidated.
 
-Include `## Finding adjudications` in the narrative with the ledger's rationale
-lines and the sweep's trace table; omit it when no blocking findings were
-adjudicated.
-
-Three observations are primary-reported through the facts file — model
-configuration, blocking findings resolved, and findings rejected at
-adjudication. Every other row is derived from the run's telemetry sink:
-
-```md
-## Workflow telemetry
-
-| Field | Observed value |
-|---|---|
-| Model configuration | <observed value or unknown> |
-| Start-to-seal elapsed | <milliseconds> ms, or unknown |
-| Implementation rounds | <count> |
-| Independent-review rounds | <count> |
-| Remediation implementation launches | <count> |
-| Validation executions | <count> |
-| Blocking findings resolved | <count or unknown> |
-| Findings rejected at adjudication | <count or unknown> |
-| Final workflow outcome | Closes or Progresses |
-| Telemetry run | <bare run id> (schema <version>, integrity <state>) |
-| Subagent launches | <total and by-role breakdown> |
-| Reviews recorded | <total and readiness/full/delta breakdown> |
-| Reviewed artifact bytes | <bytes> bytes, or unknown |
-| Validation executions recorded | <total and outcome breakdown> |
-| Recorded validation duration | <milliseconds> ms, or unknown |
-| Measured phase elapsed | <per-phase seconds, or unknown> |
-| Workflow provenance | <N> run or runs |
-```
-
-Use observed values only; never estimate. The outcome must match the issue
-mapping. A mechanical count of zero is a plain `0`, not a flag.
-
-The renderer aggregates every sink-derived row itself, appends the mechanically
-owned source note naming which rows are primary-reported, and rejects facts
-whose `telemetry` object holds anything beyond the four fields shown above —
-under any name, not a fixed list of forbidden ones; see
-`references/run-telemetry.md`. The
-table describes the latest run alone, so a later run may legitimately report
-smaller counts than the previous body did. Individual launches, reviews,
-and validation executions stay in the sink. Record the run's outcome with
-`scripts/run-telemetry.sh resolve --run "$RUN_HANDLE" --outcome "$OUTCOME"` as
-soon as the gate resolves it. Record legitimate closeout evidence, then run
-`scripts/run-registry.sh finalize --run "$RUN_HANDLE"` before rendering: it
-seals the run and discharges its registered lifecycle from the sink's own
-sealed summary, and refuses to report success unless that summary is valid. A
-run the registry deliberately left unregistered is sealed the same way and
-reported as `unregistered`.
-Schema-2
-rendering fails unless integrity is `valid`, repository/issue/outcome identity
-matches the facts, and the run has exactly one compatible resolution and seal.
-Rendering never repairs the sink.
-
-Create or update the pull request, then read back its final body and validate
-the exact content returned by GitHub:
+Create or update the pull request, then read back and validate the exact body:
 
 ```sh
 gh pr view <pr-number> --json body --jq .body \
   | ~/.agents/skills/work-on/scripts/validate-closeout-body.sh <issue-number> -
 ```
 
-For an updated pull request, also pass `--previous <old-body.md>` so validation
-proves that its prior provenance runs were preserved as an exact prefix. Only
-the current table format is accepted. A pull request whose body was written
-under the earlier format is not migrated: revalidating it refuses and blocks
-hand-back on that pull request. Those pull requests are finished; leave the
-historical body in place.
+For an update, also pass `--previous <old-body.md>`. The validator checks only:
+the three required headings exactly once and in order; the single issue-mapping
+line; `--require-closes`; the closure table shape, status vocabulary, and
+`Closes` ⇒ every row `tested`; Work-on line shape and Run-identity uniqueness;
+the previous provenance prefix with at most one appended Run line; and CRLF
+normalization of its scratch copy. It inspects no other historical content and
+does not recursively validate the previous body.
 
-Once the body has been read back and validated, make the observation findable:
-
-```sh
-~/.agents/skills/work-on/scripts/ensure-work-on-label.sh \
-  --repository <owner/repository> --pr <pr-number>
-```
-
-It applies the repository-local `work-on` label, creating it with fixed bounded
-metadata when absent and leaving an existing label's color and description
-alone. The label is a discovery aid, not evidence authority: a lookup, creation,
-or application failure prints one bounded warning and hand-back continues. Name
-the repository and pull request explicitly; neither is inferred.
-
-The canonical issue mapping, acceptance rows and statuses, and telemetry
-outcome must survive read-back. Generic validation accepts canonical `Closes`
-and `Progresses` bodies for manual closeout. Unattended AFK closeout invokes
-the same validator with `--require-closes` and refuses `Progresses` before the
-guarded merge or required checks. Report the pull-request URL. Keep the facts,
-narrative, rendered body, and any other closeout scratch untracked.
-
-<!-- Maintainer watch signals, not workflow instructions. Across recent
-work-on PRs: (a) adjudication sections dominated by "keeping it"
-justifications → the sweep flags junk; tighten what it flags. (b) zero
-findings rejected in telemetry while independent-review rounds stay high →
-inspect whether adjudication is filtering findings or raw findings are being
-forwarded; repeated full gates can also expose real new defects. -->
+Once the body has been read back and validated, apply the repository-local
+`work-on` label with `scripts/ensure-work-on-label.sh`. Its failure warns and
+does not block hand-back. Generic validation accepts canonical `Closes` and
+`Progresses`; unattended AFK closeout passes `--require-closes` and refuses
+`Progresses`. Report the pull-request URL and keep all scratch files untracked.

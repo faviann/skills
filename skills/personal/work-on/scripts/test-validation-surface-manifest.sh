@@ -1,550 +1,335 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The Validation-surface manifest is semantic contract state carried by
-# instructions, not by a script: the primary materializes it, freezes it, and
-# hands it on. These checks pin the parts of that contract a later edit could
-# silently drop — which file owns each rule, the freeze ordering, the storage
-# semantics, the evidence strength, and the fail-closed handling.
-
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_dir="$(cd "$script_dir/.." && pwd)"
+identity="$script_dir/manifest-identity.sh"
+provenance="$script_dir/workflow-provenance.sh"
+fixture="$(mktemp -d)"; trap 'rm -rf "$fixture"' EXIT
+repo="$fixture/repo"; git init -q -b main "$repo"
+git -C "$repo" config user.name Test; git -C "$repo" config user.email test@example.invalid
+printf 'base\n' >"$repo/base"; git -C "$repo" add .; git -C "$repo" commit -qm base
+printf '%s\n' '- criterion: public seam' >"$fixture/manifest.md"
+printf '%s\n' '{"body":"trusted contract"}' >"$fixture/snapshot.json"
+workflow_identity="$(cd "$repo" && "$provenance" identify-workflow)"
 
-SKILL="$skill_dir/SKILL.md"
-GATE="$skill_dir/references/closability-gate.md"
-WORKFLOW="$skill_dir/references/default-workflow.md"
-CLOSEOUT="$skill_dir/references/github-closeout.md"
-IDENTITY="$skill_dir/scripts/manifest-identity.sh"
-PROVENANCE="$skill_dir/scripts/workflow-provenance.sh"
-
-failures=0
-
-fail() {
-  printf 'not ok - %s\n' "$1" >&2
-  failures=$((failures + 1))
+freeze() {
+  (cd "$repo" && "$identity" freeze --manifest "$fixture/manifest.md" --snapshot "$fixture/snapshot.json" --base HEAD --workflow-identity "$workflow_identity")
 }
+run1="$(freeze)"; run2="$(freeze)"
+[[ "$run1" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{16}$ && "$run2" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{16}$ && "$run1" != "$run2" ]]
+custody="$repo/.git/work-on-manifest"
+[[ "$(stat -c %a "$custody")" == 700 ]]
+for run in "$run1" "$run2"; do
+  for suffix in .md .trusted-snapshot.json .provenance.json; do
+    [[ -f "$custody/$run$suffix" && "$(stat -c %a "$custody/$run$suffix")" == 600 ]]
+  done
+  [[ "$(cd "$repo" && "$identity" verify --run "$run")" == "$(git -C "$repo" rev-parse HEAD)" ]]
+done
+[[ "$run1" != *@* ]]
+[[ ! -e "$repo/.git/work-on-provenance.json" && ! -e "$repo/.git/work-on-provenance.workflow-sha256" ]]
 
-verify_rejected() {
-  local label="$1" expected="$2" description="$3"
-  if (
-    cd "$identity_repo"
-    "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
-  ) >"$flat_dir/$label.out" 2>"$flat_dir/$label.err"; then
-    fail "$description"
-    return
+# Renaming complete owner-only custody cannot mint a second Run identity.
+renamed_run=opaque-renamed-150
+for suffix in .md .trusted-snapshot.json .provenance.json; do
+  cp -p "$custody/$run1$suffix" "$custody/$renamed_run$suffix"
+done
+for command in read verify; do
+  if (cd "$repo" && "$identity" "$command" --run "$renamed_run") >/dev/null 2>&1; then
+    echo "renamed custody was accepted by manifest $command" >&2; exit 1
   fi
-  [[ ! -s "$flat_dir/$label.out" ]] \
-    || fail "$description (verification wrote successful output)"
-  grep -Fqx "$expected" "$flat_dir/$label.err" \
-    || fail "$description (unexpected diagnostic)"
-}
+done
 
-# These documents wrap at 80 columns, so a rule routinely straddles a newline.
-# Content assertions run against a copy flattened one paragraph per line: that
-# rejoins a wrapped rule while still keeping every match inside the block that
-# states it, so no pattern can be satisfied by fragments of two unrelated
-# paragraphs. Ordering assertions run against the original, which still has
-# line numbers.
-flat_dir="$(mktemp -d)"
-trap 'rm -rf "$flat_dir"' EXIT
-
-flatten() {
-  local flat="$flat_dir/$(printf '%s' "${1#"$skill_dir/"}" | tr '/' '_')"
-  [[ -f "$flat" ]] || awk '
-    /^[[:space:]]*$/ { print buf; buf = ""; next }
-    { buf = (buf == "" ? $0 : buf " " $0) }
-    END { print buf }
-  ' "$1" | tr -s ' ' > "$flat"
-  printf '%s' "$flat"
-}
-
-has() {
-  # has <file> <extended regex> <description>
-  if grep -Eqi -- "$2" "$(flatten "$1")"; then
-    return 0
-  fi
-  fail "$3 (missing in ${1#"$skill_dir/"}: $2)"
-}
-
-lacks() {
-  if grep -Eqi -- "$2" "$(flatten "$1")"; then
-    fail "$3 (unexpected in ${1#"$skill_dir/"}: $2)"
-  fi
-}
-
-has_fixed() {
-  # has_fixed <file> <literal string> <description> — for shell idioms whose
-  # brackets, pipes, and dollars would otherwise need escaping into noise.
-  if grep -Fq -- "$2" "$(flatten "$1")"; then
-    return 0
-  fi
-  fail "$3 (missing in ${1#"$skill_dir/"}: $2)"
-}
-
-last_line_of() {
-  grep -Eni -- "$2" "$1" | tail -n1 | cut -d: -f1
-}
-
-first_line_of() {
-  grep -Eni -m1 -- "$2" "$1" | cut -d: -f1
-}
-
-precedes() {
-  # precedes <file> <earlier regex> <later regex> <description>
-  # The earlier anchor takes its last match and the later anchor its first, so
-  # a repeated anchor narrows the window rather than widening it.
-  local first second
-  first="$(last_line_of "$1" "$2" || true)"
-  second="$(first_line_of "$1" "$3" || true)"
-  if [[ -z "$first" || -z "$second" ]]; then
-    fail "$4 (one of the anchors is absent from ${1#"$skill_dir/"})"
-    return
-  fi
-  if (( first >= second )); then
-    fail "$4 (${1#"$skill_dir/"}: line $first is not before line $second)"
+# Interrupt the shipped freeze around each publication boundary. Siblings alone
+# are incomplete; final-manifest absence or presence is the commit marker.
+mkdir "$fixture/wrapped-bin"
+real_mv="$(command -v mv)"
+cat >"$fixture/wrapped-bin/mv" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+destination="${!#}"
+matched=false
+[[ "$destination" == "$INTERRUPT_CUSTODY"/*"$INTERRUPT_SUFFIX" ]] && matched=true
+if [[ "$matched" == true && "$INTERRUPT_WHEN" == before ]]; then
+  printf '%s\n' "$destination" >"$INTERRUPT_SIGNAL"
+  while :; do /bin/sleep 1; done
+fi
+"$REAL_MV" "$@"
+if [[ "$matched" == true && "$INTERRUPT_WHEN" == after ]]; then
+  printf '%s\n' "$destination" >"$INTERRUPT_SIGNAL"
+  while :; do /bin/sleep 1; done
+fi
+SH
+chmod +x "$fixture/wrapped-bin/mv"
+printf '%s\n' '{"issue_number":150,"outcome":"Closes","acceptance_criteria":["criterion"],"acceptance":[{"criterion":"criterion","production_path":"script","seam":"CLI","evidence":"interrupted custody refused","status":"tested"}]}' >"$fixture/interrupted-facts.json"
+: >"$fixture/interrupted-narrative.md"
+reject_interrupted() {
+  if (cd "$repo" && "$@") >/dev/null 2>&1; then
+    echo "interrupted custody was accepted by: $*" >&2; exit 1
   fi
 }
 
-## Materialization — only an enumeration or a deterministic rule, evaluated here
-has "$GATE" 'explicit finite enumeration' \
-  'the gate accepts an explicit finite enumeration'
-has "$GATE" 'deterministic, non-interpretive finite selection rule' \
-  'the gate accepts a deterministic, non-interpretive finite selection rule'
-has "$GATE" 'must actually be evaluated during this preflight' \
-  'the gate evaluates the chosen form during preflight'
-has "$GATE" 'complete concrete list for the trusted snapshot' \
-  'materialization produces the complete concrete list for the trusted snapshot'
-has "$GATE" 'whatever implementation touches' \
-  'the gate names an interpretive rule that fails the test'
-has "$GATE" 'the one list any later execution against that same snapshot would also produce' \
-  'a rule must be reproducible, not merely terminating'
-has "$GATE" 'passes only when all six hold' \
-  'the gate has a sixth condition'
-has "$GATE" 'Validation surface is finite and materialized here' \
-  'condition 6 requires a finite materialized surface'
-has "$SKILL" 'materialized as a finite frozen' \
-  'the top-level procedure requires materialization before delegation'
-has "$SKILL" 'On a supported continuation or resume, do not refetch current comments or rebuild the snapshot' \
-  'the top-level procedure routes resume away from live-source reconstruction'
-has "$SKILL" 'proceed only when it recovers and verifies the exact retained pair without refetching or reconstruction' \
-  'every selected workflow must recover the retained contract before resume'
-echo "ok - preflight materializes a finite surface from an enumeration or a deterministic rule"
+interrupt_freeze() {
+  local label="$1" suffix="$2" when="$3" expected="$4"
+  local interrupt_signal="$fixture/$1-publication.signal"
+  PATH="$fixture/wrapped-bin:$PATH" REAL_MV="$real_mv" \
+    INTERRUPT_CUSTODY="$custody" INTERRUPT_SIGNAL="$interrupt_signal" \
+    INTERRUPT_SUFFIX="$suffix" INTERRUPT_WHEN="$when" \
+    setsid bash -c 'cd "$1" && exec "$2" freeze --manifest "$3" --snapshot "$4" --base HEAD --workflow-identity "$5"' \
+      _ "$repo" "$identity" "$fixture/manifest.md" "$fixture/snapshot.json" "$workflow_identity" \
+      >"$fixture/$label-interrupted.out" 2>"$fixture/$label-interrupted.err" &
+  freeze_pid=$!
+  for _ in {1..100}; do
+    [[ -s "$interrupt_signal" ]] && break
+    /bin/sleep 0.05
+  done
+  [[ -s "$interrupt_signal" ]] || { kill -KILL -- "-$freeze_pid" 2>/dev/null || true; echo "freeze did not reach $label publication boundary" >&2; exit 1; }
+  kill -KILL -- "-$freeze_pid"
+  set +e
+  wait "$freeze_pid" 2>/dev/null
+  interrupted_status=$?
+  set -e
+  [[ "$interrupted_status" -ne 0 && ! -s "$fixture/$label-interrupted.out" ]]
+  partial_path="$(<"$interrupt_signal")"
+  partial_run="$(basename "$partial_path" "$suffix")"
+  if [[ "$when" == before ]]; then [[ ! -e "$partial_path" ]]; else [[ -f "$partial_path" ]]; fi
+  if [[ "$expected" == incomplete ]]; then
+    reject_interrupted "$identity" read --run "$partial_run"
+    reject_interrupted "$identity" verify --run "$partial_run"
+    reject_interrupted "$provenance" read --run "$partial_run"
+    reject_interrupted "$provenance" verify --run "$partial_run"
+    reject_interrupted "$script_dir/render-closeout.sh" --run "$partial_run" \
+      "$fixture/interrupted-facts.json" "$fixture/interrupted-narrative.md" --new-pr
+  else
+    (cd "$repo" && "$identity" read --run "$partial_run") >/dev/null
+    (cd "$repo" && "$identity" verify --run "$partial_run") >/dev/null
+    (cd "$repo" && "$provenance" read --run "$partial_run") >/dev/null
+    (cd "$repo" && "$provenance" verify --run "$partial_run") >/dev/null
+    (cd "$repo" && "$script_dir/render-closeout.sh" --run "$partial_run" \
+      "$fixture/interrupted-facts.json" "$fixture/interrupted-narrative.md" \
+      --new-pr) >/dev/null
+  fi
+}
+interrupt_freeze provenance .provenance.json after incomplete
+interrupt_freeze snapshot .trusted-snapshot.json after incomplete
+interrupt_freeze manifest-before .md before incomplete
+interrupt_freeze manifest-after .md after committed
 
-## An authorized-to-be-created member needs a contract-determinable identity
-has "$GATE" 'artifact this issue authorizes creating' \
-  'the gate admits an artifact the issue authorizes creating'
-has "$GATE" 'identity, location, and criterion role are already determinable' \
-  'such a member needs a contract-determinable identity, location, and role'
-has "$GATE" 'merely turns out to touch never' \
-  'implementation-only artifacts never join a surface'
-echo "ok - an authorized-to-be-created member is admitted only when the contract determines it"
-
-## A recorded command is the vehicle for the surface's owed observations
-has "$GATE" 'command.*records as the discharging action.*surface.*required observations' \
-  'a recorded discharging command owes the surface observations'
-has "$GATE" 'default vehicle.*carries the obligation.s owning phase' \
-  'the recorded vehicle carries the obligation owning phase'
-has "$GATE" 'Re-executing that exact command is not itself the discharge condition' \
-  'the recorded command is not itself the discharge condition'
-has "$GATE" 'discharged when every owed member.*qualifying evidence.*owning phase' \
-  'every owed surface member needs qualifying evidence at the owning phase'
-echo "ok - a recorded command carries phase as the default vehicle, not the discharge condition"
-
-## Freeze timing and identity
-has "$GATE" 'freezes when the complete gate passes' \
-  'the manifest freezes on a complete gate pass'
-has "$GATE" 'before workflow-provenance capture' \
-  'the freeze precedes workflow-provenance capture'
-has "$GATE" 'and implementation delegation' \
-  'the freeze precedes implementation delegation'
-has "$GATE" 'Identify it with the trusted snapshot and the pre-implementation base' \
-  'the manifest is identified with the snapshot and base'
-lacks "$GATE" 'Identify it with the trusted snapshot, the selected workflow' \
-  'selected-workflow identity is not duplicated in the manifest'
-has "$GATE" 'selected workflow remains an invalidation input' \
-  'workflow identity stays in provenance while workflow changes still invalidate'
-has "$GATE" 'workflow-provenance.sh identify-workflow' \
-  'the selected workflow is fingerprinted before manifest derivation'
-has "$GATE" 'capture in `SKILL.md` step 7 compares the current selected workflow with that retained identity' \
-  'post-freeze provenance capture must match the workflow used for derivation'
-lacks "$GATE" 'scripts/workflow-provenance.sh capture' \
-  'the gate hands back after freeze instead of performing provenance capture'
-precedes "$SKILL" "apply this skill's .references/closability-gate\.md" \
-  '`scripts/workflow-provenance\.sh capture`' \
-  'the procedure applies the gate before capturing provenance'
-echo "ok - the manifest freezes after the complete gate and before provenance capture or delegation"
-
-## Recoverable run-local state, and where it is not
-has "$GATE" 'git-common-dir' \
-  'the manifest lives in the repository Git common directory'
-has "$GATE" 'work-on-manifest' \
-  'the manifest has its own run-local location'
-has "$GATE" 'every supported continuation or resume' \
-  'the manifest survives the run continuation and resume lifetime'
-has "$GATE" 'not telemetry, not Workflow provenance, not Run registry state, and never tracked' \
-  'the frozen files are neither telemetry, provenance, registry state, nor tracked artifacts'
-has "$GATE" 'for their owner only — `0700` and `0600`' \
-  'the manifest directory and file are owner-only'
-has_fixed "$GATE" 'run_id="${RUN_HANDLE%%@*}"' \
-  'the frozen files resolve the bare run id from the bound run handle'
-has_fixed "$GATE" 'trusted_snapshot_file="$manifest_dir/$run_id.trusted-snapshot.json"' \
-  'the retained snapshot has a run-owned sibling path'
-has_fixed "$GATE" 'manifest_file="$manifest_dir/$run_id.md"' \
-  'the manifest has a run-owned sibling path'
-has_fixed "$GATE" '[[ -e "$trusted_snapshot_file" ]] || (umask 077 && : >"$trusted_snapshot_file")' \
-  'creating the snapshot is guarded so a resume cannot truncate it'
-has_fixed "$GATE" '[[ -e "$manifest_file" ]] || (umask 077 && : >"$manifest_file")' \
-  'creating the manifest file is guarded so a re-run cannot truncate it'
-has_fixed "$GATE" '[[ -d "$manifest_dir" ]] || (umask 077 && mkdir -p "$manifest_dir")' \
-  'creating the manifest directory is guarded the same way'
-has_fixed "$GATE" 'chmod 700 "$manifest_dir"' \
-  'the manifest directory is tightened with an explicit operand'
-has_fixed "$GATE" 'chmod 600 "$manifest_file"' \
-  'the manifest file is tightened with an explicit operand'
-has_fixed "$GATE" 'chmod 600 "$trusted_snapshot_file"' \
-  'the snapshot file is tightened with an explicit operand'
-has "$GATE" 'manifest-identity.sh freeze' \
-  'the frozen manifest is bound to its snapshot and base identities'
-has "$GATE" 'umask closes the creation-to-chmod window only for shell-created files' \
-  'the umask is scoped to shell-created files, not tool-written ones'
-has "$GATE" 'Write the exact source-labelled snapshot before applying the gate' \
-  'the retained snapshot is established before Closability'
-has "$GATE" 'atomically replaces the manifest at `0600`' \
-  'the identity writer replaces and re-tightens the manifest'
-lacks "$skill_dir/references/run-telemetry.md" 'validation-surface manifest' \
-  'the telemetry sink does not carry the manifest'
-lacks "$skill_dir/references/run-registry.md" 'validation-surface manifest' \
-  'the run registry does not carry the manifest'
-has "$WORKFLOW" 'At the start of every continuation or resume' \
-  'the workflow recovers the manifest on continuation or resume'
-has "$WORKFLOW" 'recover the retained trusted-snapshot and manifest files for this run' \
-  'resume recovers both frozen run-local objects'
-has "$WORKFLOW" 'Do not refetch current trusted GitHub comments or recreate either file from conversational memory' \
-  'resume does not reconstruct the snapshot from live sources or memory'
-has "$WORKFLOW" 'newly arrived trusted comment does not join this frozen snapshot or invalidate it merely by existing' \
-  'a new non-amending trusted comment leaves the frozen run contract unchanged'
-has "$WORKFLOW" 'Only an explicit trusted-maintainer contract change takes the invalidation path' \
-  'requirements change only through the established explicit maintainer path'
-has "$WORKFLOW" 'manifest-identity.sh verify' \
-  'resume verifies the manifest identity before reuse'
-has "$WORKFLOW" 'workflow-provenance.sh verify' \
-  'resume verifies the selected workflow before manifest reuse'
-has "$WORKFLOW" 'before any manifest reuse, whether before or after delegation' \
-  'provenance verification governs both sides of the delegation boundary'
-has "$WORKFLOW" 'provenance was not captured after this manifest froze' \
-  'an interruption before provenance capture invalidates the old manifest'
-has "$WORKFLOW" 'Before delegation, a missing or failing Workflow provenance ledger or a missing, malformed, corrupt, replaced, or mismatched frozen snapshot or manifest' \
-  'either pre-delegation verification failure takes complete recomputation'
-has "$WORKFLOW" 'After delegation, either Workflow provenance or frozen-state verification failure takes the fail-closed hand-back' \
-  'either post-delegation verification failure takes fail-closed hand-back'
-has "$WORKFLOW" 'readiness, Standards, Spec, and closure contexts' \
-  'the workflow supplies the manifest to every review context'
-has "$WORKFLOW" 'available for adjudication' \
-  'the manifest stays available to the primary for adjudication'
-has "$WORKFLOW" '- Validation-surface manifest: <the frozen instances' \
-  'the scoped implementation contract carries the manifest'
-has "$GATE" 'contract input, not a prior review conclusion' \
-  'the manifest never substitutes for independent review judgement'
-echo "ok - the manifest is recoverable run-local state supplied to every downstream context"
-
-## Evidence strength is unchanged by finiteness
-has "$GATE" 'Finiteness does not weaken evidence' \
-  'finiteness does not weaken the required evidence'
-has "$CLOSEOUT" 'every instance in its frozen Validation surface' \
-  'the closure gate requires evidence at every listed member'
-has "$WORKFLOW" 'every instance in that' \
-  'the checkpoint statuses a criterion only on its whole frozen surface'
-echo "ok - every listed member keeps its criterion's direct-evidence strength"
-
-## The manifest bounds evidence, not scope
-has "$WORKFLOW" 'bounds evidence, not scope' \
-  'the manifest bounds evidence rather than scope'
-has "$WORKFLOW" 'may inspect anything their own contracts already permit' \
-  'ordinary review scope is unrestricted by the manifest'
-has "$WORKFLOW" 'reviewers may report defects outside it' \
-  'defects outside the manifest remain reportable'
-has "$WORKFLOW" 'same-mechanism neighborhood brief below stays fully' \
-  'same-mechanism investigation remains fully available'
-has "$WORKFLOW" 'sibling reproduced outside the manifest does not enlarge it' \
-  'a reproduced sibling does not silently enlarge the manifest'
-has "$WORKFLOW" 'never limits what the sweep may inspect or report' \
-  'the review brief ships the manifest without narrowing the sweep'
-has "$GATE" 'never where implementation or review may look' \
-  'the gate disclaims the manifest as an inspection whitelist'
-echo "ok - the manifest restricts neither implementation, review, nor same-mechanism discovery"
-
-## Before delegation: complete recomputation, never an entry-level patch
-has "$GATE" 'Any change to an input the manifest was derived from invalidates it' \
-  'any derivation-input change invalidates the manifest'
-has "$GATE" 'discard the manifest, rebuild the affected trusted preflight state' \
-  'invalidation rebuilds the trusted preflight state'
-has "$GATE" 'rerun the complete gate over it' \
-  'invalidation reruns the complete gate'
-has "$GATE" 'not a second gate: the run passes one complete gate' \
-  'a rerun after invalidation is still the run.s one gate'
-has "$GATE" 'Never patch one entry in place' \
-  'an entry-level patch is forbidden'
-has "$GATE" 're-materialize every criterion.s surface, including those whose own inputs did not move' \
-  'recomputation re-materializes unmoved criteria too'
-has "$GATE" 'a rebuild before delegation still overwrites both paths. contents' \
-  'the anti-truncation guard does not block a rebuild'
-has "$GATE" 'no valid replacement can be established, abort' \
-  'an unestablished replacement aborts'
-echo "ok - pre-delegation invalidation recomputes completely or ends as preflight-aborted"
-
-## After delegation: immutable, and fail closed on an omitted member
-has "$GATE" 'After implementation is delegated the manifest is immutable' \
-  'the gate hands post-delegation immutability to the workflow'
-has "$WORKFLOW" 'After delegation the manifest is immutable' \
-  'the workflow holds the manifest immutable after delegation'
-has "$WORKFLOW" '`Closes` is unavailable for this run' \
-  'an omitted required member makes Closes unavailable'
-has "$WORKFLOW" 'do not append the member, remediate it, and restart review here' \
-  'in-run amendment and remediation of the omission are forbidden'
-has "$WORKFLOW" 'record the criterion, the omitted instance' \
-  'the omission is recorded'
-has "$WORKFLOW" 'classify it — the trusted contract already clearly required the instance' \
-  'the omission is classified as a preflight defect or a contract question'
-has "$WORKFLOW" 'blocking tracker issue for unresolved work that must' \
-  'unresolved work survives the run durably'
-has "$WORKFLOW" 'hand back as `Progresses` when ordinary closeout permits a safe, independently useful partial candidate' \
-  'a safe partial candidate hands back as Progresses'
-has "$WORKFLOW" 'and as `failed` when it does not' \
-  'a determinate invalidation with no partial candidate is failed'
-has "$CLOSEOUT" 'Validation-surface manifest omits' \
-  'the closure gate routes an omitted member to the fail-closed hand-back'
-has "$CLOSEOUT" 'an omitted member is not a row a human can confirm' \
-  'human confirmation cannot restore Closes for an omitted member'
-echo "ok - a post-delegation omission fails closed instead of growing the manifest"
-
-## A later attempt starts fresh
-has "$WORKFLOW" 'fresh trusted snapshot and a fresh manifest' \
-  'a later attempt builds a fresh snapshot and manifest'
-has "$WORKFLOW" 'never inherits these objects' \
-  'a later attempt never inherits the invalidated manifest'
-echo "ok - a later attempt after invalidation starts from a fresh snapshot and manifest"
-
-## Runtime identity — the file carries and verifies snapshot + base
-identity_repo="$flat_dir/identity-repo"
-git init -q -b main "$identity_repo"
-git -C "$identity_repo" config user.name 'Manifest Identity Test'
-git -C "$identity_repo" config user.email manifest@example.invalid
-printf 'base\n' >"$identity_repo/base.txt"
-git -C "$identity_repo" add base.txt
-git -C "$identity_repo" commit -qm 'base'
-
-manifest_dir="$identity_repo/.git/work-on-manifest"
-manifest="$manifest_dir/test-run.md"
-snapshot="$manifest_dir/test-run.trusted-snapshot.json"
-current_sources="$flat_dir/current-trusted-sources.json"
-(umask 077 && mkdir -p "$manifest_dir")
-printf '%s\n' \
-  '[{"body":"trusted contract","source":"issue:example/repo#103:body"},' \
-  ' {"source":"comment:2","body":"line one\nline two"}]' >"$snapshot"
-printf '%s\n' \
-  '[{"body":"trusted contract","source":"issue:example/repo#103:body"},' \
-  ' {"source":"comment:2","body":"line one\nline two"},' \
-  ' {"source":"comment:99","body":"trusted observation, not a contract amendment"}]' \
-  >"$current_sources"
-printf '%s\n' '- criterion 1: cmd/build' >"$manifest"
-chmod 600 "$snapshot" "$manifest"
-
-# A newly frozen manifest cannot inherit a provenance ledger from an older
-# freeze. Until capture succeeds after this freeze, continuation must recompute.
-mkdir -p "$identity_repo/docs"
-printf '# Selected workflow\n' >"$identity_repo/docs/workflow.md"
-git -C "$identity_repo" add docs/workflow.md
-git -C "$identity_repo" commit -qm 'selected workflow'
-selected_workflow_identity="$(
-  cd "$identity_repo"
-  "$PROVENANCE" identify-workflow
-)"
-(umask 077 && printf '%s\n' "$selected_workflow_identity" \
-  >"$identity_repo/.git/work-on-provenance.workflow-sha256")
-(
-  cd "$identity_repo"
-  "$PROVENANCE" capture --expected-workflow "$selected_workflow_identity"
-)
-[[ -f "$identity_repo/.git/work-on-provenance.json" ]]
-
-selected_workflow_identity="$(
-  cd "$identity_repo"
-  "$PROVENANCE" identify-workflow
-)"
-
-(
-  cd "$identity_repo"
-  "$IDENTITY" freeze --manifest "$manifest" --snapshot "$snapshot" --base HEAD \
-    --workflow-identity "$selected_workflow_identity"
-)
-[[ "$(stat -c '%a' "$identity_repo/.git/work-on-provenance.workflow-sha256")" == 600 ]]
-grep -Fqx "$selected_workflow_identity" \
-  "$identity_repo/.git/work-on-provenance.workflow-sha256"
-
-[[ ! -e "$identity_repo/.git/work-on-provenance.json" ]]
-(
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot" >/dev/null
-)
-if (
-  cd "$identity_repo"
-  "$PROVENANCE" verify
-) >"$flat_dir/pre-capture.out" 2>"$flat_dir/pre-capture.err"; then
-  fail 'continuation accepted a manifest frozen before provenance capture'
+# Final-manifest presence is the authority marker; a provenance-only
+# interrupted publication is rejected by custody and rendering readers.
+partial=opaque-partial
+cp "$custody/$run1.provenance.json" "$custody/$partial.provenance.json"
+chmod 600 "$custody/$partial.provenance.json"
+if (cd "$repo" && "$identity" read --run "$partial") >"$fixture/out" 2>"$fixture/err"; then
+  echo 'partial custody was accepted' >&2; exit 1
 fi
-[[ ! -s "$flat_dir/pre-capture.out" ]]
-grep -Fq 'run ledger is missing' "$flat_dir/pre-capture.err"
-echo "ok - interruption before provenance capture cannot reuse the frozen manifest"
+grep -Fq 'complete custody is missing' "$fixture/err"
 
-printf '\nworkflow changed before capture\n' >>"$identity_repo/docs/workflow.md"
-if (
-  cd "$identity_repo"
-  "$PROVENANCE" capture --expected-workflow "$selected_workflow_identity"
-) >"$flat_dir/pre-capture-drift.out" 2>"$flat_dir/pre-capture-drift.err"; then
-  fail 'a later provenance capture authorized a manifest derived under another workflow'
+cp "$custody/$run1.md" "$fixture/saved-manifest"
+printf '\ncorrupt\n' >>"$custody/$run1.md"
+if (cd "$repo" && "$identity" read --run "$run1") >/dev/null 2>&1; then
+  echo 'corrupt custody was accepted' >&2; exit 1
 fi
-[[ ! -s "$flat_dir/pre-capture-drift.out" ]]
-[[ ! -e "$identity_repo/.git/work-on-provenance.json" ]]
-grep -Fqx \
-  'workflow provenance: workflow instructions changed since manifest derivation' \
-  "$flat_dir/pre-capture-drift.err"
+cp "$fixture/saved-manifest" "$custody/$run1.md"; chmod 600 "$custody/$run1.md"
 
-changed_workflow_identity="$(
-  cd "$identity_repo"
-  "$PROVENANCE" identify-workflow
-)"
-if (
-  cd "$identity_repo"
-  "$PROVENANCE" capture --expected-workflow "$changed_workflow_identity"
-) >"$flat_dir/reidentified-workflow.out" 2>"$flat_dir/reidentified-workflow.err"; then
-  fail 'a newly identified workflow authorized a manifest derived under the old workflow'
+bad_identity="$(printf '0%.0s' {1..64})"
+before="$(find "$custody" -maxdepth 1 -type f | wc -l)"
+if (cd "$repo" && "$identity" freeze --manifest "$fixture/manifest.md" --snapshot "$fixture/snapshot.json" --base HEAD --workflow-identity "$bad_identity") >/dev/null 2>&1; then
+  echo 'freeze accepted a workflow identity the gate did not read' >&2; exit 1
 fi
-[[ ! -s "$flat_dir/reidentified-workflow.out" ]]
-[[ ! -e "$identity_repo/.git/work-on-provenance.json" ]]
-grep -Fqx \
-  'workflow provenance: expected workflow identity does not belong to frozen manifest' \
-  "$flat_dir/reidentified-workflow.err"
-git -C "$identity_repo" restore docs/workflow.md
-echo "ok - capture rejects workflow drift between manifest derivation and capture"
-
-(
-  cd "$identity_repo"
-  "$PROVENANCE" capture --expected-workflow "$selected_workflow_identity"
-  "$PROVENANCE" verify >/dev/null
-)
-# The implementation delegate has launched. Provenance drift on this resume is
-# now immutable-run failure, not permission to rebuild the manifest.
-delegation_crossed=true
-printf '\nworkflow drift\n' >>"$identity_repo/docs/workflow.md"
-(
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot" >/dev/null
-)
-if (
-  cd "$identity_repo"
-  "$PROVENANCE" verify
-) >"$flat_dir/workflow-drift.out" 2>"$flat_dir/workflow-drift.err"; then
-  fail 'continuation accepted selected-workflow drift'
-fi
-[[ ! -s "$flat_dir/workflow-drift.out" ]]
-grep -Fqx 'workflow provenance: workflow instructions changed since capture' \
-  "$flat_dir/workflow-drift.err"
-[[ "$delegation_crossed" == true ]]
-git -C "$identity_repo" restore docs/workflow.md
-echo "ok - post-delegation selected-workflow drift cannot reuse the frozen manifest"
-
-snapshot_digest="$(sha256sum <"$snapshot" | cut -d' ' -f1)"
-base_sha="$(git -C "$identity_repo" rev-parse HEAD)"
-grep -Fqx "trusted-snapshot-sha256 $snapshot_digest" "$manifest"
-grep -Fqx "pre-implementation-base $base_sha" "$manifest"
-grep -Eq '^manifest-binding-sha256 [0-9a-f]{64}$' "$manifest"
-[[ "$(sed -n '5p' "$manifest")" == '- criterion 1: cmd/build' ]]
-[[ "$(stat -c '%a' "$manifest")" == 600 ]]
-echo "ok - a frozen manifest carries recoverable trusted-snapshot and base identity"
-
-verified_base="$(
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$manifest" --snapshot "$snapshot"
-)"
-[[ "$verified_base" == "$base_sha" ]]
-echo "ok - an unchanged resume verifies and reuses the retained frozen state"
-
-# A fresh context recovers only the run-owned paths. It neither reconstructs
-# source locators nor consults the current trusted-source population, which now
-# contains a later trusted observation that is not a contract amendment.
-fresh_run_id=test-run
-fresh_manifest="$identity_repo/.git/work-on-manifest/$fresh_run_id.md"
-fresh_snapshot="$identity_repo/.git/work-on-manifest/$fresh_run_id.trusted-snapshot.json"
-grep -Fq 'comment:99' "$current_sources"
-if grep -Fq 'comment:99' "$fresh_snapshot"; then
-  fail 'a later trusted comment silently joined the frozen snapshot'
-fi
-fresh_base="$(
-  cd "$identity_repo"
-  "$IDENTITY" verify --manifest "$fresh_manifest" --snapshot "$fresh_snapshot"
-)"
-[[ "$fresh_base" == "$base_sha" ]]
-echo "ok - fresh continuation reuses the retained snapshot despite a later trusted comment"
-
-snapshot_backup="$flat_dir/frozen-snapshot.backup"
-manifest_backup="$flat_dir/frozen-manifest.backup"
-cp -p -- "$snapshot" "$snapshot_backup"
-cp -p -- "$manifest" "$manifest_backup"
-
-mv -- "$snapshot" "$snapshot.missing"
-verify_rejected missing-snapshot \
-  'manifest identity: trusted snapshot is missing or unsafe' \
-  'identity verification silently accepted a missing frozen snapshot'
-mv -- "$snapshot.missing" "$snapshot"
-
-printf '%s\n' 'truncated frozen snapshot' >>"$snapshot"
-verify_rejected corrupt-snapshot \
-  'manifest identity: trusted snapshot does not match frozen manifest' \
-  'identity verification silently accepted a corrupt frozen snapshot'
-cp -p -- "$snapshot_backup" "$snapshot"
-
-printf '%s\n' \
-  '[{"source":"comment:replacement","body":"different frozen contract"}]' \
-  >"$snapshot"
-chmod 600 "$snapshot"
-verify_rejected replaced-snapshot \
-  'manifest identity: trusted snapshot does not match frozen manifest' \
-  'identity verification silently accepted a replaced frozen snapshot'
-cp -p -- "$snapshot_backup" "$snapshot"
-
-chmod 644 "$snapshot"
-verify_rejected unsafe-mode \
-  'manifest identity: frozen state is not owner-only' \
-  'identity verification silently accepted non-owner-only frozen state'
-chmod 600 "$snapshot"
-
-printf '%s\n' '- corrupt manifest body' >>"$manifest"
-verify_rejected corrupt-manifest \
-  'manifest identity: frozen manifest is corrupt' \
-  'identity verification silently accepted a corrupt frozen manifest'
-cp -p -- "$manifest_backup" "$manifest"
-
-other_base="$(git -C "$identity_repo" rev-parse HEAD^)"
-sed -i "2cpre-implementation-base $other_base" "$manifest"
-chmod 600 "$manifest"
-verify_rejected base-mismatch \
-  'manifest identity: frozen manifest is corrupt' \
-  'identity verification silently accepted a replaced pre-implementation base'
-cp -p -- "$manifest_backup" "$manifest"
-echo "ok - missing, replaced, or corrupt frozen state fails closed"
-
-printf '%s\n' \
-  '{"source":"issue:example/repo#103:body","body":"changed contract"}' \
-  >"$snapshot"
-verify_rejected mismatch \
-  'manifest identity: trusted snapshot does not match frozen manifest' \
-  'identity verification silently reused a mismatched trusted snapshot'
-cp -p -- "$snapshot_backup" "$snapshot"
-echo "ok - manifest, retained snapshot, and base binding mismatches are not silently reused"
-
-if (( failures > 0 )); then
-  printf '\n%s manifest-contract assertion(s) failed.\n' "$failures" >&2
-  exit 1
+[[ "$(find "$custody" -maxdepth 1 -type f | wc -l)" == "$before" ]]
+if (cd "$repo" && "$identity" verify) >/dev/null 2>&1; then
+  echo 'unnamed resume was accepted' >&2; exit 1
 fi
 
-printf '\nAll Validation-surface manifest contract assertions held.\n'
+flatten() { awk '/^[[:space:]]*$/{print b;b="";next}{b=(b?b" ":"")$0}END{print b}' "$1"; }
+for file in "$skill_dir/SKILL.md" "$skill_dir/references/closability-gate.md" "$skill_dir/references/default-workflow.md"; do
+  flat="$(flatten "$file")"
+  [[ "$flat" != *'run-telemetry.sh start'* && "$flat" != *'run-registry.sh register'* && "$flat" != *'--continues-run'* ]]
+done
+flat_skill="$(flatten "$skill_dir/SKILL.md")"
+[[ "$flat_skill" == *'single authority point that mints the Run identity'* ]]
+flat_gate="$(flatten "$skill_dir/references/closability-gate.md")"
+[[ "$flat_gate" == *'<run-identity>.provenance.json'* && "$flat_gate" == *'final manifest path exists'* ]]
+[[ "$flat_gate" == *'sibling artifacts and orphan staging are incomplete custody and never verify or render'* ]]
+[[ "$flat_gate" != *'before workflow-provenance capture'* && "$flat_gate" != *"resolves the run's existing outcome"* ]]
+flat_workflow="$(flatten "$skill_dir/references/default-workflow.md")"
+[[ "$flat_workflow" == *'positively name the Run identity'* && "$flat_workflow" == *'mismatch refuses continuation outright'* ]]
+
+assert_has() {
+  flatten "$1" | grep -Ei -- "$2" >/dev/null || {
+    echo "missing governing rule in ${1#"$skill_dir/"}: $2" >&2
+    exit 1
+  }
+}
+assert_lacks() {
+  if flatten "$1" | grep -Ei -- "$2" >/dev/null; then
+    echo "retired governing rule remains in ${1#"$skill_dir/"}: $2" >&2
+    exit 1
+  fi
+}
+gate="$skill_dir/references/closability-gate.md"
+workflow_doc="$skill_dir/references/default-workflow.md"
+closeout="$skill_dir/references/github-closeout.md"
+renderer="$script_dir/render-closeout.sh"
+
+# Preserve the base suite's governing contract inventory outside the retired
+# handle, ledger, telemetry, and registry mechanics.
+for rule in \
+  'explicit finite enumeration' \
+  'deterministic, non-interpretive finite selection rule' \
+  'must actually be evaluated during this preflight' \
+  'complete concrete list for the trusted snapshot' \
+  'whatever implementation touches' \
+  'passes only when all six hold' \
+  'Validation surface is finite and materialized here' \
+  'artifact this issue authorizes creating' \
+  'identity, location, and criterion role are already determinable' \
+  'default vehicle.*carries the obligation.s owning phase' \
+  'Re-executing that exact command is not itself the discharge condition' \
+  'discharged when every owed member.*qualifying evidence.*owning phase' \
+  'Finiteness does not weaken evidence' \
+  'never where implementation or review may look' \
+  'Any change to an input the manifest was derived from invalidates it' \
+  'rerun the complete gate over it' \
+  'Never patch one entry in place' \
+  're-materialize every criterion.s surface' \
+  'After implementation is delegated the manifest is immutable' \
+  'contract input, not a prior review conclusion'; do
+  assert_has "$gate" "$rule"
+done
+for rule in \
+  'Do not refetch current trusted GitHub comments' \
+  'newly arrived trusted comment does not join this frozen snapshot' \
+  'Only an explicit trusted-maintainer contract change' \
+  'readiness, Standards, Spec, and closure contexts' \
+  'bounds evidence, not scope' \
+  'may inspect anything their own contracts already permit' \
+  'reviewers may report defects outside it' \
+  'sibling reproduced outside the manifest does not enlarge it' \
+  'never limits what the sweep may inspect or report' \
+  'Closes.*unavailable for this run' \
+  'do not append the member, remediate it, and restart review here' \
+  'blocking tracker issue for unresolved work' \
+  'fresh trusted snapshot and a fresh manifest' \
+  'never inherits these objects'; do
+  assert_has "$workflow_doc" "$rule"
+done
+assert_has "$closeout" 'every instance in its frozen Validation surface'
+assert_has "$closeout" 'an omitted member is not a row a human can confirm'
+
+# The complete frozen instruction surface is cut off from every retired
+# telemetry/registry lifecycle command, rather than merely omitting one example.
+for instruction_member in \
+  "$skill_dir/SKILL.md" "$gate" "$workflow_doc" "$closeout" "$renderer"; do
+  assert_lacks "$instruction_member" 'run-telemetry\.sh'
+  assert_lacks "$instruction_member" 'run-registry\.sh'
+  assert_lacks "$instruction_member" '--kind full|--kind delta|--phase gate|--phase remediation'
+done
+
+# SKILL.md owns the new authority, recovery, and closeout vocabulary, with no
+# surviving route through sink-minted identity or separately captured state.
+assert_has "$skill_dir/SKILL.md" 'freeze is the single authority point that mints the Run identity'
+assert_has "$skill_dir/SKILL.md" 'captures.*governing-instruction identity into the same owner-only custody'
+assert_has "$skill_dir/SKILL.md" 'continuation or resume.*explicitly supplied Run.*identity'
+assert_has "$skill_dir/SKILL.md" 'mismatch refuses continuation'
+assert_has "$skill_dir/SKILL.md" 'Issues.*Closure gate.*Work-on sections'
+for retired_rule in \
+  'sink.*mint' 'RUN_HANDLE|run handle' 'run-registry\.sh register' 'sidecar' \
+  'work-on-provenance\.workflow-sha256' 'workflow-provenance\.sh capture' \
+  'separate.*captur|captur.*separate' 'live.*provenance|provenance.*live' \
+  'Workflow telemetry'; do
+  assert_lacks "$skill_dir/SKILL.md" "$retired_rule"
+done
+
+# Gate and workflow agree on Run-identity-addressed three-artifact custody and
+# its one explicit resume verifier, without restoring prior derivation state.
+for custody_member in "$gate" "$workflow_doc"; do
+  assert_has "$custody_member" 'trusted snapshot.*manifest.*provenance|manifest.*trusted snapshot.*provenance'
+  for retired_rule in \
+    'RUN_HANDLE' '\$\{RUN_HANDLE%%@\*\}' 'run-handle custody' \
+    'work-on-provenance\.json' 'work-on-provenance\.workflow-sha256' \
+    'workflow-provenance\.sh capture'; do
+    assert_lacks "$custody_member" "$retired_rule"
+  done
+done
+assert_has "$gate" '<run-identity>\.md.*<run-identity>\.trusted-snapshot\.json.*<run-identity>\.provenance\.json'
+assert_has "$gate" 'No expectation argument, workflow sidecar, singleton ledger, delete-on-freeze bridge, repository binding'
+assert_has "$gate" 'Run identity carries no repository binding'
+assert_has "$workflow_doc" 'explicitly named Run identity|--run.*RUN_IDENTITY'
+assert_has "$workflow_doc" 'manifest-identity\.sh verify --run'
+assert_lacks "$workflow_doc" 'singleton ledger|workflow sidecar|post-freeze.*captur|after freeze.*captur'
+
+# Closeout's authored input and validator surface remain deliberately small;
+# legacy handling migrates provenance without recursively judging old bodies.
+for fact in issue_number outcome acceptance_criteria acceptance; do assert_has "$closeout" "$fact"; done
+assert_has "$closeout" 'list is append-only by Run identity'
+assert_has "$closeout" 'Legacy run: <canonical provenance>'
+assert_has "$closeout" 'captured provenance from that Run identity.s complete custody'
+for validator_rule in \
+  'three required headings exactly once and in order' 'single issue-mapping line' \
+  '--require-closes' 'closure table shape, status vocabulary' \
+  'Closes.*every row.*tested' 'Work-on line shape and Run-identity uniqueness' \
+  'previous provenance prefix with at most one appended Run line' \
+  'CRLF normalization'; do
+  assert_has "$closeout" "$validator_rule"
+done
+assert_has "$closeout" 'does not recursively validate the previous body'
+for retired_rule in \
+  '"telemetry"[[:space:]]*:' '## Workflow telemetry' \
+  '\| Final workflow outcome \|' '\| Telemetry run \|' \
+  '\| Validation executions recorded \|' 'source note naming' \
+  'aggregates every sink-derived row' 'sink integrity|integrity is.*valid' \
+  'telemetry resolution' 'run-registry\.sh finalize' \
+  'Only the current table format is accepted' 'revalidating it refuses' \
+  'previous body must itself pass|recursively refuse'; do
+  assert_lacks "$closeout" "$retired_rule"
+done
+
+# Missing, replaced, corrupt, unsafe, or non-canonical custody remains refused.
+backup="$fixture/custody-backup"; mkdir "$backup"
+for suffix in .md .trusted-snapshot.json .provenance.json; do
+  cp -p "$custody/$run1$suffix" "$backup/run$suffix"
+done
+reject_read() {
+  if (cd "$repo" && "$identity" read --run "$run1") >/dev/null 2>&1; then
+    echo "invalid custody was accepted: $1" >&2; exit 1
+  fi
+}
+mv "$custody/$run1.trusted-snapshot.json" "$fixture/missing-snapshot"
+reject_read missing-snapshot
+mv "$fixture/missing-snapshot" "$custody/$run1.trusted-snapshot.json"
+printf 'corrupt\n' >>"$custody/$run1.trusted-snapshot.json"; reject_read corrupt-snapshot
+cp -p "$backup/run.trusted-snapshot.json" "$custody/$run1.trusted-snapshot.json"
+printf 'corrupt\n' >>"$custody/$run1.provenance.json"; reject_read corrupt-provenance
+cp -p "$backup/run.provenance.json" "$custody/$run1.provenance.json"
+chmod 644 "$custody/$run1.md"; reject_read unsafe-manifest-mode; chmod 600 "$custody/$run1.md"
+for suffix in .trusted-snapshot.json .provenance.json; do
+  chmod 644 "$custody/$run1$suffix"; reject_read "unsafe-$suffix-mode"
+  chmod 600 "$custody/$run1$suffix"
+done
+chmod 755 "$custody"; reject_read unsafe-directory-mode; chmod 700 "$custody"
+mv "$custody/$run1.trusted-snapshot.json" "$fixture/real-snapshot"
+ln -s "$fixture/real-snapshot" "$custody/$run1.trusted-snapshot.json"
+reject_read symlink-snapshot
+rm "$custody/$run1.trusted-snapshot.json"; mv "$fixture/real-snapshot" "$custody/$run1.trusted-snapshot.json"
+mv "$custody" "$fixture/real-custody"
+ln -s "$fixture/real-custody" "$custody"
+reject_read symlink-custody-directory
+rm "$custody"; mv "$fixture/real-custody" "$custody"
+sed -i '3cpre-implementation-base 0000000000000000000000000000000000000000' "$custody/$run1.md"
+reject_read unavailable-base
+cp -p "$backup/run.md" "$custody/$run1.md"
+short_base="$(git -C "$repo" rev-parse --short HEAD)"
+sed -i "3cpre-implementation-base $short_base" "$custody/$run1.md"
+reject_read noncanonical-base
+cp -p "$backup/run.md" "$custody/$run1.md"
+
+ln -s "$fixture/manifest.md" "$fixture/symlink-manifest"
+if (cd "$repo" && "$identity" freeze --manifest "$fixture/symlink-manifest" \
+    --snapshot "$fixture/snapshot.json" --base HEAD \
+    --workflow-identity "$workflow_identity") >/dev/null 2>&1; then
+  echo 'freeze accepted a symlinked materialized manifest' >&2; exit 1
+fi
+
+echo 'Validation-surface manifest contract assertions held'
