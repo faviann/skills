@@ -143,10 +143,6 @@ if (cd "$repo" && "$identity" verify) >/dev/null 2>&1; then
 fi
 
 flatten() { awk '/^[[:space:]]*$/{print b;b="";next}{b=(b?b" ":"")$0}END{print b}' "$1"; }
-for file in "$skill_dir/SKILL.md" "$skill_dir/references/closability-gate.md" "$skill_dir/references/default-workflow.md"; do
-  flat="$(flatten "$file")"
-  [[ "$flat" != *'run-telemetry.sh start'* && "$flat" != *'run-registry.sh register'* && "$flat" != *'--continues-run'* ]]
-done
 flat_skill="$(flatten "$skill_dir/SKILL.md")"
 [[ "$flat_skill" == *'single authority point that mints the Run identity'* ]]
 flat_gate="$(flatten "$skill_dir/references/closability-gate.md")"
@@ -171,10 +167,9 @@ assert_lacks() {
 gate="$skill_dir/references/closability-gate.md"
 workflow_doc="$skill_dir/references/default-workflow.md"
 closeout="$skill_dir/references/github-closeout.md"
-renderer="$script_dir/render-closeout.sh"
 
 # Preserve the base suite's governing contract inventory outside the retired
-# handle, ledger, telemetry, and registry mechanics.
+# ledger mechanics.
 for rule in \
   'explicit finite enumeration' \
   'deterministic, non-interpretive finite selection rule' \
@@ -218,24 +213,15 @@ done
 assert_has "$closeout" 'every instance in its frozen Validation surface'
 assert_has "$closeout" 'an omitted member is not a row a human can confirm'
 
-# The complete frozen instruction surface is cut off from every retired
-# telemetry/registry lifecycle command, rather than merely omitting one example.
-for instruction_member in \
-  "$skill_dir/SKILL.md" "$gate" "$workflow_doc" "$closeout" "$renderer"; do
-  assert_lacks "$instruction_member" 'run-telemetry\.sh'
-  assert_lacks "$instruction_member" 'run-registry\.sh'
-  assert_lacks "$instruction_member" '--kind full|--kind delta|--phase gate|--phase remediation'
-done
-
 # SKILL.md owns the new authority, recovery, and closeout vocabulary, with no
-# surviving route through sink-minted identity or separately captured state.
+# surviving route through separately captured state.
 assert_has "$skill_dir/SKILL.md" 'freeze is the single authority point that mints the Run identity'
 assert_has "$skill_dir/SKILL.md" 'captures.*governing-instruction identity into the same owner-only custody'
 assert_has "$skill_dir/SKILL.md" 'continuation or resume.*explicitly supplied Run.*identity'
 assert_has "$skill_dir/SKILL.md" 'mismatch refuses continuation'
 assert_has "$skill_dir/SKILL.md" 'Issues.*Closure gate.*Work-on sections'
 for retired_rule in \
-  'sink.*mint' 'RUN_HANDLE|run handle' 'run-registry\.sh register' 'sidecar' \
+  'sidecar' \
   'work-on-provenance\.workflow-sha256' 'workflow-provenance\.sh capture' \
   'separate.*captur|captur.*separate' 'live.*provenance|provenance.*live' \
   'Workflow telemetry'; do
@@ -247,7 +233,6 @@ done
 for custody_member in "$gate" "$workflow_doc"; do
   assert_has "$custody_member" 'trusted snapshot.*manifest.*provenance|manifest.*trusted snapshot.*provenance'
   for retired_rule in \
-    'RUN_HANDLE' '\$\{RUN_HANDLE%%@\*\}' 'run-handle custody' \
     'work-on-provenance\.json' 'work-on-provenance\.workflow-sha256' \
     'workflow-provenance\.sh capture'; do
     assert_lacks "$custody_member" "$retired_rule"
@@ -279,8 +264,6 @@ for retired_rule in \
   '"telemetry"[[:space:]]*:' '## Workflow telemetry' \
   '\| Final workflow outcome \|' '\| Telemetry run \|' \
   '\| Validation executions recorded \|' 'source note naming' \
-  'aggregates every sink-derived row' 'sink integrity|integrity is.*valid' \
-  'telemetry resolution' 'run-registry\.sh finalize' \
   'Only the current table format is accepted' 'revalidating it refuses' \
   'previous body must itself pass|recursively refuse'; do
   assert_lacks "$closeout" "$retired_rule"

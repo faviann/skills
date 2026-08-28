@@ -47,8 +47,12 @@ A diagnostic pattern showing where independently failure-prone **Correctness con
 _Avoid_: taxonomy gate, counted shape
 
 **Workflow provenance**:
-The `work-on` telemetry fingerprint hashes the declared `work-on`, `tdd`, and `code-review` instruction files plus the selected workflow file that governed a run. This is runtime attribution, not the risk-shapes provenance record that maps production examples to their sources.
+The captured identity of the declared `work-on`, `tdd`, and `code-review` instruction files plus the selected workflow file that governed a run. This is runtime attribution, not the risk-shapes provenance record that maps production examples to their sources.
 _Avoid_: instruction version, risk-shapes provenance
+
+**Run identity**:
+The durable id minted when a contract freezes, keying that run's custody.
+_Avoid_: run handle, repository-bound handle
 
 **Candidate identity**:
 The exact repository and candidate-controlled content being assessed. It identifies the content whose behavior or evidence is under review; a base revision participates only when the operation depends on the base or diff, while environment, toolchain, and external validation inputs are separate evidence-qualification inputs.
@@ -74,6 +78,10 @@ _Avoid_: acceptance surface, suite obligation, discharging command
 The run-local materialization of every acceptance criterion's **Validation surface**, frozen when the **Closability gate** passes after the trusted snapshot and selected workflow are read. Its recoverable identity binds the exact trusted snapshot and pre-implementation base; the selected workflow remains an invalidation input identified by **Workflow provenance**, and the manifest remains contract state for evidence rather than a limit on implementation or review scope.
 _Avoid_: acceptance-surface manifest
 
+**Owning phase**:
+The workflow-derived assignment of a definitely owed validation command or direct-evidence obligation to the phase that executes it. It is authored, load-bearing, and durable through the frozen obligation set in custody and the captured governing-instruction identity.
+_Avoid_: event phase tag, phase tag
+
 **Reviewed anchor**:
 The exact **Candidate identity** from which the next remediation delta is computed after all review axes required for that candidate have completed under unchanged governing inputs. The initial cumulative gate establishes the first Reviewed anchor; subsequent completed delta gates may advance it. It does not imply that the candidate is clean, accepted, or eligible for closeout.
 _Avoid_: approved candidate, clean baseline
@@ -91,7 +99,7 @@ The fresh blind reading of a qualifying Corrective batch's bounded BEFORE/AFTER 
 _Avoid_: semantic review, normative review, entitlement gate
 
 **Convergence episode**:
-The analysis grouping of one logical `work-on` attempt — its session and telemetry segments, continuation, review-chain restarts, synchronization, and ordinary resume, up to a durable outcome — together with its causally connected successor attempts, so corrective repetition stays visible when the work is picked up again. It is an observation boundary, not workflow state or an outcome.
+The analysis grouping of one logical `work-on` attempt — its sessions, continuation, review-chain restarts, synchronization, and ordinary resume, up to a durable outcome — together with its causally connected successor attempts, so corrective repetition stays visible when the work is picked up again. It is an observation boundary, not workflow state or an outcome.
 _Avoid_: retry chain, extended lifecycle, Convergence lifecycle
 
 **Independent judgment**:
@@ -102,24 +110,12 @@ _Avoid_: independent review execution
 A validation execution performed from a fresh independent review context when qualifying existing evidence cannot settle a concrete assurance question. One qualifying Independent execution may answer more than one assurance question; it is not required once per reviewer or workflow stage.
 _Avoid_: one rerun per reviewer, duplicated validation
 
-**Run telemetry sink**:
-The run-scoped, untracked JSON-lines file in the target repository's Git common directory where one `work-on` run appends implementation launches, atomic reviewer delegations, validation executions, outcome resolution, and its seal. It holds the events and deterministic integrity result; the pull-request body holds only bounded summaries aggregated from it. Distinct from **Workflow provenance**, which fingerprints the instructions that governed the run rather than what the run did.
-_Avoid_: event log, analytics store, telemetry ledger
-
-**Run registry**:
-The owner-only, bounded, user-level index of every `work-on` run's lifecycle, kept under an absolute XDG state directory so a run stays visible after its worktree, branch, or clone is gone. Each record is keyed by the run's repository-bound handle, and holds enumerated lifecycle and finalization states, repository/issue identity, a sink locator, and a hash of the sink's own summary — never the events themselves, which stay in the **Run telemetry sink**, and never a fact contradicting it.
-_Avoid_: run database, telemetry registry, analytics store
-
-**Control observer**:
-The optional external program the **Run registry** asks whether a run carries a finalization obligation, and notifies when one is discharged. It answers with two bounded tokens — an observer id and a control id — and owns all policy; the registry knows nothing about what any observer measures. Discharge notifications carry one stable transition identity, delivered at least once, which the observer deduplicates into one logical transition.
-_Avoid_: experiment hook, control policy, publisher
-
 **PR-local observation**:
-The bounded `## Workflow telemetry` table one `work-on` closeout writes into a pull-request body, describing the latest run only, plus the repository-local `work-on` label that makes such pull requests findable. Three rows are *primary-reported* — model configuration, blocking findings resolved, findings rejected at adjudication — and the rest are *sink-derived* from the **Run telemetry sink**; a source note below the table says which is which. It supports a manual, reversible reading of whether `work-on` is getting cheaper: it is a directional convenience sample of runs that reached a readable closeout, never a certified population, a causal proof, or evidence that no defect escaped. The label is a discovery aid, not evidence authority. See [ADR 0006](./.agents/adr/0006-retire-the-formal-control-window-for-pr-local-observation.md).
-_Avoid_: control window, experiment sample, results branch, wall-clock elapsed (the row is **Start-to-seal elapsed**)
+A manual reading of `work-on` pull requests found through the repository-local `work-on` label. It is a directional convenience sample of runs that reached a readable closeout, never a certified population, a causal proof, or evidence that no defect escaped; the label is a discovery aid, not evidence authority. See [ADR 0006](./.agents/adr/0006-retire-the-formal-control-window-for-pr-local-observation.md) for the historical mechanism this replaced.
+_Avoid_: control window, experiment sample, results branch
 
 **Closability gate**:
-The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available and its direct-evidence obligation can be materialized as a finite **Validation surface** in the run's **Validation-surface manifest** against the trusted preflight state. It produces run-local semantic contract state rather than a tracked repository artifact, and failure aborts before implementation begins. Distinct from the **closure gate**, which decides whether the required direct evidence was actually produced.
+The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available and its direct-evidence obligation can be materialized as a finite **Validation surface** in the run's **Validation-surface manifest** against the trusted preflight state. It produces run-local semantic contract state rather than a tracked repository artifact, and failure aborts before implementation begins without minting a **Run identity**. Distinct from the **closure gate**, which decides whether the required direct evidence was actually produced.
 _Avoid_: closure gate (for this), readiness gate, closability report
 
 **Correctness contract**:
@@ -136,15 +132,14 @@ _Avoid_: model kind, model family
 - An **Issue** carries one **Triage role** at a time
 - A **Correctness contract** has one or more **Responsibilities**, and several **Correctness contracts** may share one **Responsibility**
 - A **Risk shape** helps locate **Correctness contracts** but does not determine how many a slice contains
-- A `work-on` run has one **Run telemetry sink** and one **Workflow provenance** value
+- A `work-on` run has one **Run identity**, which keys its frozen custody and captured **Workflow provenance**
 - A **Reusable-evidence identity** combines one **Candidate identity**, one **Validation identity**, and the relevant qualifying execution inputs
 - **Reusable validation evidence** has one **Reusable-evidence identity** and may support many reviewers' **Independent judgments**
 - **Independent execution** supplies new raw evidence for an **Independent judgment** when qualifying **Reusable validation evidence** cannot settle the assurance question
-- A `work-on` run has at most one **Run registry** record, which names at most one **Control observer**; the record is registered before implementation and finalized on hand-back
-- A successful `work-on` PR closeout writes one **PR-local observation**, whose latest-run values are not a lower bound on any later run's
-- A `work-on` run passes one **Closability gate** before it delegates implementation; a run that fails it resolves as `preflight-aborted`, seals, and never reaches the closure gate
+- A repository-local `work-on` label makes successful PR closeouts available for **PR-local observation**
+- A `work-on` run passes one **Closability gate** before it delegates implementation; an invocation that fails it hands back as `preflight-aborted`, has no **Run identity**, and never reaches the closure gate
 - A **Validation-surface manifest** materializes the required **Validation surfaces** when the **Closability gate** passes
-- A **Convergence episode** contains one or more causally connected logical `work-on` attempts, each of which may span several `work-on` telemetry segments or review chains
+- A **Convergence episode** contains one or more causally connected logical `work-on` attempts, each of which may span several sessions or review chains
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
 - A **Map** holds many **Decision tickets** and one **Not yet specified** section

@@ -105,6 +105,7 @@ committed="$(cd "$target" && "$command" read --run "$committed_run")"
 for case_spec in \
   'skills/personal/work-on/references/validation-evidence.md:work-on' \
   'skills/personal/work-on/references/review-state-machine.md:work-on' \
+  'skills/personal/work-on/references/normative-remediation.md:work-on' \
   'skills/engineering/code-review/WORK-ON-REVIEW.md:review'; do
   path="${case_spec%:*}"
   printf 'changed authority input\n' >>"$skills/$path"
@@ -115,6 +116,21 @@ for case_spec in \
   [[ -f "$target/.git/work-on-manifest/$committed_run.provenance.json" ]]
   grep -Fq 'governing instructions changed since contract freeze' \
     "$fixture/authority.err"
+  if (cd "$target" && "$freeze_command" verify --run "$committed_run") \
+      >"$fixture/manifest-authority.out" 2>"$fixture/manifest-authority.err"; then
+    echo "manifest verify accepted changed $path" >&2; exit 1
+  fi
+  grep -Fq 'current governing instruction identity does not match frozen custody' \
+    "$fixture/manifest-authority.err"
+  if [[ "$path" == skills/personal/work-on/references/normative-remediation.md ]]; then
+    (cd "$target" && "$command" capture \
+      --output "$fixture/normative-authority.json")
+    normative_canonical="$(jq -r '.canonical' \
+      "$fixture/normative-authority.json")"
+    [[ "$(component work-on "$normative_canonical")" != \
+      "$(component work-on "$committed")" ]]
+    [[ "$(component work-on "$normative_canonical")" == *'*' ]]
+  fi
   git -C "$skills" restore "$path"
 done
 

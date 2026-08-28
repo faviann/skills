@@ -152,7 +152,6 @@ name the assurance question, why existing evidence and static inspection were
 insufficient, and why the execution was the narrowest adequate check. A
 discretionary cheap check owes no justification record.
 
-Do not copy raw evidence into the Run telemetry sink or create another evidence
-subsystem. Raw harness transcripts and access-controlled result artifacts
-remain source evidence; the reviewer report carries safe provenance and
-reasoning only.
+Do not create another evidence subsystem. Raw harness transcripts and
+access-controlled result artifacts remain source evidence; the reviewer report
+carries safe provenance and reasoning only.

@@ -169,5 +169,5 @@ This mechanism makes no change to #103's Validation-surface manifest, #104/#122
 validation-evidence rules, or #105's review chain. It creates no
 `review-state-machine.md` gate, no Reviewed anchor, and no durable lifecycle
 state. The semantic reader's existence and output never enter a cumulative or
-delta package. The mechanism adds no telemetry schema, no new telemetry kind,
-no provider analytics, and no pilot bookkeeping.
+delta package. The mechanism adds no provider analytics and no pilot
+bookkeeping.

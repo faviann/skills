@@ -13,7 +13,6 @@ WORKFLOW="$skill_dir/references/default-workflow.md"
 STATE="$skill_dir/references/review-state-machine.md"
 SKILL="$skill_dir/SKILL.md"
 CLOSEOUT="$skill_dir/references/github-closeout.md"
-TELEMETRY="$skill_dir/references/run-telemetry.md"
 REVIEW="$skill_dir/../../engineering/code-review/SKILL.md"
 REVIEW_ADAPTER="$skill_dir/../../engineering/code-review/WORK-ON-REVIEW.md"
 EVIDENCE="$skill_dir/references/validation-evidence.md"
@@ -272,15 +271,6 @@ has "$EVIDENCE" \
   'Failing, stale, contradictory, incomplete, identity-invalid, or otherwise inadequate evidence remains blocking' \
   'inadequate evidence remains blocking under its owning policy'
 echo 'ok - review invalidation preserves manifest fail-closed and evidence-reuse ownership'
-
-## Existing telemetry observes delta delegations without gaining authority
-has "$TELEMETRY" \
-  '`--kind` is one of `readiness`, `full`, `delta`' \
-  'the existing telemetry kind records delta review'
-has "$TELEMETRY" \
-  'Telemetry observes the run; it never decides what the run does|records.*does not change' \
-  'telemetry remains non-authoritative'
-echo 'ok - existing telemetry records delta review without governing it'
 
 if (( failures > 0 )); then
   printf '\n%s review-state-machine assertion(s) failed.\n' "$failures" >&2
