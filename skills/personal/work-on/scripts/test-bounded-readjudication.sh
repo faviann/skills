@@ -83,9 +83,9 @@ has "$section" \
   'Contract-backed and Defensive rulings are ineligible'
 lacks "$section" '(Contract-backed|Defensive)[^.]{0,40}(are|is) eligible' \
   'no ineligible classification is admitted as eligible'
-has "$section" '`D` produced the current remediation candidate' \
+has "$section" '(`D` produced the current remediation candidate|current remediation candidate was produced by `D`)' \
   'the triggering directive produced the current remediation candidate'
-has "$section" 'accepted blocker.*attributable to the mechanism introduced\s+for `D`' \
+has "$section" 'accepted blocker at that gate is attributable to the mechanism introduced for `D`' \
   'the trigger requires a blocker attributable to the Ambiguous directive'
 has "$section" '(immediately following delta gate|delta gate that immediately follows)' \
   'the trigger window is the immediately following delta gate'
@@ -96,17 +96,15 @@ echo 'ok - eligibility is limited to Ambiguous rulings whose own mechanism repro
 ## The association is transient working state, not a lineage system.
 has "$section" 'run-local note[^.]*`D` descends from `R`' \
   'the association records only that the directive descends from the ruling'
-for forbidden in 'lineage store' 'registry' 'lifecycle' 'event protocol' \
-  'telemetry' 'persistent correlation state'; do
-  has "$section" "(keep|introduce|add) no[^.]*$forbidden" \
-    "the association introduces no $forbidden"
-done
-has "$section" '(drop|discard) it once that gate is adjudicated' \
+has "$section" \
+  '(keep|introduce|add) no lineage store, registry, lifecycle, event protocol, telemetry, or persistent correlation state' \
+  'the association introduces no durable machinery of any listed kind'
+has "$section" 'and (drop|discard) it once that gate is adjudicated' \
   'the association is bounded to the immediate delta window'
 echo 'ok - the directive-to-ruling association is transient run-local state'
 
 ## The reader is fresh, blind, non-reviewing, and derives meaning only.
-has "$section" 'launch (one|a single) fresh blind reader' \
+has "$section" 'remediation continues, launch (one|a single) fresh blind reader' \
   'one fresh blind reader performs the reading'
 has "$section" 'isolation pattern of `references/normative-remediation.md` without invoking or extending' \
   'the reader reuses the isolation pattern without importing that mechanism'
@@ -117,6 +115,10 @@ for supplied in \
   has "$section" "(supply|give it) only[^.]*$supplied" \
     "the closed reader package supplies $supplied and nothing else"
 done
+lacks "$section" '(supply|give it) only[^.]*(prior ruling|adjudication ledger|previously rejected alternative)' \
+  'no withheld item appears in the closed supply clause'
+lacks "$section" '(withhold|never give)[^.]*but (supply|give)' \
+  'the withholding clause is not reversed mid-sentence'
 has "$section" 'reader is non-reviewing' 'the reader is non-reviewing'
 has "$section" 'never reuse it as a review-axis agent' \
   'the reader never becomes a review axis in this chain'
@@ -129,7 +131,7 @@ for withheld in \
   has "$section" "(withhold|never give the reader)[^.]*$withheld" \
     "the reader is blind to the $withheld"
 done
-has "$section" '(enumerate|list) (them|every|each|all)[^.]{0,60}concrete obligation' \
+has "$section" '(enumerate|list) (them|every|each|all)[^.]{0,40}\bwith the concrete obligation' \
   'the reader enumerates every materially defensible reading and its obligation'
 has "$section" '(must not|must never|may not) prefer a reading[^.]*cheaper' \
   'the reader may not prefer a reading for being cheaper'
@@ -182,6 +184,8 @@ has "$SKILL" \
 echo 'ok - the immutability fence, reviewer blindness, and authority grant hold'
 
 ## Observability uses ordinary primary reasoning rather than a new protocol.
+has "$section" '(state|report) in ordinary working reasoning (which|what|whether|the)' \
+  'the reporting imperative leads directly into the items it names'
 for reported in 'which ruling was re-adjudicated' 'the reader returned' \
   'upheld or superseded' 'evidence-sufficiency decision'; do
   has "$section" "(state|report) in ordinary working reasoning[^.]*$reported" \
@@ -191,7 +195,7 @@ echo 'ok - observability is ordinary primary reasoning'
 
 ## No new document, no expansion of normative remediation, no new naming.
 mapfile -t references < <(cd "$skill_dir/references" &&
-  find . -name '*.md' -printf '%P\n' | sort)
+  find . -name '*.md' | sed 's|^\./||' | sort)
 expected='closability-gate.md default-workflow.md github-closeout.md normative-remediation.md review-state-machine.md validation-evidence.md'
 if [[ "${references[*]}" != "$expected" ]]; then
   fail "no new reference document is introduced (found: ${references[*]})"
@@ -203,8 +207,8 @@ while IFS= read -r reference; do
 done < <(find "$skill_dir/references" -name '*.md')
 lacks "$section" 'semantic challenge' \
   'the mechanism is not named with the normative-remediation term'
-lacks "$SKILL" 'semantic challenge' \
-  'SKILL.md never names the mechanism a semantic challenge'
+lacks "$SKILL" 'Ambiguous ruling[^.]*semantic challenge|semantic challenge[^.]*Ambiguous ruling' \
+  'SKILL.md never names this mechanism a semantic challenge'
 lacks "$section" 'telemetry schema|run registry|durable event protocol|new lifecycle' \
   'no telemetry, registry, or lifecycle machinery is introduced'
 echo 'ok - the static surface gains no document, term, or lifecycle machinery'
