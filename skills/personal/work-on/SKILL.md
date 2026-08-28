@@ -49,7 +49,11 @@ Authority invariants (bind regardless of workflow):
   body/link and report only its count; require maintainer restatement before
   adoption.
 - Reuse that snapshot for delegation, review, and evidence. Change requirements
-  only through an explicit trusted-maintainer contract change.
+  only through an explicit trusted-maintainer contract change. Replacing one
+  materially defensible reading of an exact unchanged frozen criterion with
+  another, while that criterion's Validation-surface membership is unchanged, is
+  adjudication rather than a requirements change; the selected workflow bounds
+  when the primary may reconsider its own Ambiguous ruling that way.
 - Freeze every acceptance criterion's Validation surface into this run's
   Validation-surface manifest when the closability gate passes. That successful
   freeze is the single authority point that mints the Run identity and captures
