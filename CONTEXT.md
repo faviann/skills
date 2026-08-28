@@ -111,11 +111,11 @@ A validation execution performed from a fresh independent review context when qu
 _Avoid_: one rerun per reviewer, duplicated validation
 
 **PR-local observation**:
-A manual reading of `work-on` pull requests found through the repository-local `work-on` label. It is a directional convenience sample of runs that reached a readable closeout, never a certified population, a causal proof, or evidence that no defect escaped; the label is a discovery aid, not evidence authority. See [ADR 0006](./.agents/adr/0006-retire-the-formal-control-window-for-pr-local-observation.md) for the historical mechanism this replaced.
+A manual reading of `work-on` pull requests found through the repository-local `work-on` label; it is a directional convenience sample of runs that reached a readable closeout, never a certified population, a causal proof, or evidence that no defect escaped; the label is a discovery aid, not evidence authority. See [ADR 0006](./.agents/adr/0006-retire-the-formal-control-window-for-pr-local-observation.md) for the historical mechanism this replaced.
 _Avoid_: control window, experiment sample, results branch
 
 **Closability gate**:
-The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available and its direct-evidence obligation can be materialized as a finite **Validation surface** in the run's **Validation-surface manifest** against the trusted preflight state. It produces run-local semantic contract state rather than a tracked repository artifact, and failure aborts before implementation begins without minting a **Run identity**. Distinct from the **closure gate**, which decides whether the required direct evidence was actually produced.
+The `work-on` preflight that decides, before implementation is delegated, whether every acceptance criterion has a direct validation seam available and its direct-evidence obligation can be materialized as a finite **Validation surface** in the run's **Validation-surface manifest** against the trusted preflight state. It produces run-local semantic contract state rather than a tracked repository artifact, and failure aborts before implementation begins without minting a **Run identity**; it is distinct from the **closure gate**, which decides whether the required direct evidence was actually produced.
 _Avoid_: closure gate (for this), readiness gate, closability report
 
 **Correctness contract**:
