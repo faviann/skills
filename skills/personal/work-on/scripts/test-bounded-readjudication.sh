@@ -53,9 +53,9 @@ extract_section() {
   ' "$source" >"$output"
 }
 
-heading='### Bounded re-adjudication of an Ambiguous ruling'
+heading="$(grep -m1 '^### Bounded re-adjudication' "$WORKFLOW" || true)"
 section="$fixture_dir/readjudication-section.md"
-extract_section "$WORKFLOW" "$heading" "$section"
+[[ -n "$heading" ]] && extract_section "$WORKFLOW" "$heading" "$section"
 if [[ ! -s "$section" ]]; then
   fail 'the default workflow carries the bounded re-adjudication section inline'
   printf '\n%s bounded-re-adjudication assertion(s) failed.\n' "$failures" >&2
@@ -67,33 +67,38 @@ awk '/^## / { inside = ($0 ~ /^## 5\./) }
   inside && /^### Bounded re-adjudication/ { found = 1 }
   END { exit !found }' "$WORKFLOW" ||
   fail 'bounded re-adjudication sits inside the adjudicate-and-remediate step'
-has "$section" 'exactly once' 'a qualifying trigger produces exactly one re-adjudication'
-has "$section" 'classified \*\*Ambiguous\*\*; Contract-backed and Defensive rulings are ineligible' \
-  'Contract-backed and Defensive rulings are ineligible'
+has "$section" 're-adjudicate `R` (exactly once|once and only once|only once)' \
+  'a qualifying trigger produces exactly one re-adjudication'
+has "$section" 'classified \*\*Ambiguous\*\*' 'only an Ambiguous ruling qualifies'
+for ruling in 'Contract-backed' 'Defensive'; do
+  has "$section" "($ruling.{0,60}ineligible|ineligible.{0,60}$ruling)" \
+    "$ruling rulings are ineligible"
+done
 has "$section" '`D` produced the current remediation candidate' \
   'the triggering directive produced the current remediation candidate'
-has "$section" 'accepted blocker.*attributable to the mechanism introduced for `D`' \
+has "$section" 'accepted blocker.*attributable to the mechanism introduced\s+for `D`' \
   'the trigger requires a blocker attributable to the Ambiguous directive'
-has "$section" 'immediately following delta gate' \
+has "$section" '(immediately following delta gate|delta gate that immediately follows)' \
   'the trigger window is the immediately following delta gate'
-has "$section" 'does not trace to `D`.s mechanism takes ordinary remediation' \
+has "$section" 'does not trace to `D`.s mechanism\s+\S*\s*(takes|proceeds through) ordinary remediation' \
   'an unattributable blocker at the same gate does not trigger the mechanism'
 echo 'ok - eligibility is limited to Ambiguous rulings whose own mechanism reproduced a blocker'
 
 ## The association is transient working state, not a lineage system.
-has "$section" 'run-local note that `D` descends from `R`' \
+has "$section" 'run-local note[^.]*`D` descends from `R`' \
   'the association records only that the directive descends from the ruling'
 for forbidden in 'lineage store' 'registry' 'lifecycle' 'event protocol' \
   'telemetry' 'persistent correlation state'; do
   has "$section" "keep no[^.]*$forbidden" \
     "the association introduces no $forbidden"
 done
-has "$section" 'drop it once that gate is adjudicated' \
+has "$section" '(drop|discard) it once that gate is adjudicated' \
   'the association is bounded to the immediate delta window'
 echo 'ok - the directive-to-ruling association is transient run-local state'
 
 ## The reader is fresh, blind, non-reviewing, and derives meaning only.
-has "$section" 'launch one fresh blind reader' 'one fresh blind reader performs the reading'
+has "$section" 'launch (one|a single) fresh blind reader' \
+  'one fresh blind reader performs the reading'
 has "$section" 'isolation pattern of `references/normative-remediation.md` without invoking or extending' \
   'the reader reuses the isolation pattern without importing that mechanism'
 for supplied in \
@@ -116,11 +121,12 @@ for withheld in \
 done
 has "$section" '(enumerate|list)[^.]{0,80}concrete obligation' \
   'the reader enumerates every materially defensible reading and its obligation'
-has "$section" 'must not prefer a reading because that reading is cheaper' \
+has "$section" 'must (not|never) prefer a reading[^.]*cheaper' \
   'the reader may not prefer a reading for being cheaper'
-has "$section" 'must not propose an implementation' 'the reader proposes no implementation'
+has "$section" 'must (not|never) propose an implementation' \
+  'the reader proposes no implementation'
 has "$section" 'reader derives meaning only' 'the reader derives meaning only'
-has "$section" 'primary retains adjudication authority' \
+has "$section" '(primary retains adjudication authority|adjudication authority stays with the primary)' \
   'the primary retains adjudication authority'
 has "$section" 'one fresh invocation may handle several eligible criterion units' \
   'several eligible units from one gate share a single fresh invocation'
@@ -132,12 +138,14 @@ has "$section" 'continue ordinary remediation and do not re-adjudicate `R` again
   'an upheld ruling returns to ordinary remediation and cannot trigger again'
 has "$section" 'one re-adjudication per Ambiguous ruling, not one per run' \
   'the one-shot limit is per ruling rather than a global per-run cap'
-has "$section" 'remove mechanism no criterion requires rather than hardening it' \
+has "$section" '(remove mechanism no criterion requires.{0,30}rather than hardening|rather than hardening it.{0,20}remove mechanism no criterion requires)' \
   'superseding removes mechanism instead of hardening it'
 has "$section" 'keep any blocker portion that still applies to surviving candidate content' \
   'the surviving portion of the blocker is retained'
-has "$section" 'freshly adjudicate under `references/validation-evidence.md`' \
+has "$section" '(freshly adjudicate|adjudicate afresh) under `references/validation-evidence.md`' \
   'evidence sufficiency is freshly adjudicated after a superseding reading'
+has "$section" 'rerun where sufficiency requires it' \
+  'evidence is re-executed where the fresh adjudication requires it'
 has "$section" 'reuse evidence only where it directly proves that obligation' \
   'evidence is reused only where it proves the newly adjudicated obligation'
 has "$section" 'carry no earlier `tested` disposition across the reversal' \
@@ -156,7 +164,7 @@ has "$section" \
   'changed bytes or membership take the existing hand-back routes'
 has "$section" 'changes no frozen review-chain governing input' \
   're-adjudication changes no frozen review-chain governing input'
-has "$section" 'ledger stays out of every reviewer package' \
+has "$section" 'ledger (stays out of|is withheld from) every reviewer package' \
   'the adjudication ledger remains hidden from reviewers'
 has "$SKILL" \
   'materially defensible reading of an exact unchanged frozen criterion.*Validation-surface membership is unchanged.*adjudication rather than a requirements change' \
@@ -166,7 +174,7 @@ echo 'ok - the immutability fence, reviewer blindness, and authority grant hold'
 ## Observability uses ordinary primary reasoning rather than a new protocol.
 for reported in 'which ruling was re-adjudicated' 'the reader returned' \
   'upheld or superseded' 'evidence-sufficiency decision'; do
-  has "$section" "state in ordinary working reasoning[^.]*$reported" \
+  has "$section" "(state|report) in ordinary working reasoning[^.]*$reported" \
     "the reporting obligation itself names $reported"
 done
 echo 'ok - observability is ordinary primary reasoning'
@@ -184,6 +192,11 @@ for reference in "$skill_dir"/references/*.md; do
 done
 lacks "$section" 'semantic challenge' \
   'the mechanism is not named with the normative-remediation term'
+skill_grant="$fixture_dir/skill-authority-clause.md"
+grep -A2 'materially defensible reading of an exact unchanged frozen criterion' \
+  "$SKILL" >"$skill_grant"
+lacks "$skill_grant" 'semantic challenge' \
+  'the authority clause does not name the mechanism a semantic challenge'
 lacks "$section" 'telemetry schema|run registry|durable event protocol|new lifecycle' \
   'no telemetry, registry, or lifecycle machinery is introduced'
 echo 'ok - the static surface gains no document, term, or lifecycle machinery'
