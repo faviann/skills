@@ -11,10 +11,6 @@ skill_dir="$(cd "$script_dir/.." && pwd)"
 
 SKILL="$skill_dir/SKILL.md"
 WORKFLOW="$skill_dir/references/default-workflow.md"
-NORMATIVE="$skill_dir/references/normative-remediation.md"
-STATE="$skill_dir/references/review-state-machine.md"
-CLOSABILITY="$skill_dir/references/closability-gate.md"
-EVIDENCE="$skill_dir/references/validation-evidence.md"
 
 failures=0
 fixture_dir="$(mktemp -d)"
@@ -107,8 +103,9 @@ for supplied in \
   has "$section" "supply only[^.]*$supplied" \
     "the closed reader package supplies $supplied and nothing else"
 done
-has "$section" 'non-reviewing: never reuse it as a review-axis agent' \
-  'the reader is non-reviewing and never becomes a review axis'
+has "$section" 'reader is non-reviewing' 'the reader is non-reviewing'
+has "$section" 'never reuse it as a review-axis agent' \
+  'the reader never becomes a review axis in this chain'
 for withheld in \
   'prior ruling' \
   'previously rejected alternative' \
@@ -117,7 +114,7 @@ for withheld in \
   'current implementation except a bounded raw fact'; do
   has "$section" "withhold.*$withheld" "the reader is blind to the $withheld"
 done
-has "$section" '(enumerate|list)[^.;]{0,80}concrete obligation' \
+has "$section" '(enumerate|list)[^.]{0,80}concrete obligation' \
   'the reader enumerates every materially defensible reading and its obligation'
 has "$section" 'must not prefer a reading because that reading is cheaper' \
   'the reader may not prefer a reading for being cheaper'
@@ -167,24 +164,23 @@ has "$SKILL" \
 echo 'ok - the immutability fence, reviewer blindness, and authority grant hold'
 
 ## Observability uses ordinary primary reasoning rather than a new protocol.
-has "$section" 'state in ordinary working reasoning' \
-  'the re-adjudication is reported in ordinary working reasoning'
 for reported in 'which ruling was re-adjudicated' 'the reader returned' \
   'upheld or superseded' 'evidence-sufficiency decision'; do
-  has "$section" "$reported" "the report names $reported"
+  has "$section" "state in ordinary working reasoning[^.]*$reported" \
+    "the reporting obligation itself names $reported"
 done
 echo 'ok - observability is ordinary primary reasoning'
 
 ## No new document, no expansion of normative remediation, no new naming.
+mapfile -t references < <(cd "$skill_dir/references" && ls ./*.md | sort)
+expected='./closability-gate.md ./default-workflow.md ./github-closeout.md ./normative-remediation.md ./review-state-machine.md ./validation-evidence.md'
+if [[ "${references[*]}" != "$expected" ]]; then
+  fail "no new reference document is introduced (found: ${references[*]})"
+fi
 for reference in "$skill_dir"/references/*.md; do
   [[ "$reference" == "$WORKFLOW" ]] && continue
   lacks "$reference" 're-adjudicat|Ambiguous ruling' \
     "the mechanism does not expand or move into ${reference##*/}"
-done
-for required in closability-gate.md default-workflow.md github-closeout.md \
-  normative-remediation.md review-state-machine.md validation-evidence.md; do
-  [[ -f "$skill_dir/references/$required" ]] ||
-    fail "the existing reference document $required survives"
 done
 lacks "$section" 'semantic challenge' \
   'the mechanism is not named with the normative-remediation term'
