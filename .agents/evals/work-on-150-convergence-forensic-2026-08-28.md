@@ -22,44 +22,6 @@ experiment. Companion to
 whose instrument this reuses, and to the 2026-08-13 review-churn packet in this
 directory.
 
-## The short answer
-
-The simpler design was never discovered late. **It was the initial
-implementation.**
-
-`manifest-identity.sh` at the first candidate commit `87744de` (21:05:42) already
-published the fully bound manifest last, as the single commit point, with no
-lifecycle state. It survived four review waves unchallenged on that axis. At
-21:37 a closure reviewer reproduced a real criterion-3 boundary defect by
-`SIGKILL`ing the freeze between the final `mv` and its stdout. The primary
-adjudicated that finding under a **strict** reading of criterion 3 — a failed
-invocation must leave nothing readable — and the remediation for it introduced
-the `pending`/`accepted` freeze lifecycle at `2a63eb8` (21:48:34). Everything the
-maintainer later deleted descends from that one adjudication.
-
-The maintainer's intervention at 22:49:41 did not supply a missing fact. It
-supplied the **opposite reading of criterion 3**: the final manifest rename *is*
-the success point, so an interruption after it is a committed freeze rather than
-a failed one. Under that reading the lifecycle has nothing to do, and it was
-deleted at `c298820`.
-
-Diffing the first candidate against the last, the freeze publication model is
-structurally identical. The whole net semantic delta across ten commits in that
-file is one accepted blocker: binding `run-identity` into the manifest header and
-the binding digest.
-
-```console
-$ git diff 87744de c298820 -- skills/personal/work-on/scripts/manifest-identity.sh
-# adds:  run-identity header line, identity in binding_digest, header 5→6 lines
-# removes: rmdir/staging_dir reset (trap already covers it)
-# publication order, commit point, and reader predicate: unchanged
-```
-
-So the causal mechanism is **not** "the workflow could not see the simple
-design." It is: *a mid-run contract interpretation became a fixed premise that no
-later gate was chartered to re-open, and the mechanism required by that premise
-then generated its own defects for two further rounds.*
-
 ## Evidence authority
 
 Per skills#98, in order:
@@ -111,9 +73,10 @@ window and by reading each child's own first turns.
 
 All timestamps are `2026-08-27` UTC. Roles were confirmed from launch behaviour
 in each child session, not from ordering: the primary is the only session
-carrying `spawn_agent`; the delegate is the only child receiving `followup_task`
-across the whole span; each reviewer opens by verifying a pinned package SHA-256
-and declares its axis.
+spawning *named workflow roles*; the delegate is the only child receiving
+`followup_task` across the whole span; each reviewer opens by verifying a pinned
+package SHA-256 and declares its axis. The primary is **not** the only session
+carrying `spawn_agent` — see the reconciliation below.
 
 Repository locators:
 
@@ -126,13 +89,46 @@ Repository locators:
 | Run identity (old closeout) | `20260827T202741Z-b05f10bb` |
 
 **Session-count reconciliation.** The primary issued exactly 47 `spawn_agent`
-calls (1 implementation + 1 readiness + 45 review). Moraine indexes **49**
-non-primary `codex` sessions in the run window: two additional reviewer sessions
-(`01a04566-9d12-…` at 22:45:48, `01a04577-a6fa-…` at 23:04:24) carry review work
-but match no `spawn_agent` call, and are read here as harness re-invocations of
-an already-spawned reviewer. Both are counted in the wave table. Two concurrent
-`homelab-iac` sessions in the same window are a separate `/work-on 202` run and
-are excluded.
+calls (1 implementation + 1 readiness + 45 review), matching the old closeout's
+figure. Moraine indexes **49** non-primary `codex` sessions in the run window.
+The two extra sessions are **second-level delegates, not gate reviewers**: the
+`closure_delta7` and `closure_delta8` reviewers each invoked this repository's
+`code-review` skill, which spawns its own `standards_axis` and `spec_axis`
+sub-agents.
+
+```sql
+SELECT session_id, event_ts,
+       JSONExtractString(JSONExtractString(payload_json,'arguments'),'task_name')
+FROM moraine.events
+WHERE project_id = '<project_id>' AND tool_name = 'spawn_agent'
+  AND tool_phase = 'request' AND session_id != '<primary>'
+ORDER BY event_ts FORMAT TSV
+```
+
+```text
+01a04565-3754-…  (closure_delta7)  22:45:47  standards_axis
+01a04565-3754-…  (closure_delta7)  22:46:10  spec_axis
+01a04575-83c4-…  (closure_delta8)  23:04:24  standards_axis
+01a04575-83c4-…  (closure_delta8)  23:04:29  spec_axis
+```
+
+`01a04566-9d12-…` (22:45:48) is the child of the first; `01a04577-a6fa-…`
+(23:04:24) is the child of the third. Both open by declaring the `code-review`
+skill. Of the four nested spawns, Moraine indexes two child sessions: the
+23:04:29 `spec_axis` output appears inside `01a04577-a6fa-…` rather than in a
+session of its own, and the 22:46:10 `spec_axis` spawn has no indexed session at
+all. That is a Moraine coverage gap, recorded in *Limitations*.
+
+The `delta7` and `delta8` rows of the wave table count these as a fourth session
+because their tokens are real and were spent reviewing that candidate. They are
+**nested** review inside one axis, not a fourth independent axis, and the
+independence properties skills#98 protects are unaffected. `delta8`'s 2,860,443
+includes 707,133 of nested cost.
+
+Five concurrent `homelab-iac` sessions in the same window (`01a04558-4501`,
+`01a0455d-2bb0`, `01a04560-e77b`, `01a0456a-3d39`, `01a0456a-4ff2`) are a
+separate `/work-on 202` run — verified from each session's own opening turns —
+and are excluded.
 
 ## Queries
 
@@ -255,6 +251,44 @@ defect in A+B → mechanism C`, where the later deletion of A makes B and C
 unnecessary. Asserted only where `git log -S` places the mechanism's introduction
 in a remediation commit *and* the reviewer report naming the defect is on record.
 
+## The short answer
+
+The simpler design was never discovered late. **It was the initial
+implementation.**
+
+`manifest-identity.sh` at the first candidate commit `87744de` (21:05:42) already
+published the fully bound manifest last, as the single commit point, with no
+lifecycle state. It survived four review waves unchallenged on that axis. At
+21:37 a closure reviewer reproduced a real criterion-3 boundary defect by
+`SIGKILL`ing the freeze between the final `mv` and its stdout. The primary
+adjudicated that finding under a **strict** reading of criterion 3 — a failed
+invocation must leave nothing readable — and the remediation for it introduced
+the `pending`/`accepted` freeze lifecycle at `2a63eb8` (21:48:34). Everything the
+maintainer later deleted descends from that one adjudication.
+
+The maintainer's intervention at 22:49:41 did not supply a missing fact. It
+supplied the **opposite reading of criterion 3**: the final manifest rename *is*
+the success point, so an interruption after it is a committed freeze rather than
+a failed one. Under that reading the lifecycle has nothing to do, and it was
+deleted at `c298820`.
+
+Diffing the first candidate against the last, the freeze publication model is
+structurally identical. The whole net semantic delta across ten commits in that
+file is one accepted blocker: binding `run-identity` into the manifest header and
+the binding digest.
+
+```console
+$ git diff 87744de c298820 -- skills/personal/work-on/scripts/manifest-identity.sh
+# adds:  run-identity header line, identity in binding_digest, header 5→6 lines
+# removes: rmdir/staging_dir reset (trap already covers it)
+# publication order, commit point, and reader predicate: unchanged
+```
+
+So the causal mechanism is **not** "the workflow could not see the simple
+design." It is: *a mid-run contract interpretation became a fixed premise that no
+later gate was chartered to re-open, and the mechanism required by that premise
+then generated its own defects for two further rounds.*
+
 ## Wave map
 
 Fifteen review triads, each Standards + Spec + closure, launched with
@@ -326,7 +360,7 @@ the 47 reviewers. No conclusion in this file rests on any of these figures.
 | 21:09:17 | **`4fc9e49`** — one-line flake fix | proof/test-only |
 | 21:11 | **wave c0** cumulative gate | gate |
 | 21:16:02 | accepts 4: legacy previous-body detection; real interruption fixture; static evidence for criteria 14/31–33. Rejects glossary (slice 2) and duplicated regex | adjudication |
-| 21:25:49 | **`56f19fd`** — `prod +22/−10, test +143/0` | production + proof |
+| 21:25:49 | **`56f19fd`** — `prod +22/−10, test +143/0` | proof/test-only (+ production/correctness) |
 | 21:30:17 | **d1**: Spec finds the c0 fix incomplete — a counterfeit `## Closure gate` *before* the real one still wins | **A3′**, remediation-introduced |
 | 21:33:01 | **`40208d8`** — anchor to the *last* closure gate | production/correctness |
 | 21:36:12 | **d2** clean. Standards repeats duplicated-parser | — |
@@ -361,7 +395,7 @@ the 47 reviewers. No conclusion in this file rests on any of these figures.
 
 | Commit | Time | Dominant class | Also | Prod / prose / test |
 |---|---|---|---|---|
-| `87744de` | 21:05 | production/correctness | simplification/deletion (the cutover is net −3,291) | +265/−925 · +163/−307 · +583/−2059 |
+| `87744de` | 21:05 | production/correctness | simplification/deletion (1,011 insertions against 3,291 deletions; net −2,280) | +265/−925 · +163/−307 · +583/−2059 |
 | `4fc9e49` | 21:09 | proof/test-only | — | 0 · 0 · +1/−1 |
 | `56f19fd` | 21:25 | proof/test-only | production/correctness | +22/−10 · 0 · +143/0 |
 | `40208d8` | 21:33 | production/correctness | — | +10/−8 · 0 · +9/0 |
@@ -465,25 +499,32 @@ by a delta7 Standards reader at 22:44 and accepted at 22:47 — changed no code.
 The primary's response was to require the next wave's reviewers to execute any
 surface whose supplied event was insufficient, which is why `final6` costs 9.33M.
 
-### Rejected (3 families, ~13 raises)
+### Rejected — 3 families, 15 raises
 
 | # | Family | Waves raised | Raises | Authority for rejection | Ever accepted? |
 |---|---|---|---:|---|---|
 | R1 | `CONTEXT.md` glossary is stale — update it | c0, final, final2, final3 | **4** | #150 + inherited ruling #147 assign vocabulary migration to slice 2 (#151) | never |
-| R2 | Extract a shared helper (previous-body parser ×6; custody-cloning loops; `date`/`od` PATH shims; test assertion matrix) | c0, d1, d2, final, delta3, delta4, final3, final4, delta8 | **9** | frozen Fowler baseline is advisory; no divergence or acceptance defect reproduced | never |
+| R2 | Extract a shared helper (previous-body parser ×7; custody-cloning loops; `date`/`od` PATH shims; test assertion matrix) | c0, d1, d2, final, delta3, delta4, final2, final3, final4, delta8 | **10** | frozen Fowler baseline is advisory; no divergence or acceptance defect reproduced | never |
 | R3 | "Telemetry suites must pass unchanged" forbids removing their renderer assertions | delta6 | 1 | more specific frozen decisions require every telemetry rendering rule to disappear | never |
 
-**R1 and R2 account for 13 of ~32 adjudications and were rejected every time
+**R1 and R2 account for 14 of ~33 adjudications and were rejected every time
 under an authority that never moved.** Standards raised R1 in four of the six
 cumulative waves; the answer was identical each time and was already written into
-the frozen contract before the run started. R2 was raised by nine separate
-Standards readers who could not know it had been rejected eight times, because
+the frozen contract before the run started. R2 was raised in **ten of the fifteen
+waves** by readers who could not know it had been rejected nine times, because
 each was launched `fork_turns: none` with no adjudication ledger — by design.
+
+Two of R2's raises are not visible in the wave table's *Rejected* column, which
+is built from the primary's plaintext adjudications: at delta3 the primary
+narrated only its three acceptances, and at final2 it rejected *"the repeated
+glossary/duplication findings"* as one phrase covering both families. The
+reviewer reports are the authority for the family table, and both waves carry an
+R2 raise.
 This is skills#134's mechanism, observed cleanly.
 
 The maintainer's amendment independently ruled on R2 (§3: *"Do not extract a
 shared legacy parser… unless the existing duplication has produced a real
-divergence"*), agreeing with all nine rejections.
+divergence"*), agreeing with all ten rejections.
 
 ## Question 2 — when did the simple design become available?
 
@@ -518,8 +559,12 @@ The maintainer's testimony makes two claims. The transcript settles both.
 
 **Claim 1 — no fact was missing. CONFIRMED.**
 
-At 22:50:27, 46 seconds after the amendment landed and before any file was read
-or any agent was launched, the primary produced the complete analysis:
+At 22:50:27, 46 seconds after the amendment landed, the primary produced the
+complete analysis. In that window it launched no agent (only the three
+`interrupt_agent` calls) and read no implementation file: its two `exec` calls,
+at 22:50:03 and 22:50:08, read `SKILL.md`, `default-workflow.md` and
+`closability-gate.md` — workflow governance on how to handle a trusted-maintainer
+contract correction, not code or contract material bearing on the question:
 
 > My current read is that no #150 criterion inherently requires `pending`/`accepted`
 > state: criterion 4 needs a mechanical distinction, and "final manifest absent vs
@@ -532,6 +577,18 @@ primary held the contract, the candidate, every reviewer report, and its own
 adjudication ledger. The delegate held the code. Both had everything needed for
 the contract-versus-mechanism comparison. The testimony's factual claim is
 correct.
+
+**What this does and does not establish.** It establishes that the primary could
+*evaluate* a reversed reading of criterion 3 in 46 seconds against context it
+already held, and that no fact was missing. It does **not** establish that the
+primary would have *generated* that reading unprompted. The primary's own
+framing throughout is receipt, not authorship — *"The simpler design is
+authorized as a contract amendment"*, *"Your message is an explicit
+trusted-maintainer contract correction"*, *"your amendment clarifies that…"*.
+Validation on demand and generation on initiative are different capabilities,
+and only the first is on the record. This distinction is a judgment call, flagged
+as such, and it is why the recommendation below asks for a re-adjudication
+*trigger* rather than asserting the primary would have converged on its own.
 
 **Claim 2 — the distinction was attention level rather than information. CONFIRMED,
 with one correction that matters for routing.**
@@ -569,9 +626,11 @@ concurrent unrelated `/work-on 202` run in `homelab-iac`
 therefore ran in a harness Moraine does not ingest, and its context cannot be
 compared to the primary's from evidence. The distinction `#153` asks for — *"no
 role owned this"* versus *"no role could have done this"* — is nonetheless
-settled by Claim 1 above: the primary demonstrably could have done it, in under a
-minute, from context it already held. Reporting this as an evidence gap rather
-than inferring the side agent's context.
+narrowed, not closed, by Claim 1: the primary held every fact the comparison
+needs and could evaluate the reversed reading in under a minute, so "no role
+could have done this" is not supported on the information axis. Whether any role
+was *disposed* to generate it is not settled by this evidence. Reported as an
+evidence gap rather than inferring the side agent's context.
 
 ## Question 7 — was the assurance worth the cost?
 
@@ -602,7 +661,7 @@ fewer reviewers or delta-only gates loses both.
 |---|---|
 | Findings whose requested mechanism was itself later deleted | **2** (A8 at `final`, A8 at `delta3`) |
 | Findings invalidated by the later simplification | **2** (same), plus A10's remedy narrowed |
-| Rejected findings re-raised under an unchanged authority | **13 raises across 2 families** (R1 ×4, R2 ×9) |
+| Rejected findings re-raised under an unchanged authority | **14 raises across 2 families** (R1 ×4, R2 ×10) |
 | Waves whose entire blocking content was the ratchet | **delta3** (reviewing `2a63eb8`), **delta4** (reviewing `9d22396`) |
 | Reviewer input tokens on those two waves | 3,353,341 (2,957,312 cache-read; 396,029 fresh) |
 | Reviewer input tokens on the interrupted `final5` | 1,590,271, zero findings |
@@ -615,9 +674,12 @@ Roughly **7.8M reviewer input tokens and ~41 minutes** are attributable to
 mechanism B and C — their construction, their review, their own defects, and
 their removal. `final6` would have run regardless and is not counted.
 
-The remaining assurance cost is not obviously excessive: eleven of the fifteen
-triads found real defects or confirmed a real clean state on a candidate that had
-just moved.
+The remaining assurance cost is not obviously excessive. Of the fifteen triads,
+**seven** produced an accepted blocker (c0, d1, final, delta3, final2, final4,
+and delta7's evidence-handling correction), **seven** confirmed a clean state on
+a candidate that had just moved (d2, delta4, delta5, final3, delta6, delta8,
+final6), and one — the interrupted `final5` — produced nothing. Fourteen of
+fifteen returned a usable verdict.
 
 ## Counterfactual — routing across #119, #120, #133, #134
 
@@ -654,16 +716,16 @@ not argue for closing it.
 
 ### skills#134 — fresh review rediscovers settled concern families. **Strongly supported. Secondary route.**
 
-13 raises across 2 families, every one rejected under an authority that was
+14 raises across 2 families, every one rejected under an authority that was
 frozen before the run began and never moved. R1 (`CONTEXT.md`) is the sharper
 case: #150 and #147 explicitly assign it to slice 2, and the frozen contract
 handed to every reviewer says so — yet four Standards readers raised it anyway.
 
 The tax is real but bounded, and it is a **cost** tax, not the convergence cause.
-Removing all 13 repeats changes no candidate and no commit. Note the tension #134
+Removing all 14 repeats changes no candidate and no commit. Note the tension #134
 must resolve: `fork_turns: none` and a withheld adjudication ledger are exactly
 what makes these reviewers independent, and skills#98's assurance properties
-depend on that independence. R2's nine raises came from nine readers who each
+depend on that independence. R2's ten raises came from readers who each
 correctly applied the frozen Fowler baseline to code they were seeing for the
 first time. A remedy that leaks the ledger buys cheapness with independence.
 
@@ -672,14 +734,15 @@ first time. A remedy that leaks the ledger buys cheapness with independence.
 The surface reading fits: tests dominate every diff, `4fc9e49` and `83f9414` are
 test-only candidates, and two of delta3's three accepted findings were instrument
 defects. But the reviewed object that *moved* across the run was production
-semantics, not the proof instrument. The mechanism-specific fixtures deleted at
-`c298820` (`+45/−67` in `test-validation-surface-manifest.sh`, plus `−41/+69`
-churn at `2a63eb8` and `+65/−6` at `9d22396`) were downstream of mechanism B, not
-an independent driver.
+semantics, not the proof instrument. The mechanism-specific fixtures were downstream of mechanism B, not an
+independent driver. Taking `test-validation-surface-manifest.sh` alone, the file
+that carried them: `+50/−33` at `2a63eb8`, `+47/−2` at `9d22396`, `+40/−66` at
+`c298820`.
 
-Attributable to fixtures for deleted machinery: roughly 170 test lines added and
-later removed, across two waves. Real, and worth recording — but it is a symptom
-of the #119 chain, not a separate #133 instance. `#153` asked not to force this
+So 97 lines entered that file across the two hardening commits and 66 left at
+the cleanup — the same order of magnitude, as expected when a mechanism and its
+fixtures are added and removed together. Real, and worth recording, but a symptom
+of the #119 chain rather than a separate #133 instance. `#153` asked not to force this
 analogy; it should not be forced.
 
 ### The problem this run discovers
@@ -723,7 +786,7 @@ without weakening skills#98:
 - it must not read the adjudication ledger into a *reviewing* context —
   otherwise it buys convergence with independence and takes #134's tax the wrong
   way round;
-- it must not fire on the nine R2 raises or the four R1 raises, which are
+- it must not fire on the ten R2 raises or the four R1 raises, which are
   repetition without chains;
 - and it must be able to answer "the mechanism is correct but the premise is
   expensive," which no current axis (Standards, Spec, closure) is chartered to
@@ -731,13 +794,15 @@ without weakening skills#98:
 
 The counterfactual worth pricing: had that trigger fired at 21:54, the run would
 have re-derived the criterion-3 reading before building mechanism C, saving
-`9d22396`, delta4, most of the cleanup, and delta8 — call it ~5.8M reviewer input
-tokens and ~30 minutes — while keeping every finding in the *materially improved
-correctness* table above, including A8's discovery, which is what made the
-ambiguity visible in the first place.
+`9d22396`, delta4 and delta8, and shortening the cleanup — **4,619,806 reviewer
+input tokens** (delta4 1,759,363 + delta8 2,860,443) and roughly 30 minutes —
+while keeping every finding in the *materially improved correctness* table above,
+including A8's discovery, which is what made the ambiguity visible in the first
+place. Whether the interrupted `final5` (1,590,271) also disappears depends on
+where the trigger lands the run, so it is excluded from the figure.
 
-**What not to grill.** Not the reviewer count: eleven of fifteen triads earned
-their keep. Not #150's architecture. Not a second comparison run for symmetry —
+**What not to grill.** Not the reviewer count: fourteen of fifteen triads
+returned a usable verdict, and seven found real defects. Not #150's architecture. Not a second comparison run for symmetry —
 `#148` is the collection point if one becomes worth reconstructing.
 
 ## Limitations
@@ -759,9 +824,13 @@ their keep. Not #150's architecture. Not a second comparison run for symmetry �
   family in aggregate (*"the repeated glossary/duplication findings"*). Family
   membership is reconstructed from the reviewers' own reports, which are complete;
   the mapping to the closeout's "seventeen rejected" is not attempted.
-- **Two reviewer sessions match no `spawn_agent` call.** Read as harness
-  re-invocations. If they are instead genuine unlogged launches, the reviewer
-  count is 49, not 47.
+- **Two of four nested `code-review` spawns have no dedicated indexed session.**
+  The `closure_delta7` and `closure_delta8` reviewers each spawned a
+  `standards_axis` and a `spec_axis` sub-agent (four spawns); Moraine indexes two
+  child sessions, one of which carries both axes' output, and the 22:46:10
+  `spec_axis` spawn has none. Nested review cost is therefore a floor, not a
+  total. *This is a Moraine coverage observation, not a request to build
+  capture.*
 - **Token figures are Moraine's accounting of harness-reported usage.**
   `input_tokens` includes cache reads on this harness; the decomposition above
   subtracts them. Reported as read *volume*, never as cost, and no conclusion
