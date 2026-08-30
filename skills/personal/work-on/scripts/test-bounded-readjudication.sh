@@ -12,8 +12,16 @@ set -euo pipefail
 # let a gap span a negation or a sentence boundary that could invert the
 # obligation; prefer [^.] over . wherever a boundary is load-bearing. And a
 # matched phrase proves nothing if a negation sits just outside it, so `has`
-# rejects a match that is negated in place - that check belongs in one helper
-# rather than in an anchor bolted onto every pattern.
+# rejects a match negated within its own clause - that check belongs in one
+# helper rather than in an anchor bolted onto every pattern.
+#
+# What that guard does not reach, stated so nobody trusts it further than it
+# goes: it is local to the clause holding the match. A separate sentence that
+# retires or supersedes a rule while leaving the rule's own words intact will
+# still pass. Catching that needs whole-document contradiction analysis, which
+# is a different instrument than this one; these assertions discriminate an
+# implementation that gets the contract wrong, not one that contradicts itself
+# on purpose.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_dir="$(cd "$script_dir/.." && pwd)"
@@ -30,6 +38,15 @@ fail() {
   failures=$((failures + 1))
 }
 
+# Name the file a reader would edit, not the flattened fixture behind it.
+display() {
+  if [[ -n "${section:-}" && "$1" == "$section" ]]; then
+    printf '%s' 'references/default-workflow.md (bounded re-adjudication section)'
+  else
+    printf '%s' "${1#"$skill_dir/"}"
+  fi
+}
+
 flatten() {
   local source="$1"
   local flat="$fixture_dir/$(printf '%s' "${source#"$skill_dir/"}" | tr '/' '_')"
@@ -43,21 +60,21 @@ flatten() {
 
 # A negation immediately before an asserted phrase inverts the obligation while
 # leaving the phrase intact. Reject that as firmly as absence.
-negated='(do not|does not|do no|never|need not|cannot|no longer|is never|are never)'
+negated='(do|does|is|are|was|were|must|may|shall|should|can|need|could|would|will)( not|n.t)|never|no longer|not (true|required|the case)|none of|cannot'
 
 has() {
   local flat
   flat="$(flatten "$1")"
   if ! grep -Eqi -- "$2" "$flat"; then
-    fail "$3 (missing in ${1#"$skill_dir/"}: $2)"
-  elif grep -Eqi -- "$negated[^.]{0,12}$2" "$flat"; then
-    fail "$3 (negated in ${1#"$skill_dir/"}: $2)"
+    fail "$3 (missing in $(display "$1"): $2)"
+  elif grep -Eqi -- "($negated)[^.;:]{0,30}$2" "$flat"; then
+    fail "$3 (negated in $(display "$1"): $2)"
   fi
 }
 
 lacks() {
   if grep -Eqi -- "$2" "$(flatten "$1")"; then
-    fail "$3 (unexpected in ${1#"$skill_dir/"}: $2)"
+    fail "$3 (unexpected in $(display "$1"): $2)"
   fi
 }
 
@@ -84,19 +101,19 @@ awk '/^## / { inside = ($0 ~ /^## 5\./) }
   inside && /^### Bounded re-adjudication/ { found = 1 }
   END { exit !found }' "$WORKFLOW" ||
   fail 'bounded re-adjudication sits inside the adjudicate-and-remediate step'
-has "$section" 're-adjudicate `R` (exactly once|once and only once|only once)' \
+has "$section" 're-adjudicate `R` (exactly once|once,? and only once|only once)' \
   'a qualifying trigger produces exactly one re-adjudication'
-has "$section" 'has one bounded exception' \
+has "$section" '(one|a single) bounded exception' \
   'the mechanism is in force as an exception, not retired as a historical note'
-has "$section" 'when all of the following hold' \
+has "$section" 'when (all|every one) of the following (hold|holds)' \
   'every trigger condition must hold, not merely one of them'
 has "$section" 'classified \*\*Ambiguous\*\*' 'only an Ambiguous ruling qualifies'
 has "$section" \
-  '(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) ineligible' \
+  '(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) (ineligible|never eligible)' \
   'Contract-backed and Defensive rulings are ineligible'
-lacks "$section" '(Contract-backed|Defensive)[^.]{0,60}\beligible' \
+lacks "$section" '(Contract-backed|Defensive)[^.]{0,60}(is|are|becomes?) (also |likewise )?eligible' \
   'no ineligible classification is admitted as eligible'
-lacks "$section" 'reclassif' \
+lacks "$section" '(reclassify|reclassifies|reclassifying) a[^.]{0,40}ruling' \
   'no route reclassifies a ruling into the eligible class'
 has "$section" '(`D` produced the current remediation candidate|current remediation candidate was produced by `D`)' \
   'the triggering directive produced the current remediation candidate'
@@ -104,7 +121,7 @@ has "$section" 'accepted blocker at that gate is attributable to the mechanism i
   'the trigger requires a blocker attributable to the Ambiguous directive'
 has "$section" '(immediately following delta gate|delta gate that immediately follows)' \
   'the run-local note is scoped to the immediately following delta gate'
-has "$section" 'does not trace to `D`.s mechanism (takes|proceeds through) ordinary remediation' \
+has "$section" 'does not trace to `D`.s mechanism (takes|proceeds through|is handled by) ordinary remediation' \
   'an unattributable blocker at the same gate does not trigger the mechanism'
 echo 'ok - eligibility is limited to Ambiguous rulings whose own mechanism reproduced a blocker'
 
@@ -119,7 +136,7 @@ has "$section" '(drop|discard) it once that gate is adjudicated' \
 echo 'ok - the directive-to-ruling association is transient run-local state'
 
 ## The reader is fresh, blind, non-reviewing, and derives meaning only.
-has "$section" 'launch (one|a single) fresh blind reader' \
+has "$section" '(one|a single) fresh blind reader' \
   'one fresh blind reader performs the reading'
 has "$section" 'isolation pattern of `references/normative-remediation.md` without invoking or extending' \
   'the reader reuses the isolation pattern without importing that mechanism'
@@ -127,12 +144,12 @@ for supplied in \
   'exact frozen criterion text' \
   'bounded raw governing context' \
   'raw triggering observation and its boundary'; do
-  has "$section" "(supply|give it) only[^.]*$supplied" \
+  has "$section" "(supply|give it|provide) only[^.]*$supplied" \
     "the closed reader package supplies $supplied and nothing else"
 done
-lacks "$section" '(supply|give it) only[^.;]*(prior ruling|adjudication ledger|previously rejected alternative)' \
+lacks "$section" '(supply|give it|provide) only[^.;]*(prior ruling|adjudication ledger|previously rejected alternative)' \
   'no withheld item appears in the closed supply clause'
-lacks "$section" '(withhold|never give)[^.]*but (supply|give)' \
+lacks "$section" '(withhold|never give|keep back)[^.]*but (supply|give|provide)' \
   'the withholding clause is not reversed mid-sentence'
 has "$section" 'non-reviewing[^.]*reuse it as a review-axis agent' \
   'the reader is non-reviewing and never becomes a review axis in this chain'
@@ -142,7 +159,7 @@ for withheld in \
   'adjudication ledger' \
   'prior reviewer conclusions and dispositions' \
   'current implementation except a bounded raw fact'; do
-  has "$section" "(withhold|never give the reader)[^.]*$withheld" \
+  has "$section" "(withhold|never give the reader|keep back from it)[^.]*$withheld" \
     "the reader is blind to the $withheld"
 done
 has "$section" '(enumerate|list) (them|every|each|all)[^.]{0,40}\bwith the concrete obligation' \
@@ -159,7 +176,8 @@ has "$section" '(one|a single) fresh invocation may handle several eligible crit
 echo 'ok - the fresh blind reader derives governing meaning from a bounded blind package'
 
 ## Uphold is one-shot; supersede removes mechanism and resets evidence.
-has "$section" 'uphold.*prior interpretation stands' 'upholding leaves the prior ruling in force'
+has "$section" 'uphold[^.]*prior interpretation stands' \
+  'upholding leaves the prior ruling in force'
 has "$section" 'continue ordinary remediation and do not re-adjudicate `R` again in this run' \
   'an upheld ruling returns to ordinary remediation and cannot trigger again'
 has "$section" 'one re-adjudication per Ambiguous ruling, (not|rather than) one per run' \
@@ -176,7 +194,7 @@ has "$section" 'reuse evidence only where it directly proves that obligation' \
   'evidence is reused only where it proves the newly adjudicated obligation'
 has "$section" '(carry|inherit) no earlier `tested` disposition across the reversal' \
   'no prior tested disposition is silently inherited'
-has "$section" 'correction.{0,20}delta gate.{0,30}fresh blind cumulative confirmation' \
+has "$section" 'correction[^.]{0,20}delta gate[^.]{0,30}fresh blind cumulative confirmation' \
   'the supersede route re-enters the existing correction and confirmation path'
 echo 'ok - uphold is one-shot and supersede removes mechanism through the existing path'
 
