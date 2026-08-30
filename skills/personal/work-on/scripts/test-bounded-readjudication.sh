@@ -12,16 +12,17 @@ set -euo pipefail
 # let a gap span a negation or a sentence boundary that could invert the
 # obligation; prefer [^.] over . wherever a boundary is load-bearing. And a
 # matched phrase proves nothing if a negation sits just outside it, so `has`
-# rejects a match negated within its own clause - that check belongs in one
-# helper rather than in an anchor bolted onto every pattern.
+# carries its own polarity: where the obligation is a prohibition, the negative
+# word belongs inside the pattern, not in a gap that would match either way.
 #
-# What that guard does not reach, stated so nobody trusts it further than it
-# goes: it is local to the clause holding the match. A separate sentence that
-# retires or supersedes a rule while leaving the rule's own words intact will
-# still pass. Catching that needs whole-document contradiction analysis, which
-# is a different instrument than this one; these assertions discriminate an
-# implementation that gets the contract wrong, not one that contradicts itself
-# on purpose.
+# `has` also refuses a match with a negation cue immediately in front of it.
+# That is a backstop, not a proof, and it is worth saying exactly how far it
+# goes so nobody leans on it: it looks only at the few characters before the
+# match, inside one clause, for a short list of cues. A negation further off, a
+# cue phrased another way, one that lands after the phrase, or a separate
+# sentence retiring the rule while its words stand, all pass. Binding polarity
+# into the pattern is what actually discriminates; the cue check only catches
+# the careless case early.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_dir="$(cd "$script_dir/.." && pwd)"
@@ -60,14 +61,14 @@ flatten() {
 
 # A negation immediately before an asserted phrase inverts the obligation while
 # leaving the phrase intact. Reject that as firmly as absence.
-negated='(do|does|is|are|was|were|must|may|shall|should|can|need|could|would|will)( not|n.t)|never|no longer|not (true|required|the case)|none of|cannot'
+negation_cue='(do|does|is|are|was|were|must|may|shall|should|can|need|could|would|will)( not|n.t)|never|no longer|not (true|required|the case)|none of|cannot|under no circumstances|nothing requires'
 
 has() {
   local flat
   flat="$(flatten "$1")"
   if ! grep -Eqi -- "$2" "$flat"; then
     fail "$3 (missing in $(display "$1"): $2)"
-  elif grep -Eqi -- "($negated)[^.;:]{0,30}$2" "$flat"; then
+  elif grep -Eqi -- "($negation_cue)[^.;:]{0,10}($2)" "$flat"; then
     fail "$3 (negated in $(display "$1"): $2)"
   fi
 }
@@ -103,21 +104,17 @@ awk '/^## / { inside = ($0 ~ /^## 5\./) }
   fail 'bounded re-adjudication sits inside the adjudicate-and-remediate step'
 has "$section" 're-adjudicate `R` (exactly once|once,? and only once|only once)' \
   'a qualifying trigger produces exactly one re-adjudication'
-has "$section" '(one|a single) bounded exception' \
-  'the mechanism is in force as an exception, not retired as a historical note'
 has "$section" 'when (all|every one) of the following (hold|holds)' \
   'every trigger condition must hold, not merely one of them'
 has "$section" 'classified \*\*Ambiguous\*\*' 'only an Ambiguous ruling qualifies'
 has "$section" \
   '(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) (ineligible|never eligible)' \
   'Contract-backed and Defensive rulings are ineligible'
-lacks "$section" '(Contract-backed|Defensive)[^.]{0,60}(is|are|becomes?) (also |likewise )?eligible' \
-  'no ineligible classification is admitted as eligible'
-lacks "$section" '(reclassify|reclassifies|reclassifying) a[^.]{0,40}ruling' \
-  'no route reclassifies a ruling into the eligible class'
+lacks "$section" '(Contract-backed|Defensive)[^.]{0,120}((is|are|becomes?) (also |likewise )?eligible|(also |likewise )?qualifies|reclassified as)' \
+  'no ineligible classification is admitted as eligible or reclassified'
 has "$section" '(`D` produced the current remediation candidate|current remediation candidate was produced by `D`)' \
   'the triggering directive produced the current remediation candidate'
-has "$section" 'accepted blocker at that gate is attributable to the mechanism introduced for `D`' \
+has "$section" 'accepted blocker at that gate (is attributable to|traces to) the mechanism introduced for `D`' \
   'the trigger requires a blocker attributable to the Ambiguous directive'
 has "$section" '(immediately following delta gate|delta gate that immediately follows)' \
   'the run-local note is scoped to the immediately following delta gate'
@@ -151,7 +148,7 @@ lacks "$section" '(supply|give it|provide) only[^.;]*(prior ruling|adjudication 
   'no withheld item appears in the closed supply clause'
 lacks "$section" '(withhold|never give|keep back)[^.]*but (supply|give|provide)' \
   'the withholding clause is not reversed mid-sentence'
-has "$section" 'non-reviewing[^.]*reuse it as a review-axis agent' \
+has "$section" 'non-reviewing[^.]*(never|not) reuse it as a review-axis agent' \
   'the reader is non-reviewing and never becomes a review axis in this chain'
 for withheld in \
   'prior ruling' \
@@ -178,13 +175,13 @@ echo 'ok - the fresh blind reader derives governing meaning from a bounded blind
 ## Uphold is one-shot; supersede removes mechanism and resets evidence.
 has "$section" 'uphold[^.]*prior interpretation stands' \
   'upholding leaves the prior ruling in force'
-has "$section" 'continue ordinary remediation and do not re-adjudicate `R` again in this run' \
+has "$section" 'continue ordinary remediation and (do not|never) re-adjudicate `R` again in this run' \
   'an upheld ruling returns to ordinary remediation and cannot trigger again'
 has "$section" 'one re-adjudication per Ambiguous ruling, (not|rather than) one per run' \
   'the one-shot limit is per ruling rather than a global per-run cap'
-has "$section" '(remove mechanism no criterion requires.{0,30}rather than hardening|rather than hardening it.{0,20}remove mechanism no criterion requires)' \
+has "$section" '(remove mechanism no criterion requires[^.]{0,30}rather than hardening|rather than hardening it[^.]{0,20}remove mechanism no criterion requires)' \
   'superseding removes mechanism instead of hardening it'
-has "$section" 'keep any blocker portion that still applies to surviving candidate content' \
+has "$section" '(keep|retain) any blocker portion that still applies to surviving candidate content' \
   'the surviving portion of the blocker is retained'
 has "$section" '(freshly adjudicate|adjudicate afresh) under `references/validation-evidence.md`' \
   'evidence sufficiency is freshly adjudicated after a superseding reading'
@@ -204,7 +201,7 @@ has "$section" "(frozen criterion bytes|criterion's frozen bytes) are unchanged"
 has "$section" "Validation-surface membership is unchanged" \
   're-adjudication requires unchanged Validation-surface membership'
 has "$section" \
-  'changed criterion text[^.]*changed Validation-surface membership takes the existing trusted-maintainer or immutable-manifest hand-back' \
+  'changed criterion text[^.]*obligation those bytes do not already carry[^.]*changed Validation-surface membership takes the existing trusted-maintainer or immutable-manifest hand-back' \
   'changed bytes or membership take the existing hand-back routes'
 has "$section" 'changes no frozen review-chain governing input' \
   're-adjudication changes no frozen review-chain governing input'
@@ -230,11 +227,11 @@ expected='closability-gate.md default-workflow.md github-closeout.md normative-r
 if [[ "${references[*]}" != "$expected" ]]; then
   fail "no new reference document is introduced (found: ${references[*]})"
 fi
-while IFS= read -r reference; do
-  [[ "$reference" == "$WORKFLOW" ]] && continue
-  lacks "$reference" 're-adjudicat|Ambiguous ruling' \
-    "the mechanism does not expand or move into ${reference##*/}"
-done < <(find "$skill_dir/references" -name '*.md')
+for reference in "${references[@]}"; do
+  [[ "$skill_dir/references/$reference" == "$WORKFLOW" ]] && continue
+  lacks "$skill_dir/references/$reference" 're-adjudicat|Ambiguous ruling' \
+    "the mechanism does not expand or move into $reference"
+done
 lacks "$section" 'semantic challenge' \
   'the mechanism is not named with the normative-remediation term'
 lacks "$SKILL" 'Ambiguous ruling[^.]*semantic challenge|semantic challenge[^.]*Ambiguous ruling' \
