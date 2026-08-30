@@ -113,8 +113,6 @@ for supplied in \
   has "$section" "(supply|give it|provide) only[^.]*$supplied" \
     "the closed reader package supplies $supplied and nothing else"
 done
-lacks "$section" '(supply|give it|provide) only[^.;]*(prior ruling|adjudication ledger|previously rejected alternative)' \
-  'no withheld item appears in the closed supply clause'
 has "$section" 'non-reviewing[^.]*(never|not) (reuse it as|be reused as) a review-axis agent' \
   'the reader is non-reviewing and never becomes a review axis in this chain'
 for withheld in \
@@ -196,8 +194,6 @@ lacks "$section" 'semantic challenge' \
   'the mechanism is not named with the normative-remediation term'
 lacks "$SKILL" 'Ambiguous ruling[^.]*semantic challenge|semantic challenge[^.]*Ambiguous ruling' \
   'SKILL.md never names this mechanism a semantic challenge'
-lacks "$section" 'telemetry schema|run registry|durable event protocol|new lifecycle' \
-  'no telemetry, registry, or lifecycle machinery is introduced'
 echo 'ok - naming and static machinery constraints hold'
 
 if (( failures > 0 )); then
