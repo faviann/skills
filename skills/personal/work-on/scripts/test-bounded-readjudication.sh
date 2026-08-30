@@ -89,6 +89,9 @@ has "$section" \
 lacks "$section" \
   '((not true|not the case|false) that[^.]*Contract-backed and Defensive rulings? (are|is) ineligible|Contract-backed and Defensive rulings? (are|is) not ineligible)' \
   'Contract-backed and Defensive ineligibility is not directly negated'
+lacks "$section" \
+  '(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) ineligible[^.]*(but|yet|however)[^.]*(treat|consider|regard)[^.]*eligible' \
+  'ineligible rulings are not later treated as eligible in the same sentence'
 lacks "$section" '(Contract-backed|Defensive)( ruling)?s?[^.]{0,40}((is|are|becomes?) (also |likewise )?eligible|(also |likewise )?qualifies|reclassified as)' \
   'no ineligible classification is admitted as eligible or reclassified'
 has "$section" '(`D` produced the current remediation candidate|current remediation candidate was produced by `D`)' \
@@ -173,6 +176,9 @@ has "$section" '(remove mechanism no criterion requires[^.]{0,30}rather than har
   'superseding removes mechanism instead of hardening it'
 lacks "$section" '(do not|never) remove mechanism no criterion requires[^.]*rather than hardening' \
   'Supersede removal is not directly negated'
+lacks "$section" \
+  'remove mechanism no criterion requires[^.]*rather than hardening[^.]*(unless|except when|only if)' \
+  'Supersede removal rather than hardening has no exception'
 has "$section" '(keep|retain) any blocker portion that still applies to surviving candidate content' \
   'the surviving portion of the blocker is retained'
 has "$section" '(freshly adjudicate|adjudicate afresh) under `references/validation-evidence.md`' \
@@ -207,25 +213,16 @@ has "$SKILL" \
 echo 'ok - the immutability fence, reviewer blindness, and authority grant hold'
 
 ## Observability uses ordinary primary reasoning rather than a new protocol.
-reporting_clause="$fixture_dir/reporting-clause.md"
-awk -v RS='[.]' '
-  {
-    lower = tolower($0)
-    if (lower ~ /ordinary working reasoning/ &&
-        lower ~ /(^|[^[:alnum:]_])(state|report)([^[:alnum:]_]|$)/ &&
-        lower !~ /(do not|never) (state|report)/) {
-      print
-      matches++
-    }
-  }
-  END { exit matches != 1 }
-' "$(flatten "$section")" >"$reporting_clause" ||
-  fail 'the section has one ordinary-working-reasoning reporting imperative'
+has "$section" \
+  '((state|report) in ordinary working reasoning|in ordinary working reasoning[^.]{0,24}(state|report))' \
+  'the primary is instructed to state or report in ordinary working reasoning'
 for reported in 'which ruling was re-adjudicated' 'the reader returned' \
   'upheld or superseded' 'evidence-sufficiency decision'; do
-  has "$reporting_clause" "$reported" \
-    "the primary is instructed to report $reported in ordinary working reasoning"
+  has "$section" "$reported" "the reporting obligation names $reported"
 done
+lacks "$section" \
+  '(not required to (be )?(state|report|stated|reported)|need not be (stated|reported)|(do not|never) (state|report))' \
+  'the named observability facts have no explicit reporting exemption'
 echo 'ok - observability is ordinary primary reasoning'
 
 ## No new document, no expansion of normative remediation, no new naming.
