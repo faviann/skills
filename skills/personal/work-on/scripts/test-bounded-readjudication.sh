@@ -118,7 +118,7 @@ done
 lacks "$section" '(keep|introduce|add) no[^.]*but (keep|introduce|add|retain)' \
   'the machinery prohibition is not reversed mid-sentence'
 lacks "$section" \
-  '((keep|introduce|add) no[^.]*(unless|except when|only if)|(unless|except when|only if)[^.;,]*,[[:space:]]*(keep|introduce|add) no)' \
+  '((keep|introduce|add) no[^.]*(unless|except when|only if)|(unless|except when|only if)[^.;,]*,[[:space:]]*([^[:space:].;,]+[[:space:]]+){0,4}(keep|introduce|add) no)' \
   'the absolute machinery prohibition has no exception'
 has "$section" '(drop|discard) it once that gate is adjudicated' \
   'the association is bounded to the immediate delta window'
