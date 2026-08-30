@@ -86,6 +86,9 @@ lacks "$section" '`R` was not classified \*\*Ambiguous\*\*' \
 has "$section" \
   '(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) (ineligible|never eligible)' \
   'Contract-backed and Defensive rulings are ineligible'
+lacks "$section" \
+  '((not true|not the case|false) that[^.]*Contract-backed and Defensive rulings? (are|is) ineligible|Contract-backed and Defensive rulings? (are|is) not ineligible)' \
+  'Contract-backed and Defensive ineligibility is not directly negated'
 lacks "$section" '(Contract-backed|Defensive)( ruling)?s?[^.]{0,40}((is|are|becomes?) (also |likewise )?eligible|(also |likewise )?qualifies|reclassified as)' \
   'no ineligible classification is admitted as eligible or reclassified'
 has "$section" '(`D` produced the current remediation candidate|current remediation candidate was produced by `D`)' \
@@ -115,8 +118,10 @@ has "$section" '(drop|discard) it once that gate is adjudicated' \
 echo 'ok - the directive-to-ruling association is transient run-local state'
 
 ## The reader is fresh, blind, non-reviewing, and derives meaning only.
-has "$section" '(one|a single) fresh blind reader' \
+has "$section" '(launch|use) (one|a single) fresh blind reader' \
   'one fresh blind reader performs the reading'
+lacks "$section" '(do not|never) (launch|use) (one|a single) fresh blind reader' \
+  'launching the fresh blind reader is not directly negated'
 has "$section" 'isolation pattern of `references/normative-remediation.md`' \
   'the reader reuses the normative-remediation isolation pattern'
 has "$section" \
@@ -166,6 +171,8 @@ has "$section" 'one re-adjudication per Ambiguous ruling, (not|rather than) one 
   'the one-shot limit is per ruling rather than a global per-run cap'
 has "$section" '(remove mechanism no criterion requires[^.]{0,30}rather than hardening|rather than hardening it[^.]{0,20}remove mechanism no criterion requires)' \
   'superseding removes mechanism instead of hardening it'
+lacks "$section" '(do not|never) remove mechanism no criterion requires[^.]*rather than hardening' \
+  'Supersede removal is not directly negated'
 has "$section" '(keep|retain) any blocker portion that still applies to surviving candidate content' \
   'the surviving portion of the blocker is retained'
 has "$section" '(freshly adjudicate|adjudicate afresh) under `references/validation-evidence.md`' \
@@ -200,12 +207,24 @@ has "$SKILL" \
 echo 'ok - the immutability fence, reviewer blindness, and authority grant hold'
 
 ## Observability uses ordinary primary reasoning rather than a new protocol.
-has "$section" \
-  '(^|[.] )((state|report)[^.]*ordinary working reasoning|in ordinary working reasoning[^.]*(state|report))' \
-  'the primary is instructed to report in ordinary working reasoning'
+reporting_clause="$fixture_dir/reporting-clause.md"
+awk -v RS='[.]' '
+  {
+    lower = tolower($0)
+    if (lower ~ /ordinary working reasoning/ &&
+        lower ~ /(^|[^[:alnum:]_])(state|report)([^[:alnum:]_]|$)/ &&
+        lower !~ /(do not|never) (state|report)/) {
+      print
+      matches++
+    }
+  }
+  END { exit matches != 1 }
+' "$(flatten "$section")" >"$reporting_clause" ||
+  fail 'the section has one ordinary-working-reasoning reporting imperative'
 for reported in 'which ruling was re-adjudicated' 'the reader returned' \
   'upheld or superseded' 'evidence-sufficiency decision'; do
-  has "$section" "$reported" "the reporting obligation names $reported"
+  has "$reporting_clause" "$reported" \
+    "the primary is instructed to report $reported in ordinary working reasoning"
 done
 echo 'ok - observability is ordinary primary reasoning'
 
