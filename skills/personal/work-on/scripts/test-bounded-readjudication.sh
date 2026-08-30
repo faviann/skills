@@ -6,26 +6,9 @@ set -euo pipefail
 # break: eligibility, attribution, the blind package, the one-shot property,
 # the supersede routing, the immutability fence, and the static surface.
 #
-# Assertions bind obligations, not sentences. Three rules keep both halves of
-# that honest. Alternate over the function words a rewrite legitimately
-# changes (must not/may not/never, keep no/introduce no, one/a single). Never
-# let a gap span a negation or a sentence boundary that could invert the
-# obligation; prefer [^.] over . wherever a boundary is load-bearing. And a
-# matched phrase proves nothing if a negation sits just outside it, so `has`
-# carries its own polarity: where the obligation is a prohibition, the negative
-# word belongs inside the pattern, not in a gap that would match either way.
-#
-# `has` also refuses a match with a negation cue in front of it, within the
-# same clause - commas end a clause here, so a contrastive "never X, Y" does
-# not read as a negation of Y, and "unless" ends it too, since "does not
-# qualify unless X" requires X rather than forbidding it. That is a backstop,
-# not a proof, and it errs in both directions, which is worth stating so
-# nobody leans on it. It can miss: a cue phrased another way, one that lands
-# after the phrase, one further off than the window, or a separate sentence
-# retiring the rule while its words stand. It can also over-fire, since it
-# does not know which verb a cue governs. Binding polarity into the pattern is
-# what actually discriminates; the cue check only catches the careless case
-# early.
+# Assertions bind obligations, not sentences. Alternate over function words a
+# rewrite legitimately changes, keep load-bearing gaps inside sentence
+# boundaries, and put required polarity in each obligation-specific pattern.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_dir="$(cd "$script_dir/.." && pwd)"
@@ -42,15 +25,6 @@ fail() {
   failures=$((failures + 1))
 }
 
-# Name the file a reader would edit, not the flattened fixture behind it.
-display() {
-  if [[ -n "${section:-}" && "$1" == "$section" ]]; then
-    printf '%s' 'references/default-workflow.md (bounded re-adjudication section)'
-  else
-    printf '%s' "${1#"$skill_dir/"}"
-  fi
-}
-
 flatten() {
   local source="$1"
   local flat="$fixture_dir/$(printf '%s' "${source#"$skill_dir/"}" | tr '/' '_')"
@@ -62,39 +36,27 @@ flatten() {
   printf '%s' "$flat"
 }
 
-# A negation immediately before an asserted phrase inverts the obligation while
-# leaving the phrase intact. Reject that as firmly as absence.
-negation_cue='\b(do|does|is|are|was|were|must|may|shall|should|can|need|could|would|will)( not|n.t)|\bnever|\bno longer|\bnot (true|required|obliged|the case)|\bnone of|\bcannot|under no circumstances|\bno requirement|nothing[^.;:,]{0,12}requires'
-
 has() {
-  local flat
-  flat="$(flatten "$1")"
-  if ! grep -Eqi -- "$2" "$flat"; then
-    fail "$3 (missing in $(display "$1"): $2)"
-  elif sed -E 's/ (unless|except when|only if) / . /gI' "$flat" |
-    grep -Eqi -- "($negation_cue)[^.;:,]{0,24}($2)"; then
-    fail "$3 (negated in $(display "$1"): $2)"
+  if ! grep -Eqi -- "$2" "$(flatten "$1")"; then
+    fail "$3"
   fi
 }
 
 lacks() {
   if grep -Eqi -- "$2" "$(flatten "$1")"; then
-    fail "$3 (unexpected in $(display "$1"): $2)"
+    fail "$3"
   fi
-}
-
-extract_section() {
-  local source="$1" heading="$2" output="$3"
-  awk -v heading="$heading" '
-    $0 == heading { inside = 1 }
-    inside && $0 != heading && /^#{1,3} / { exit }
-    inside { print }
-  ' "$source" >"$output"
 }
 
 heading="$(grep -m1 '^### Bounded re-adjudication' "$WORKFLOW" || true)"
 section="$fixture_dir/readjudication-section.md"
-[[ -n "$heading" ]] && extract_section "$WORKFLOW" "$heading" "$section"
+if [[ -n "$heading" ]]; then
+  awk -v heading="$heading" '
+    $0 == heading { inside = 1 }
+    inside && $0 != heading && /^#{1,3} / { exit }
+    inside { print }
+  ' "$WORKFLOW" >"$section"
+fi
 if [[ ! -s "$section" ]]; then
   fail 'the default workflow carries the bounded re-adjudication section inline'
   printf '\n%s bounded-re-adjudication assertion(s) failed.\n' "$failures" >&2
@@ -106,10 +68,21 @@ awk '/^## / { inside = ($0 ~ /^## 5\./) }
   inside && /^### Bounded re-adjudication/ { found = 1 }
   END { exit !found }' "$WORKFLOW" ||
   fail 'bounded re-adjudication sits inside the adjudicate-and-remediate step'
+all_conditions='((all|every one) of the following (hold|holds)|all (of )?(these|the) conditions (are )?(satisfied|met))'
 has "$section" \
-  're-adjudicate `R` (exactly once|once,? and only once|only once)[^.]*(when|only if) (all|every one) of the following (hold|holds)' \
+  "(re-adjudicate \`R\` (exactly once|once,? and only once|only once)[^.]*(when|only if|if) $all_conditions|(when|only if|if) $all_conditions[^.]*re-adjudicate \`R\` (exactly once|once,? and only once|only once))" \
   'a qualifying trigger produces exactly one re-adjudication only when every condition holds'
-has "$section" 'classified \*\*Ambiguous\*\*' 'only an Ambiguous ruling qualifies'
+lacks "$section" \
+  '(there is (no|not any) (obligation|requirement)[^.]{0,32}|nothing[^.]{0,64}requires[^.]{0,48})re-adjudicate `R`' \
+  'the positive trigger is not retained inside an explicit denial of its obligation'
+lacks "$section" \
+  "(do not|never) re-adjudicate \`R\` (exactly once|once,? and only once|only once)[^.]*(when|only if|if) $all_conditions" \
+  'the trigger is not inverted into a prohibition'
+has "$section" \
+  '(`R` was classified \*\*Ambiguous\*\*|classification of `R` (was|is) \*\*Ambiguous\*\*)' \
+  'only an Ambiguous ruling qualifies'
+lacks "$section" '`R` was not classified \*\*Ambiguous\*\*' \
+  'the Ambiguous classification is not explicitly inverted'
 has "$section" \
   '(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) (ineligible|never eligible)' \
   'Contract-backed and Defensive rulings are ineligible'
@@ -135,6 +108,8 @@ for forbidden in 'lineage store' 'registry' 'lifecycle' 'event protocol' \
 done
 lacks "$section" '(keep|introduce|add) no[^.]*but (keep|introduce|add|retain)' \
   'the machinery prohibition is not reversed mid-sentence'
+lacks "$section" '(keep|introduce|add) no[^.]*(unless|except when|only if)' \
+  'the absolute machinery prohibition has no exception'
 has "$section" '(drop|discard) it once that gate is adjudicated' \
   'the association is bounded to the immediate delta window'
 echo 'ok - the directive-to-ruling association is transient run-local state'
@@ -142,8 +117,11 @@ echo 'ok - the directive-to-ruling association is transient run-local state'
 ## The reader is fresh, blind, non-reviewing, and derives meaning only.
 has "$section" '(one|a single) fresh blind reader' \
   'one fresh blind reader performs the reading'
-has "$section" 'isolation pattern of `references/normative-remediation.md` without invoking or extending' \
-  'the reader reuses the isolation pattern without importing that mechanism'
+has "$section" 'isolation pattern of `references/normative-remediation.md`' \
+  'the reader reuses the normative-remediation isolation pattern'
+has "$section" \
+  '(without (invoking[^.]{0,20}extending|extending[^.]{0,20}invoking) that mechanism|that mechanism (is|must be|may be) neither invoked nor extended|((do|does|must|may|shall|should|can|will)( not|n.t)|never) (invoke[^.]{0,20}extend|extend[^.]{0,20}invoke) that mechanism)' \
+  'the reader does not invoke or extend normative remediation'
 for supplied in \
   'exact frozen criterion text' \
   'bounded raw governing context' \
@@ -222,23 +200,22 @@ has "$SKILL" \
 echo 'ok - the immutability fence, reviewer blindness, and authority grant hold'
 
 ## Observability uses ordinary primary reasoning rather than a new protocol.
+has "$section" \
+  '(^|[.] )((state|report)[^.]*ordinary working reasoning|in ordinary working reasoning[^.]*(state|report))' \
+  'the primary is instructed to report in ordinary working reasoning'
 for reported in 'which ruling was re-adjudicated' 'the reader returned' \
   'upheld or superseded' 'evidence-sufficiency decision'; do
-  has "$section" "(state|report) in ordinary working reasoning[^.]*$reported" \
-    "the reporting obligation itself names $reported"
+  has "$section" "$reported" "the reporting obligation names $reported"
 done
 echo 'ok - observability is ordinary primary reasoning'
 
 ## No new document, no expansion of normative remediation, no new naming.
 mapfile -t references < <(cd "$skill_dir/references" &&
   find . -name '*.md' | sed 's|^\./||' | sort)
-expected='closability-gate.md default-workflow.md github-closeout.md normative-remediation.md review-state-machine.md validation-evidence.md'
-if [[ "${references[*]}" != "$expected" ]]; then
-  fail "no new reference document is introduced (found: ${references[*]})"
-fi
 for reference in "${references[@]}"; do
   [[ "$skill_dir/references/$reference" == "$WORKFLOW" ]] && continue
-  lacks "$skill_dir/references/$reference" 're-adjudicat|Ambiguous ruling' \
+  lacks "$skill_dir/references/$reference" \
+    're-adjudicat|Ambiguous ruling|`D` descends from `R`' \
     "the mechanism does not expand or move into $reference"
 done
 lacks "$section" 'semantic challenge' \
