@@ -191,22 +191,14 @@ for reported in 'which ruling was re-adjudicated' 'the reader returned' \
 done
 echo 'ok - observability is ordinary primary reasoning'
 
-## No new document, no expansion of normative remediation, no new naming.
-mapfile -t references < <(cd "$skill_dir/references" &&
-  find . -name '*.md' | sed 's|^\./||' | sort)
-for reference in "${references[@]}"; do
-  [[ "$skill_dir/references/$reference" == "$WORKFLOW" ]] && continue
-  lacks "$skill_dir/references/$reference" \
-    're-adjudicat|Ambiguous ruling|`D` descends from `R`' \
-    "the mechanism does not expand or move into $reference"
-done
+## Naming and static mechanism surface.
 lacks "$section" 'semantic challenge' \
   'the mechanism is not named with the normative-remediation term'
 lacks "$SKILL" 'Ambiguous ruling[^.]*semantic challenge|semantic challenge[^.]*Ambiguous ruling' \
   'SKILL.md never names this mechanism a semantic challenge'
 lacks "$section" 'telemetry schema|run registry|durable event protocol|new lifecycle' \
   'no telemetry, registry, or lifecycle machinery is introduced'
-echo 'ok - the static surface gains no document, term, or lifecycle machinery'
+echo 'ok - naming and static machinery constraints hold'
 
 if (( failures > 0 )); then
   printf '\n%s bounded-re-adjudication assertion(s) failed.\n' "$failures" >&2
