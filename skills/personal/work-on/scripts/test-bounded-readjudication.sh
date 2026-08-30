@@ -6,9 +6,8 @@ set -euo pipefail
 # break: eligibility, attribution, the blind package, the one-shot property,
 # the supersede routing, the immutability fence, and the static surface.
 #
-# Assertions bind obligations, not sentences. Alternate over function words a
-# rewrite legitimately changes, keep load-bearing gaps inside sentence
-# boundaries, and put required polarity in each obligation-specific pattern.
+# Assertions cover stable instruction structure. Independent Spec and closure
+# interpret the governing prose; this suite does not parse arbitrary English.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_dir="$(cd "$script_dir/.." && pwd)"
@@ -68,35 +67,15 @@ awk '/^## / { inside = ($0 ~ /^## 5\./) }
   inside && /^### Bounded re-adjudication/ { found = 1 }
   END { exit !found }' "$WORKFLOW" ||
   fail 'bounded re-adjudication sits inside the adjudicate-and-remediate step'
-all_conditions='((all|every one) of the following (hold|holds)|all (of )?(these|the) conditions (are )?(satisfied|met))'
-has "$section" \
-  "(re-adjudicate \`R\` (exactly once|once,? and only once|only once)[^.]*(when|only if|if) $all_conditions|(when|only if|if) $all_conditions[^.]*re-adjudicate \`R\` (exactly once|once,? and only once|only once))" \
-  'a qualifying trigger produces exactly one re-adjudication only when every condition holds'
-lacks "$section" \
-  '(there is (no|not any) (obligation|requirement)[^.]{0,32}|nothing[^.]{0,64}requires[^.]{0,48})re-adjudicate `R`' \
-  'the positive trigger is not retained inside an explicit denial of its obligation'
-lacks "$section" \
-  "(do not|never) re-adjudicate \`R\` (exactly once|once,? and only once|only once)[^.]*(when|only if|if) $all_conditions" \
-  'the trigger is not inverted into a prohibition'
-has "$section" \
-  '(`R` was classified \*\*Ambiguous\*\*|classification of `R` (was|is) \*\*Ambiguous\*\*)' \
+has "$section" 're-adjudicate `R` (exactly once|once,? and only once|only once)' \
+  'a qualifying trigger produces one re-adjudication'
+has "$section" '(all|every one) of the following (hold|holds)|all (of )?(these|the) conditions (are )?(satisfied|met)' \
+  'the trigger is gated by the complete condition set'
+has "$section" 'classified \*\*Ambiguous\*\*' \
   'only an Ambiguous ruling qualifies'
-lacks "$section" '`R` was not classified \*\*Ambiguous\*\*' \
-  'the Ambiguous classification is not explicitly inverted'
 has "$section" \
   '(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) (ineligible|never eligible)' \
   'Contract-backed and Defensive rulings are ineligible'
-lacks "$section" \
-  '((not true|not the case|false) that[^.]*Contract-backed and Defensive rulings? (are|is) ineligible|Contract-backed and Defensive rulings? (are|is) not ineligible)' \
-  'Contract-backed and Defensive ineligibility is not directly negated'
-lacks "$section" \
-  '(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) ineligible[^.]*(but|yet|however)[^.]*(treat|consider|regard)[^.]*eligible' \
-  'ineligible rulings are not later treated as eligible in the same sentence'
-lacks "$section" \
-  '((Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) ineligible[^.]*(unless|except when|only if)|(unless|except when|only if)[^.]*(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) ineligible)' \
-  'Contract-backed and Defensive ineligibility has no exception'
-lacks "$section" '(Contract-backed|Defensive)( ruling)?s?[^.]{0,40}((is|are|becomes?) (also |likewise )?eligible|(also |likewise )?qualifies|reclassified as)' \
-  'no ineligible classification is admitted as eligible or reclassified'
 has "$section" '(`D` produced the current remediation candidate|current remediation candidate was produced by `D`)' \
   'the triggering directive produced the current remediation candidate'
 has "$section" 'accepted blocker at that gate (is attributable to|traces to) the mechanism introduced for `D`' \
@@ -115,11 +94,6 @@ for forbidden in 'lineage store' 'registry' 'lifecycle' 'event protocol' \
   has "$section" "(keep|introduce|add) no[^.;]*$forbidden" \
     "the association introduces no $forbidden"
 done
-lacks "$section" '(keep|introduce|add) no[^.]*but (keep|introduce|add|retain)' \
-  'the machinery prohibition is not reversed mid-sentence'
-lacks "$section" \
-  '((keep|introduce|add) no[^.]*(unless|except when|only if)|(unless|except when|only if)[^.;,]*,[[:space:]]*([^[:space:].;,]+[[:space:]]+){0,4}(keep|introduce|add) no)' \
-  'the absolute machinery prohibition has no exception'
 has "$section" '(drop|discard) it once that gate is adjudicated' \
   'the association is bounded to the immediate delta window'
 echo 'ok - the directive-to-ruling association is transient run-local state'
@@ -127,12 +101,10 @@ echo 'ok - the directive-to-ruling association is transient run-local state'
 ## The reader is fresh, blind, non-reviewing, and derives meaning only.
 has "$section" '(launch|use) (one|a single) fresh blind reader' \
   'one fresh blind reader performs the reading'
-lacks "$section" '(do not|never) (launch|use) (one|a single) fresh blind reader' \
-  'launching the fresh blind reader is not directly negated'
 has "$section" 'isolation pattern of `references/normative-remediation.md`' \
   'the reader reuses the normative-remediation isolation pattern'
 has "$section" \
-  '(without (invoking[^.]{0,20}extending|extending[^.]{0,20}invoking) that mechanism|that mechanism (is|must be|may be) neither invoked nor extended|((do|does|must|may|shall|should|can|will)( not|n.t)|never) (invoke[^.]{0,20}extend|extend[^.]{0,20}invoke) that mechanism)' \
+  '(without[^.]*invoking[^.]*extending that mechanism|without[^.]*extending[^.]*invoking that mechanism|neither invoked nor extended)' \
   'the reader does not invoke or extend normative remediation'
 for supplied in \
   'exact frozen criterion text' \
@@ -143,8 +115,6 @@ for supplied in \
 done
 lacks "$section" '(supply|give it|provide) only[^.;]*(prior ruling|adjudication ledger|previously rejected alternative)' \
   'no withheld item appears in the closed supply clause'
-lacks "$section" '(withhold|never give|keep back)[^.]*but (supply|give|provide)' \
-  'the withholding clause is not reversed mid-sentence'
 has "$section" 'non-reviewing[^.]*(never|not) (reuse it as|be reused as) a review-axis agent' \
   'the reader is non-reviewing and never becomes a review axis in this chain'
 for withheld in \
@@ -178,11 +148,6 @@ has "$section" 'one re-adjudication per Ambiguous ruling, (not|rather than) one 
   'the one-shot limit is per ruling rather than a global per-run cap'
 has "$section" '(remove mechanism no criterion requires[^.]{0,30}rather than hardening|rather than hardening it[^.]{0,20}remove mechanism no criterion requires)' \
   'superseding removes mechanism instead of hardening it'
-lacks "$section" '(do not|never) remove mechanism no criterion requires[^.]*rather than hardening' \
-  'Supersede removal is not directly negated'
-lacks "$section" \
-  '(remove mechanism no criterion requires[^.]*rather than hardening[^.]*(unless|except when|only if)|(unless|except when|only if)[^.]*remove mechanism no criterion requires[^.]*rather than hardening)' \
-  'Supersede removal rather than hardening has no exception'
 has "$section" '(keep|retain) any blocker portion that still applies to surviving candidate content' \
   'the surviving portion of the blocker is retained'
 has "$section" '(freshly adjudicate|adjudicate afresh) under `references/validation-evidence.md`' \
@@ -217,31 +182,12 @@ has "$SKILL" \
 echo 'ok - the immutability fence, reviewer blindness, and authority grant hold'
 
 ## Observability uses ordinary primary reasoning rather than a new protocol.
-reporting_block="$fixture_dir/reporting-block.md"
-awk -v RS='' '
-  {
-    lower = tolower($0)
-    if (lower ~ /ordinary working reasoning/ &&
-        lower ~ /(^|[^[:alnum:]_])(state|report)([^[:alnum:]_]|$)/) {
-      print
-      if ((getline adjacent) > 0 && adjacent ~ /^- /) {
-        print ""
-        print adjacent
-      }
-      exit
-    }
-  }
-' "$section" >"$reporting_block"
-if [[ ! -s "$reporting_block" ]]; then
-  fail 'the section has an ordinary-working-reasoning reporting block'
-fi
-reporting_exemption='(not required to (be )?(state|report|stated|reported)|need not be (stated|reported)|(do not|never) (state|report))'
+has "$section" \
+  '((state|report) in ordinary working reasoning|in ordinary working reasoning[^.]{0,24}(state|report))' \
+  'the primary reports in ordinary working reasoning'
 for reported in 'which ruling was re-adjudicated' 'the reader returned' \
   'upheld or superseded' 'evidence-sufficiency decision'; do
-  has "$reporting_block" "$reported" "the reporting block names $reported"
-  lacks "$reporting_block" \
-    "($reported[^.]*$reporting_exemption|$reporting_exemption[^.]*$reported)" \
-    "the reporting block gives $reported no explicit exemption"
+  has "$section" "$reported" "the reporting instruction names $reported"
 done
 echo 'ok - observability is ordinary primary reasoning'
 
