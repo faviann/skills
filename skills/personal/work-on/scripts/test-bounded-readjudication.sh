@@ -117,7 +117,8 @@ for forbidden in 'lineage store' 'registry' 'lifecycle' 'event protocol' \
 done
 lacks "$section" '(keep|introduce|add) no[^.]*but (keep|introduce|add|retain)' \
   'the machinery prohibition is not reversed mid-sentence'
-lacks "$section" '(keep|introduce|add) no[^.]*(unless|except when|only if)' \
+lacks "$section" \
+  '((keep|introduce|add) no[^.]*(unless|except when|only if)|(unless|except when|only if)[^.]*(keep|introduce|add) no)' \
   'the absolute machinery prohibition has no exception'
 has "$section" '(drop|discard) it once that gate is adjudicated' \
   'the association is bounded to the immediate delta window'
