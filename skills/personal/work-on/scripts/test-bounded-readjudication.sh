@@ -15,14 +15,17 @@ set -euo pipefail
 # carries its own polarity: where the obligation is a prohibition, the negative
 # word belongs inside the pattern, not in a gap that would match either way.
 #
-# `has` also refuses a match with a negation cue immediately in front of it.
-# That is a backstop, not a proof, and it is worth saying exactly how far it
-# goes so nobody leans on it: it looks only at the few characters before the
-# match, inside one clause, for a short list of cues. A negation further off, a
-# cue phrased another way, one that lands after the phrase, or a separate
-# sentence retiring the rule while its words stand, all pass. Binding polarity
-# into the pattern is what actually discriminates; the cue check only catches
-# the careless case early.
+# `has` also refuses a match with a negation cue in front of it, within the
+# same clause - commas end a clause here, so a contrastive "never X, Y" does
+# not read as a negation of Y, and "unless" ends it too, since "does not
+# qualify unless X" requires X rather than forbidding it. That is a backstop,
+# not a proof, and it errs in both directions, which is worth stating so
+# nobody leans on it. It can miss: a cue phrased another way, one that lands
+# after the phrase, one further off than the window, or a separate sentence
+# retiring the rule while its words stand. It can also over-fire, since it
+# does not know which verb a cue governs. Binding polarity into the pattern is
+# what actually discriminates; the cue check only catches the careless case
+# early.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_dir="$(cd "$script_dir/.." && pwd)"
@@ -61,14 +64,15 @@ flatten() {
 
 # A negation immediately before an asserted phrase inverts the obligation while
 # leaving the phrase intact. Reject that as firmly as absence.
-negation_cue='(do|does|is|are|was|were|must|may|shall|should|can|need|could|would|will)( not|n.t)|never|no longer|not (true|required|the case)|none of|cannot|under no circumstances|nothing requires'
+negation_cue='\b(do|does|is|are|was|were|must|may|shall|should|can|need|could|would|will)( not|n.t)|\bnever|\bno longer|\bnot (true|required|obliged|the case)|\bnone of|\bcannot|under no circumstances|\bno requirement|nothing[^.;:,]{0,12}requires'
 
 has() {
   local flat
   flat="$(flatten "$1")"
   if ! grep -Eqi -- "$2" "$flat"; then
     fail "$3 (missing in $(display "$1"): $2)"
-  elif grep -Eqi -- "($negation_cue)[^.;:]{0,10}($2)" "$flat"; then
+  elif sed -E 's/ (unless|except when|only if) / . /gI' "$flat" |
+    grep -Eqi -- "($negation_cue)[^.;:,]{0,24}($2)"; then
     fail "$3 (negated in $(display "$1"): $2)"
   fi
 }
@@ -102,15 +106,14 @@ awk '/^## / { inside = ($0 ~ /^## 5\./) }
   inside && /^### Bounded re-adjudication/ { found = 1 }
   END { exit !found }' "$WORKFLOW" ||
   fail 'bounded re-adjudication sits inside the adjudicate-and-remediate step'
-has "$section" 're-adjudicate `R` (exactly once|once,? and only once|only once)' \
-  'a qualifying trigger produces exactly one re-adjudication'
-has "$section" 'when (all|every one) of the following (hold|holds)' \
-  'every trigger condition must hold, not merely one of them'
+has "$section" \
+  're-adjudicate `R` (exactly once|once,? and only once|only once)[^.]*(when|only if) (all|every one) of the following (hold|holds)' \
+  'a qualifying trigger produces exactly one re-adjudication only when every condition holds'
 has "$section" 'classified \*\*Ambiguous\*\*' 'only an Ambiguous ruling qualifies'
 has "$section" \
   '(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) (ineligible|never eligible)' \
   'Contract-backed and Defensive rulings are ineligible'
-lacks "$section" '(Contract-backed|Defensive)[^.]{0,120}((is|are|becomes?) (also |likewise )?eligible|(also |likewise )?qualifies|reclassified as)' \
+lacks "$section" '(Contract-backed|Defensive)( ruling)?s?[^.]{0,40}((is|are|becomes?) (also |likewise )?eligible|(also |likewise )?qualifies|reclassified as)' \
   'no ineligible classification is admitted as eligible or reclassified'
 has "$section" '(`D` produced the current remediation candidate|current remediation candidate was produced by `D`)' \
   'the triggering directive produced the current remediation candidate'
@@ -125,9 +128,13 @@ echo 'ok - eligibility is limited to Ambiguous rulings whose own mechanism repro
 ## The association is transient working state, not a lineage system.
 has "$section" 'carry a run-local note[^.]*`D` descends from `R`' \
   'the association records only that the directive descends from the ruling'
-has "$section" \
-  '(keep|introduce|add) no lineage store, registry, lifecycle, event protocol, telemetry, or persistent correlation state' \
-  'the association introduces no durable machinery of any listed kind'
+for forbidden in 'lineage store' 'registry' 'lifecycle' 'event protocol' \
+  'telemetry' 'persistent correlation state'; do
+  has "$section" "(keep|introduce|add) no[^.;]*$forbidden" \
+    "the association introduces no $forbidden"
+done
+lacks "$section" '(keep|introduce|add) no[^.]*but (keep|introduce|add|retain)' \
+  'the machinery prohibition is not reversed mid-sentence'
 has "$section" '(drop|discard) it once that gate is adjudicated' \
   'the association is bounded to the immediate delta window'
 echo 'ok - the directive-to-ruling association is transient run-local state'
@@ -148,7 +155,7 @@ lacks "$section" '(supply|give it|provide) only[^.;]*(prior ruling|adjudication 
   'no withheld item appears in the closed supply clause'
 lacks "$section" '(withhold|never give|keep back)[^.]*but (supply|give|provide)' \
   'the withholding clause is not reversed mid-sentence'
-has "$section" 'non-reviewing[^.]*(never|not) reuse it as a review-axis agent' \
+has "$section" 'non-reviewing[^.]*(never|not) (reuse it as|be reused as) a review-axis agent' \
   'the reader is non-reviewing and never becomes a review axis in this chain'
 for withheld in \
   'prior ruling' \
@@ -203,6 +210,8 @@ has "$section" "Validation-surface membership is unchanged" \
 has "$section" \
   'changed criterion text[^.]*obligation those bytes do not already carry[^.]*changed Validation-surface membership takes the existing trusted-maintainer or immutable-manifest hand-back' \
   'changed bytes or membership take the existing hand-back routes'
+has "$section" 'hand-back[^.]*(is|are) never re-adjudicated here' \
+  'a change outside the fence is never re-adjudicated by this mechanism'
 has "$section" 'changes no frozen review-chain governing input' \
   're-adjudication changes no frozen review-chain governing input'
 has "$section" 'ledger (stays out of|is withheld from) every reviewer package' \
