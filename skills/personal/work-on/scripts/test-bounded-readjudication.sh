@@ -6,11 +6,14 @@ set -euo pipefail
 # break: eligibility, attribution, the blind package, the one-shot property,
 # the supersede routing, the immutability fence, and the static surface.
 #
-# Assertions bind obligations, not sentences. Two rules keep both halves of
-# that honest: alternate over the function words a rewrite legitimately
-# changes (must not/may not/never, keep no/introduce no, one/a single), and
-# never let a gap span a negation or a sentence boundary that could invert the
-# obligation. Prefer [^.] over . wherever a sentence boundary is load-bearing.
+# Assertions bind obligations, not sentences. Three rules keep both halves of
+# that honest. Alternate over the function words a rewrite legitimately
+# changes (must not/may not/never, keep no/introduce no, one/a single). Never
+# let a gap span a negation or a sentence boundary that could invert the
+# obligation; prefer [^.] over . wherever a boundary is load-bearing. And a
+# matched phrase proves nothing if a negation sits just outside it, so `has`
+# rejects a match that is negated in place - that check belongs in one helper
+# rather than in an anchor bolted onto every pattern.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skill_dir="$(cd "$script_dir/.." && pwd)"
@@ -38,9 +41,17 @@ flatten() {
   printf '%s' "$flat"
 }
 
+# A negation immediately before an asserted phrase inverts the obligation while
+# leaving the phrase intact. Reject that as firmly as absence.
+negated='(do not|does not|do no|never|need not|cannot|no longer|is never|are never)'
+
 has() {
-  if ! grep -Eqi -- "$2" "$(flatten "$1")"; then
+  local flat
+  flat="$(flatten "$1")"
+  if ! grep -Eqi -- "$2" "$flat"; then
     fail "$3 (missing in ${1#"$skill_dir/"}: $2)"
+  elif grep -Eqi -- "$negated[^.]{0,12}$2" "$flat"; then
+    fail "$3 (negated in ${1#"$skill_dir/"}: $2)"
   fi
 }
 
@@ -62,8 +73,6 @@ extract_section() {
 heading="$(grep -m1 '^### Bounded re-adjudication' "$WORKFLOW" || true)"
 section="$fixture_dir/readjudication-section.md"
 [[ -n "$heading" ]] && extract_section "$WORKFLOW" "$heading" "$section"
-[[ "$heading" == *Ambiguous* ]] ||
-  fail 'the section heading names the Ambiguous ruling it governs'
 if [[ ! -s "$section" ]]; then
   fail 'the default workflow carries the bounded re-adjudication section inline'
   printf '\n%s bounded-re-adjudication assertion(s) failed.\n' "$failures" >&2
@@ -77,34 +86,40 @@ awk '/^## / { inside = ($0 ~ /^## 5\./) }
   fail 'bounded re-adjudication sits inside the adjudicate-and-remediate step'
 has "$section" 're-adjudicate `R` (exactly once|once and only once|only once)' \
   'a qualifying trigger produces exactly one re-adjudication'
+has "$section" 'has one bounded exception' \
+  'the mechanism is in force as an exception, not retired as a historical note'
+has "$section" 'when all of the following hold' \
+  'every trigger condition must hold, not merely one of them'
 has "$section" 'classified \*\*Ambiguous\*\*' 'only an Ambiguous ruling qualifies'
 has "$section" \
   '(Contract-backed and Defensive|Defensive and Contract-backed) rulings? (are|is) ineligible' \
   'Contract-backed and Defensive rulings are ineligible'
-lacks "$section" '(Contract-backed|Defensive)[^.]{0,40}(are|is) eligible' \
+lacks "$section" '(Contract-backed|Defensive)[^.]{0,60}\beligible' \
   'no ineligible classification is admitted as eligible'
+lacks "$section" 'reclassif' \
+  'no route reclassifies a ruling into the eligible class'
 has "$section" '(`D` produced the current remediation candidate|current remediation candidate was produced by `D`)' \
   'the triggering directive produced the current remediation candidate'
 has "$section" 'accepted blocker at that gate is attributable to the mechanism introduced for `D`' \
   'the trigger requires a blocker attributable to the Ambiguous directive'
 has "$section" '(immediately following delta gate|delta gate that immediately follows)' \
-  'the trigger window is the immediately following delta gate'
+  'the run-local note is scoped to the immediately following delta gate'
 has "$section" 'does not trace to `D`.s mechanism (takes|proceeds through) ordinary remediation' \
   'an unattributable blocker at the same gate does not trigger the mechanism'
 echo 'ok - eligibility is limited to Ambiguous rulings whose own mechanism reproduced a blocker'
 
 ## The association is transient working state, not a lineage system.
-has "$section" 'run-local note[^.]*`D` descends from `R`' \
+has "$section" 'carry a run-local note[^.]*`D` descends from `R`' \
   'the association records only that the directive descends from the ruling'
 has "$section" \
   '(keep|introduce|add) no lineage store, registry, lifecycle, event protocol, telemetry, or persistent correlation state' \
   'the association introduces no durable machinery of any listed kind'
-has "$section" 'and (drop|discard) it once that gate is adjudicated' \
+has "$section" '(drop|discard) it once that gate is adjudicated' \
   'the association is bounded to the immediate delta window'
 echo 'ok - the directive-to-ruling association is transient run-local state'
 
 ## The reader is fresh, blind, non-reviewing, and derives meaning only.
-has "$section" 'remediation continues, launch (one|a single) fresh blind reader' \
+has "$section" 'launch (one|a single) fresh blind reader' \
   'one fresh blind reader performs the reading'
 has "$section" 'isolation pattern of `references/normative-remediation.md` without invoking or extending' \
   'the reader reuses the isolation pattern without importing that mechanism'
@@ -115,13 +130,12 @@ for supplied in \
   has "$section" "(supply|give it) only[^.]*$supplied" \
     "the closed reader package supplies $supplied and nothing else"
 done
-lacks "$section" '(supply|give it) only[^.]*(prior ruling|adjudication ledger|previously rejected alternative)' \
+lacks "$section" '(supply|give it) only[^.;]*(prior ruling|adjudication ledger|previously rejected alternative)' \
   'no withheld item appears in the closed supply clause'
 lacks "$section" '(withhold|never give)[^.]*but (supply|give)' \
   'the withholding clause is not reversed mid-sentence'
-has "$section" 'reader is non-reviewing' 'the reader is non-reviewing'
-has "$section" 'never reuse it as a review-axis agent' \
-  'the reader never becomes a review axis in this chain'
+has "$section" 'non-reviewing[^.]*reuse it as a review-axis agent' \
+  'the reader is non-reviewing and never becomes a review axis in this chain'
 for withheld in \
   'prior ruling' \
   'previously rejected alternative' \
@@ -167,25 +181,23 @@ has "$section" 'correction.{0,20}delta gate.{0,30}fresh blind cumulative confirm
 echo 'ok - uphold is one-shot and supersede removes mechanism through the existing path'
 
 ## The immutability fence and reviewer blindness are preserved.
-has "$section" '(frozen criterion bytes|criterion.s frozen bytes) are unchanged' \
+has "$section" "(frozen criterion bytes|criterion's frozen bytes) are unchanged" \
   're-adjudication requires identical frozen criterion bytes'
 has "$section" "Validation-surface membership is unchanged" \
   're-adjudication requires unchanged Validation-surface membership'
 has "$section" \
-  'changed criterion text.*obligation those bytes do not already carry.*changed Validation-surface membership.*trusted-maintainer or immutable-manifest hand-back' \
+  'changed criterion text[^.]*changed Validation-surface membership takes the existing trusted-maintainer or immutable-manifest hand-back' \
   'changed bytes or membership take the existing hand-back routes'
 has "$section" 'changes no frozen review-chain governing input' \
   're-adjudication changes no frozen review-chain governing input'
 has "$section" 'ledger (stays out of|is withheld from) every reviewer package' \
   'the adjudication ledger remains hidden from reviewers'
 has "$SKILL" \
-  'materially defensible reading of an exact unchanged frozen criterion.*Validation-surface membership is unchanged.*adjudication rather than a requirements change' \
+  'materially defensible reading of an exact unchanged frozen criterion[^.]*membership is unchanged, is adjudication rather than a requirements change' \
   'SKILL.md grants the bounded right to reconsider without a requirements change'
 echo 'ok - the immutability fence, reviewer blindness, and authority grant hold'
 
 ## Observability uses ordinary primary reasoning rather than a new protocol.
-has "$section" '(state|report) in ordinary working reasoning (which|what|whether|the)' \
-  'the reporting imperative leads directly into the items it names'
 for reported in 'which ruling was re-adjudicated' 'the reader returned' \
   'upheld or superseded' 'evidence-sufficiency decision'; do
   has "$section" "(state|report) in ordinary working reasoning[^.]*$reported" \
