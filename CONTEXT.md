@@ -98,6 +98,10 @@ _Avoid_: semantic diff, remediation rationale, authority-site inventory
 The fresh blind reading of a qualifying Corrective batch's bounded BEFORE/AFTER authority, performed before the normative correction is committed as the candidate reviewed by the next delta gate. It derives governing consequences independently of the primary's expected semantics and is a pre-commit checkpoint, not a review axis.
 _Avoid_: semantic review, normative review, entitlement gate
 
+**Implementation-mechanism reset**:
+The bounded reconsideration `work-on` remediation performs when correcting an accepted blocker would preserve an implementation-created support mechanism instead of reconsidering the premise that blocker exposed. The blocker stays accepted and blocking throughout, and is resolved under either disposition. It has one operation and two entries: a *support loop*, where the blocker reaches support machinery an earlier approach created, that support would not survive a change of approach on its own contract merits, and the proposed correction principally keeps that support trustworthy; and an *accepted incompatibility*, where conflicting reproduced witnesses with a causal explanation, or states the mechanism cannot tell apart with the information available to it, show the premise insufficient. The retained implementation delegate states Uphold or revise in ordinary working reasoning; the disposition is reasoning, never a recorded marker, ledger entry, or other proof artifact.
+_Avoid_: architectural reset, minimal-mechanism guard, premise reset
+
 **Convergence episode**:
 The analysis grouping of one logical `work-on` attempt — its sessions, continuation, review-chain restarts, synchronization, and ordinary resume, up to a durable outcome — together with its causally connected successor attempts, so corrective repetition stays visible when the work is picked up again. It is an observation boundary, not workflow state or an outcome.
 _Avoid_: retry chain, extended lifecycle, Convergence lifecycle
@@ -139,6 +143,7 @@ _Avoid_: model kind, model family
 - A repository-local `work-on` label makes successful PR closeouts available for **PR-local observation**
 - A `work-on` run passes one **Closability gate** before it delegates implementation; an invocation that fails it hands back as `preflight-aborted`, has no **Run identity**, and never reaches the closure gate
 - A **Validation-surface manifest** materializes the required **Validation surfaces** when the **Closability gate** passes
+- An **Implementation-mechanism reset** is entered from a support loop or an accepted incompatibility, and both of its dispositions return to the existing remediation, delta-gate, and fresh-cumulative-confirmation path
 - A **Convergence episode** contains one or more causally connected logical `work-on` attempts, each of which may span several sessions or review chains
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
