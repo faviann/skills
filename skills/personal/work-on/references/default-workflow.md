@@ -364,15 +364,11 @@ the blocker with its existing mechanism-to-criterion trace, and the current or
 proposed remediation.
 
 A qualifying detection is never advisory commentary. On primary detection,
-supply this instruction verbatim to the retained implementation delegate with
-the adjudicated directives, through the same supported continuation mechanism
-that batches accepted blockers, before the next support layer is added; keep its
-`Risks:` channel and authority relationship unchanged. On delegate detection,
-the delegate applies the instruction where it stands, with no authorization
-round trip, and a delegate who reaches qualifying incompatibility while planning
-remediation revises immediately. Either way, before remediation continues the
-retained implementation delegate states its disposition in ordinary working
-reasoning:
+supply this instruction in full to the retained implementation delegate with the
+adjudicated directives, before the next support layer is added. On delegate
+detection, the delegate applies it where it stands, with no authorization round
+trip, and a delegate who reaches qualifying incompatibility while planning
+remediation revises immediately.
 
 > Reconsider only the implementation premise exposed by this blocker; do not
 > reinterpret the accepted obligation. Can the same obligation still be
@@ -391,16 +387,18 @@ reasoning:
 > Where accepted incompatibility has established the premise as insufficient,
 > unchanged reliance on that premise is unavailable.
 
-That disposition creates no reset marker, ledger entry, flag, acknowledgement
-object, counter, or other recorded proof artifact. The retained implementation
-delegate owns the disposition and the implementation shape. The primary enforces
-only the accepted contract and, through the existing candidate flow, that a
+Either way, before remediation continues the retained implementation delegate
+states its resulting disposition in ordinary working reasoning. That disposition
+creates no reset marker, ledger entry, flag, acknowledgement object, counter, or
+other recorded proof artifact. The retained implementation delegate owns the
+disposition and the implementation shape. The primary enforces only the
+accepted contract and, through the existing candidate flow, that a
 demonstrated-insufficient premise was not carried forward unchanged; it approves
 no architecture and repeats no reconsideration.
 
 Uphold returns to ordinary remediation on that brief rationale. Both
-dispositions keep the accepted blocker until it is resolved, then run
-affected focused validation, commit normally, and take the existing delta gate
+dispositions keep the accepted blocker until it is resolved, then run affected
+focused validation, commit normally, and take the existing delta gate
 followed by fresh cumulative confirmation. Tests or proof machinery whose only
 relevant subject was a superseded approach may be deleted, replaced, or
 adjusted while suitable direct evidence for the unchanged obligation survives;
