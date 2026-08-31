@@ -99,7 +99,7 @@ The fresh blind reading of a qualifying Corrective batch's bounded BEFORE/AFTER 
 _Avoid_: semantic review, normative review, entitlement gate
 
 **Implementation-mechanism reset**:
-The bounded reconsideration `work-on` remediation performs when correcting an accepted blocker would preserve an implementation-created support mechanism instead of reconsidering the premise that blocker exposed. The blocker stays accepted and blocking throughout. Its two entries, a *support loop* and an *accepted incompatibility*, together with the bounded instruction and the Uphold/revise disposition, are governed by the *Implementation-mechanism reset* rule in `work-on`'s `references/default-workflow.md`.
+The bounded reconsideration `work-on` remediation performs when an accepted blocker exposes an implementation premise for reconsideration. The blocker stays accepted and blocking throughout. Its two entries, a *support loop* and an *accepted incompatibility*, together with the bounded instruction and the Uphold/revise disposition, are governed by the *Implementation-mechanism reset* rule in `work-on`'s `references/default-workflow.md`.
 _Avoid_: architectural reset, minimal-mechanism guard, premise reset
 
 **Convergence episode**:
