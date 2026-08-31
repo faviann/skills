@@ -98,6 +98,10 @@ _Avoid_: semantic diff, remediation rationale, authority-site inventory
 The fresh blind reading of a qualifying Corrective batch's bounded BEFORE/AFTER authority, performed before the normative correction is committed as the candidate reviewed by the next delta gate. It derives governing consequences independently of the primary's expected semantics and is a pre-commit checkpoint, not a review axis.
 _Avoid_: semantic review, normative review, entitlement gate
 
+**Implementation-mechanism reset**:
+The bounded reconsideration `work-on` remediation performs when an accepted blocker exposes an implementation premise for reconsideration. The blocker stays accepted and blocking throughout. Its two entries, a *support loop* and an *accepted incompatibility*, together with the bounded instruction and the Uphold/revise disposition, are governed by the *Implementation-mechanism reset* rule in `work-on`'s `references/default-workflow.md`.
+_Avoid_: architectural reset, minimal-mechanism guard, premise reset
+
 **Convergence episode**:
 The analysis grouping of one logical `work-on` attempt — its sessions, continuation, review-chain restarts, synchronization, and ordinary resume, up to a durable outcome — together with its causally connected successor attempts, so corrective repetition stays visible when the work is picked up again. It is an observation boundary, not workflow state or an outcome.
 _Avoid_: retry chain, extended lifecycle, Convergence lifecycle
