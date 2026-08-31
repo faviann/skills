@@ -262,11 +262,10 @@ the blocker with its existing mechanism-to-criterion trace, and the current or
 proposed remediation.
 
 A qualifying detection is never advisory commentary. On primary detection,
-supply the following instruction verbatim to the retained implementation
-delegate with the adjudicated directives, before the next support layer is
-added. On delegate detection, the delegate applies it where it stands, with no
-authorization round trip, and a delegate who reaches qualifying incompatibility
-while planning remediation revises immediately.
+include the following instruction verbatim in the adjudicated directives before
+the next support layer is added. On delegate detection, the delegate applies it
+where it stands, with no authorization round trip, and a delegate who reaches
+qualifying incompatibility while planning remediation revises immediately.
 
 > Reconsider only the implementation premise exposed by this blocker; do not
 > reinterpret the accepted obligation. Can the same obligation still be
