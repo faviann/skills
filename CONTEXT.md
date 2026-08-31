@@ -99,7 +99,7 @@ The fresh blind reading of a qualifying Corrective batch's bounded BEFORE/AFTER 
 _Avoid_: semantic review, normative review, entitlement gate
 
 **Implementation-mechanism reset**:
-The bounded reconsideration `work-on` remediation performs when correcting an accepted blocker would preserve an implementation-created support mechanism instead of reconsidering the premise that blocker exposed. The blocker stays accepted and blocking throughout. Its two entries, its bounded instruction, and its Uphold/revise disposition are governed by `work-on`'s `references/default-workflow.md` section 5.
+The bounded reconsideration `work-on` remediation performs when correcting an accepted blocker would preserve an implementation-created support mechanism instead of reconsidering the premise that blocker exposed. The blocker stays accepted and blocking throughout. Its two entries, a *support loop* and an *accepted incompatibility*, together with the bounded instruction and the Uphold/revise disposition, are governed by the *Implementation-mechanism reset* rule in `work-on`'s `references/default-workflow.md`.
 _Avoid_: architectural reset, minimal-mechanism guard, premise reset
 
 **Convergence episode**:
@@ -143,7 +143,6 @@ _Avoid_: model kind, model family
 - A repository-local `work-on` label makes successful PR closeouts available for **PR-local observation**
 - A `work-on` run passes one **Closability gate** before it delegates implementation; an invocation that fails it hands back as `preflight-aborted`, has no **Run identity**, and never reaches the closure gate
 - A **Validation-surface manifest** materializes the required **Validation surfaces** when the **Closability gate** passes
-- An **Implementation-mechanism reset** is entered from a support loop or an accepted incompatibility, and both of its dispositions return to the existing remediation, delta-gate, and fresh-cumulative-confirmation path
 - A **Convergence episode** contains one or more causally connected logical `work-on` attempts, each of which may span several sessions or review chains
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
