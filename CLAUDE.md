@@ -48,9 +48,9 @@ Skills, agent instructions, and agent-reached reference docs: use [`writing-for-
 
 Linked worktrees, local skill loading, and dependency setup. See [docs/agents/worktrees.md](./docs/agents/worktrees.md).
 
-### Shell tests
+### Testing and deterministic checks
 
-The all-suite command, suite membership, and pull-request policy live in [docs/agents/testing.md](./docs/agents/testing.md).
+Shell-test suite operations and decisions about whether a deterministic check legitimately holds mechanical authority live in [docs/agents/testing.md](./docs/agents/testing.md).
 
 ### Issue tracker
 
