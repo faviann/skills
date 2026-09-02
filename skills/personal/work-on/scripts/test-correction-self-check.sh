@@ -55,10 +55,10 @@ extract_section() {
 }
 
 extract_h2_section() {
-  local source="$1" heading="$2" output="$3"
-  awk -v heading="$heading" '
-    $0 == heading { inside = 1 }
-    inside && $0 != heading && /^## / { exit }
+  local source="$1" title="$2" output="$3"
+  awk -v title="$title" '
+    $0 ~ "^## ([0-9]+\\. )?" title "$" { inside = 1; next }
+    inside && /^## / { exit }
     inside { print }
   ' "$source" >"$output"
 }
@@ -69,8 +69,8 @@ remediation="$fixture_dir/remediation"
 cumulative="$fixture_dir/cumulative-package"
 delta="$fixture_dir/delta-package"
 extract_section "$WORKFLOW" '### Accepted-blocker correction self-check' "$contract"
-extract_h2_section "$WORKFLOW" '## 3. Primary checkpoint' "$readiness"
-extract_h2_section "$WORKFLOW" '## 5. Adjudicate and remediate through delta review' "$remediation"
+extract_h2_section "$WORKFLOW" 'Primary checkpoint' "$readiness"
+extract_h2_section "$WORKFLOW" 'Adjudicate and remediate through delta review' "$remediation"
 extract_section "$STATE" '### Cumulative-review package' "$cumulative"
 extract_section "$STATE" '### Delta-review package' "$delta"
 
@@ -157,20 +157,38 @@ has "$contract" \
 
 ## Existing normative remediation composes with the broader self-check.
 has "$contract" \
-  'Complete this self-check in the working tree before commit.{0,180}qualifying post-gate Corrective batch.{0,120}both this self-check and the existing `references/normative-remediation.md` checkpoint must be complete before commit' \
-  'qualifying post-gate corrections complete both pre-commit obligations'
+  'Complete this self-check in the working tree before commit.{0,180}qualifying post-gate Corrective batch.{0,120}complete this self-check before applying the existing `references/normative-remediation.md` checkpoint to the actual correction.{0,80}both must be complete before commit' \
+  'qualifying post-gate corrections complete the self-check before the normative checkpoint and commit'
 has "$contract" \
   'reference retains ownership of its contract' \
   'normative-remediation ownership remains in its existing reference'
+if ! awk '
+  /shared correction self-check.s pre-commit/ { self_check = NR }
+  /reconciliation against the actual correction/ { normative = NR }
+  END { exit !(self_check && normative && self_check < normative) }
+' "$remediation"; then
+  fail 'post-correction self-check completion precedes normative reconciliation in remediation'
+fi
 
 ## Rechecked reasoning stays primary-side while raw evidence uses existing slots.
 has "$contract" \
   'Keep `Rechecked:` rationale, applicability declarations, conclusions, and correction reasoning in primary-side working state, excluded from cumulative and delta reviewer packages' \
   'the shared contract positively excludes Rechecked reasoning from both package types'
 for package in "$cumulative" "$delta"; do
-  has "$package" \
-    'Candidate identity.*Mechanically exact.*Full trusted contract.*Binding Standards input.*Validation-surface manifest.*Qualifying raw validation evidence' \
-    'the reviewer package retains its enumerated contract and evidence slots'
+  for slot in \
+    'Candidate identity' \
+    'Mechanically exact' \
+    'Full trusted contract' \
+    'Binding Standards input' \
+    'Validation-surface manifest' \
+    'Qualifying raw validation evidence'; do
+    has "$package" \
+      "(^|[[:space:]])-[[:space:]]+[^:]*$slot[^:]*:" \
+      "the reviewer package enumerates $slot"
+  done
+  lacks "$package" \
+    '(^|[[:space:]])-[[:space:]]+([*][*]|`)?Rechecked:([*][*]|`)?([[:space:]]|$)' \
+    'the reviewer package does not enumerate Rechecked as a field'
 done
 
 ## Self-checking remains implementation work rather than another review stage.

@@ -221,9 +221,10 @@ This route does not pass through `references/normative-remediation.md`.
 
 Complete this self-check in the working tree before commit; the last commit
 remains the mechanically identified candidate. For a qualifying post-gate
-Corrective batch, both this self-check and the existing
-`references/normative-remediation.md` checkpoint must be complete before
-commit; that reference retains ownership of its contract.
+Corrective batch, complete this self-check before applying the existing
+`references/normative-remediation.md` checkpoint to the actual correction; both
+must be complete before commit, and that reference retains ownership of its
+contract.
 
 Keep `Rechecked:` rationale, applicability declarations, conclusions, and
 correction reasoning in primary-side working state, excluded from cumulative
