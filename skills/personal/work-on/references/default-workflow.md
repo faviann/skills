@@ -309,13 +309,11 @@ prior reset confers no exemption, suppression, one-shot status, or other special
 standing.
 
 Before dispatching the accepted blockers, apply
-`references/normative-remediation.md` to determine whether the Corrective batch
-contains at least one qualifying unit. If it does, identify every qualifying
-unit and record its Authority delta to accompany the adjudicated directives at
-dispatch; do not ask the delegate to pre-answer the entitlement analysis. If the
-batch contains no qualifying unit, proceed through ordinary remediation without
-an Authority delta, semantic-reader package, or semantic challenge; this branch
-never widens into general remediation review.
+`references/normative-remediation.md` to predict provisionally which units of
+the Corrective batch qualify. Where at least one does, record its Authority
+delta to accompany the adjudicated directives at dispatch; do not ask the
+delegate to pre-answer the entitlement analysis. That prediction never settles
+entitlement, and this branch never widens into general remediation review.
 
 Batch all accepted blockers from one gate, with any Authority deltas, back to
 the initial implementation delegate through the harness's supported continuation
@@ -325,18 +323,20 @@ the retained implementation delegate keeps its `Risks:` channel and authority
 relationship unchanged. Run affected focused checks under the same Candidate and
 Validation identity rule, applying `references/validation-evidence.md`.
 
-Before committing the exact current candidate, if the batch contains at least
-one qualifying unit, launch one fresh semantic reader for the batch, handling
-every qualifying unit in one invocation. Keep that reader blind to expected
-semantics until its independent interpretation completes. Resolve
-`INSUFFICIENT_CONTEXT` and reconcile any material mismatch through
+Before committing the exact current candidate, reconcile qualification against
+the correction the delegate actually produced, through
+`references/normative-remediation.md`. Where the reconciled qualifying set is
+non-empty, launch one fresh semantic reader for the batch, handling every
+qualifying unit in one invocation. Keep that reader blind to expected semantics
+until its independent interpretation completes. Resolve `INSUFFICIENT_CONTEXT`
+and reconcile any material mismatch through
 `references/normative-remediation.md`. An unresolved challenge means the
 qualifying correction is not committed as though the challenge passed; take the
 settled escalation, `Progresses`, or `failed` route. Only a completed challenge
 permits committing the normative correction as the candidate reviewed by the
-next delta gate. A batch with no qualifying unit proceeds to commit through the
-existing workflow without launching a semantic reader or constructing a
-semantic-reader package.
+next delta gate. Where the reconciled qualifying set is empty, the batch
+proceeds to commit through the existing workflow without launching a semantic
+reader or constructing a semantic-reader package.
 
 Apply the remediation delta loop and fresh cumulative confirmation in
 `references/review-state-machine.md`. Run no full regression in the remediation

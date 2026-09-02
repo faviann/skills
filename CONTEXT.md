@@ -99,8 +99,8 @@ One automatic, accepted-blocker-driven correction after the initial cumulative g
 _Avoid_: finding, review round, validation run, remediation attempt
 
 **Authority delta**:
-The primary's pre-dispatch record of the current and intended governing meaning of every qualifying normative correction, the constraints that survive it, and the bounded related authority considered. It exposes the primary's semantic model for an independent challenge; it is not durable review or lifecycle state.
-_Avoid_: semantic diff, remediation rationale, authority-site inventory
+The primary's record of the current and intended governing meaning of every qualifying normative correction, the constraints that survive it, and the bounded related authority considered. Its intended meaning comes from the adjudicated directive and the authority at the **Reviewed anchor**, never from the correction the retained implementation delegate produced. It exposes the primary's semantic model for an independent challenge; it is not durable review or lifecycle state.
+_Avoid_: semantic diff, remediation rationale, authority-site inventory, Authority-delta variants (provisional, reconciled, final)
 
 **Pre-candidate semantic challenge**:
 The fresh blind reading of a qualifying Corrective batch's bounded BEFORE/AFTER authority, performed before the normative correction is committed as the candidate reviewed by the next delta gate. It derives governing consequences independently of the primary's expected semantics and is a pre-commit checkpoint, not a review axis.
