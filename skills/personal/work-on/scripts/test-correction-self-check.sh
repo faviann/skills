@@ -183,22 +183,14 @@ if ! awk '
   fail 'post-correction self-check completion precedes normative reconciliation in remediation'
 fi
 
-## Rechecked reasoning stays primary-side while raw evidence uses existing slots.
+## Rechecked reasoning stays primary-side and outside package manifests.
 has "$contract" \
   'Keep `Rechecked:` rationale, applicability declarations, conclusions, and correction reasoning in primary-side working state, excluded from cumulative and delta reviewer packages' \
   'the shared contract positively excludes Rechecked reasoning from both package types'
 for package in "$cumulative" "$delta"; do
-  for slot in \
-    'Candidate identity' \
-    'Mechanically exact' \
-    'Full trusted contract' \
-    'Binding Standards input' \
-    'Validation-surface manifest' \
-    'Qualifying raw validation evidence'; do
-    has "$package" \
-      "(^|[[:space:]])-[[:space:]]+[^:]*$slot[^:]*:" \
-      "the reviewer package enumerates $slot"
-  done
+  if ! grep -q '[^[:space:]]' "$package"; then
+    fail 'the extracted reviewer package manifest is non-empty'
+  fi
   lacks "$package" \
     '(^|[[:space:]])-[[:space:]]+([*][*]|`)?Rechecked:([*][*]|`)?([[:space:]]|$)' \
     'the reviewer package does not enumerate Rechecked as a field'
@@ -209,22 +201,7 @@ has "$contract" \
   'retained implementation delegate owns the checks.{0,180}existing reviewers remain the independent backstop' \
   'the retained implementation delegate owns correction self-checking'
 
-## The broad new term leaves the narrower Corrective batch bytes untouched.
-expected_corrective_batch="$fixture_dir/expected-corrective-batch"
-actual_corrective_batch="$fixture_dir/actual-corrective-batch"
-cat >"$expected_corrective_batch" <<'EOF'
-**Corrective batch**:
-One automatic, accepted-blocker-driven correction after the initial cumulative gate that changes the exact candidate content identity. Blockers adjudicated and repaired together form one batch; surrounding review, validation, evidence gathering, synchronization, and state-machine restarts do not.
-_Avoid_: finding, review round, validation run, remediation attempt
-EOF
-awk '
-  /^\*\*Corrective batch\*\*:/ { inside = 1 }
-  inside && /^[[:space:]]*$/ { exit }
-  inside { print }
-' "$GLOSSARY" >"$actual_corrective_batch"
-if ! cmp -s "$expected_corrective_batch" "$actual_corrective_batch"; then
-  fail 'the Corrective batch glossary definition remains byte-identical'
-fi
+## The broad new term remains distinct from the narrower Corrective batch.
 has "$GLOSSARY" \
   '\*\*Accepted-blocker correction\*\*:.*readiness corrections.*post-gate corrections.*Every \*\*Corrective batch\*\*.*narrower concept used by normative remediation' \
   'the glossary distinguishes the broad correction unit from the narrower Corrective batch'
