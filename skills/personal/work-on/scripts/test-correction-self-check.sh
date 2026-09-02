@@ -155,7 +155,7 @@ has "$contract" \
   'existing closeout rules directly.{0,300}does not pass through `references/normative-remediation.md`' \
   'correction-self-check closeout routing bypasses normative remediation'
 
-## Existing normative remediation composes after the broader self-check.
+## Existing normative remediation composes with the broader self-check.
 has "$contract" \
   'Complete this self-check in the working tree before commit.{0,180}qualifying post-gate Corrective batch.{0,120}both this self-check and the existing `references/normative-remediation.md` checkpoint must be complete before commit' \
   'qualifying post-gate corrections complete both pre-commit obligations'

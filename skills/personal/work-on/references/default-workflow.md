@@ -211,8 +211,8 @@ independent backstop.
 - An explicitly unresolved required check blocks commit. First revise or reshape
   the correction, narrow its claim, replace its mechanism, or try another way to
   satisfy the blocker.
-- Once every required check is established, the correction may proceed to the
-  other applicable existing pre-commit obligations and then commit.
+- Once every required check is established, this self-check no longer blocks
+  commit; all other applicable existing pre-commit obligations still apply.
 
 Only when no advancing correction can be produced, use the existing closeout
 rules directly: reach ordinary `Progresses` with a safe, independently useful
