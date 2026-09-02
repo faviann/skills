@@ -311,20 +311,19 @@ standing.
 Before dispatching the accepted blockers, apply
 `references/normative-remediation.md` to determine whether the Corrective batch
 contains at least one qualifying unit. If it does, identify every qualifying
-unit and record its Authority delta. Then give the retained implementation
-delegate the adjudicated directives and any Authority deltas; keep its `Risks:`
-channel and authority relationship unchanged, and do not ask it to pre-answer
-the entitlement analysis. If the batch contains no qualifying unit, proceed
-through ordinary remediation without an Authority delta, semantic-reader
-package, or semantic challenge; this branch never widens into general
-remediation review.
+unit and record its Authority delta to accompany the adjudicated directives at
+dispatch; do not ask the delegate to pre-answer the entitlement analysis. If the
+batch contains no qualifying unit, proceed through ordinary remediation without
+an Authority delta, semantic-reader package, or semantic challenge; this branch
+never widens into general remediation review.
 
-Batch all accepted blockers from one gate back to the initial implementation
-delegate through the harness's supported continuation mechanism, applying the
-implementation-owner fallback in `SKILL.md`'s authority invariants when
-continuation is unavailable. Run affected focused checks under the same
-Candidate and Validation identity rule, applying
-`references/validation-evidence.md`.
+Batch all accepted blockers from one gate, with any Authority deltas, back to
+the initial implementation delegate through the harness's supported continuation
+mechanism, applying the implementation-owner fallback in `SKILL.md`'s authority
+invariants when continuation is unavailable. For every batch dispatched here,
+the retained implementation delegate keeps its `Risks:` channel and authority
+relationship unchanged. Run affected focused checks under the same Candidate and
+Validation identity rule, applying `references/validation-evidence.md`.
 
 Before committing the exact current candidate, if the batch contains at least
 one qualifying unit, launch one fresh semantic reader for the batch, handling

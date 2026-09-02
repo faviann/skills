@@ -110,8 +110,6 @@ echo 'ok - the Authority delta records its bounded semantic model without launde
 ## The retained implementation owner drafts; one new blind reader challenges.
 has "$CONTRACT" 'retained implementation delegate.*drafts.*Authority delta' \
   'the retained implementation owner drafts under the Authority delta'
-has "$CONTRACT" 'retains.*`Risks:`.*authority relationship' \
-  'the implementation owner retains its Risks channel and authority relationship'
 has "$CONTRACT" 'not asked to (pre-answer|perform).*entitlement' \
   'the implementation owner does not pre-answer the challenge'
 has "$CONTRACT" 'one fresh (semantic )?reader per.*batch.*every.*qualifying unit.*one invocation' \
@@ -126,8 +124,12 @@ has "$WORKFLOW" \
 has "$WORKFLOW" \
   'no qualifying unit.*without an Authority delta, semantic-reader package, or semantic challenge.*never widens into general remediation review' \
   'a non-qualifying batch proceeds without an empty challenge or general review'
-has "$WORKFLOW" 'retained implementation delegate.*adjudicated directives.*Authority deltas.*`Risks:`.*authority relationship.*not ask.*entitlement' \
-  'the workflow preserves the retained delegate handoff and Risks channel'
+has "$WORKFLOW" \
+  'references/normative-remediation.md.*qualifying unit.*Authority delta.*not ask the delegate to pre-answer the entitlement analysis' \
+  'the normative branch prepares only the Authority delta and entitlement boundary'
+has "$WORKFLOW" \
+  'Batch all accepted blockers.*retained implementation delegate keeps its `Risks:` channel and authority relationship' \
+  'the common corrective dispatch owns the retained-delegate Risks and authority invariant'
 cross_batch_state_pattern='(must|shall|required to).{0,120}(retain|reuse|persist|carry|share).{0,120}(semantic )?reader.{0,80}(across|between).{0,40}batch|cross-batch.{0,80}(semantic[- ]reader|reader).{0,80}(state|memory|ledger|history)'
 for source in "$SKILL" "$WORKFLOW" "$CONTRACT" "$EVAL"; do
   lacks "$source" "$cross_batch_state_pattern" \
