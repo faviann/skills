@@ -12,6 +12,8 @@ Evidence may move to a legitimately available surface that exposes the observati
 
 A mechanical determination carries only the meaning and consequence granted by its authoritative mechanical definition and governing contract. If a consequence is not itself mechanically determined, the governing review or adjudication process decides it.
 
+A deterministic check protecting an agent-facing contract is also bounded by what its assertions may enforce. The last step before such a check is done is the **shadow contract** pass from [`writing-for-agents`](../../skills/productivity/writing-for-agents/SKILL.md)'s pruning section, applied to every assertion the check makes.
+
 Keep one authoritative mechanical definition. Executable checks consume that authority; prose does not independently reimplement its predicate. When tests of the mechanism are warranted, exercise its supported interface and externally observable effects without creating a competing implementation of the predicate. Independent expected values and test oracles remain valid.
 
 An authoritative schema can establish `required field missing`; observing one implementation does not itself establish `speculative abstraction`.
@@ -37,7 +39,3 @@ There is one shell-test set. It includes the repository-level reconciliation sui
 The `Shell tests` workflow runs the full set on every pull request, without path filters. Most changes are prose, but skill behavior often spans instructions and scripts, and the current few-minute runtime is cheap enough to keep the trigger simple and complete.
 
 A failing suite fails the `Shell tests` job: it is not advisory and must be green before merge. Repository merge rules should require that check; the workflow deliberately has no `continue-on-error` escape hatch.
-
-## Test authority
-
-Most suites here guard agent-facing instructions — a skill's wording, a reference's shape. The last step before such a check is done is the **shadow contract** pass from [`writing-for-agents`](../../skills/productivity/writing-for-agents/SKILL.md)'s pruning section, applied to every assertion the check makes.
