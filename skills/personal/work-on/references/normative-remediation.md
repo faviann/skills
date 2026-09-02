@@ -40,10 +40,10 @@ absent from the unit is under-slice/site-discovery evidence, not a semantic
 challenge failure.
 
 The retained implementation delegate drafts the correction under the Authority
-delta. It retains its `Risks:` channel and authority relationship and reports
-conflicts between the directive and repository authority. It is not asked to
-pre-answer the entitlement analysis; its answer is not a substitute for the
-fresh reader's interpretation.
+delta, retaining the `Risks:` channel and authority relationship the corrective
+dispatch preserves, and reports conflicts between the directive and repository
+authority. It is not asked to pre-answer the entitlement analysis; its answer is
+not a substitute for the fresh reader's interpretation.
 
 ## Semantic unit
 
