@@ -142,12 +142,14 @@ parse_index() {
 }
 
 # A pinned endpoint must resolve to exactly itself and to its separately
-# supplied tree. Nothing canonicalizes a live ref into an endpoint.
+# supplied tree. Nothing canonicalizes a live ref into an endpoint, and
+# replacement objects are disabled so a replace ref cannot rebind a pinned
+# commit to another commit's tree.
 resolve_endpoint() {
   local label="$1" commit="$2" tree="$3"
-  [[ "$(git rev-parse --verify --quiet "${commit}^{commit}" 2>/dev/null)" == "$commit" ]] || fail "$label commit identity is not a canonical full object identity in this repository"
-  [[ "$(git rev-parse --verify --quiet "${tree}^{tree}" 2>/dev/null)" == "$tree" ]] || fail "$label tree identity is not a canonical full object identity in this repository"
-  [[ "$(git rev-parse --verify --quiet "${commit}^{tree}" 2>/dev/null)" == "$tree" ]] || fail "$label commit does not resolve to its declared tree"
+  [[ "$(git --no-replace-objects rev-parse --verify --quiet "${commit}^{commit}" 2>/dev/null)" == "$commit" ]] || fail "$label commit identity is not a canonical full object identity in this repository"
+  [[ "$(git --no-replace-objects rev-parse --verify --quiet "${tree}^{tree}" 2>/dev/null)" == "$tree" ]] || fail "$label tree identity is not a canonical full object identity in this repository"
+  [[ "$(git --no-replace-objects rev-parse --verify --quiet "${commit}^{tree}" 2>/dev/null)" == "$tree" ]] || fail "$label commit does not resolve to its declared tree"
 }
 
 check_member_custody() {
@@ -221,6 +223,7 @@ do_create() {
   done
 
   package_root="$(umask 077 && mktemp -d "${TMPDIR:-/tmp}/work-on-review-index.XXXXXX")"
+  [[ "$package_root" == /* ]] || package_root="$PWD/$package_root"
   mkdir -- "$package_root/components"
   chmod 700 "$package_root" "$package_root/components"
 

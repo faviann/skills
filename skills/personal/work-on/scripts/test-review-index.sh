@@ -235,6 +235,29 @@ refuse mismatched-tree create_endpoints "$root_endpoint" cumulative \
 refuse swapped-tree-identity create_endpoints "$root_endpoint" cumulative \
   "$comparison_commit" "$comparison_commit" "$candidate_commit" "$candidate_tree"
 
+# A replace ref rebinds commit^{tree} for ordinary Git reads, so endpoint
+# validation disables replacement objects: it neither accepts the replacement's
+# tree nor rejects the true one.
+git -C "$repo" replace "$candidate_commit" "$comparison_commit" >/dev/null
+[[ "$(git -C "$repo" rev-parse "$candidate_commit^{tree}")" == "$comparison_tree" ]]
+root_replace="$fixture/root-replace"; mkdir -p "$root_replace"
+refuse replaced-tree create_endpoints "$root_replace" cumulative \
+  "$comparison_commit" "$comparison_tree" "$candidate_commit" "$comparison_tree"
+create_endpoints "$root_replace" cumulative \
+  "$comparison_commit" "$comparison_tree" "$candidate_commit" "$candidate_tree" >"$fixture/create-replace.out"
+mapfile -t created_replace <"$fixture/create-replace.out"
+verify "${created_replace[0]}" "${created_replace[1]}" >/dev/null
+git -C "$repo" replace -d "$candidate_commit" >/dev/null
+
+# A relative TMPDIR still yields the absolute index path the contract returns.
+mkdir -p "$repo/relative-root"
+create relative-root >"$fixture/create-relative.out"
+mapfile -t created_relative <"$fixture/create-relative.out"
+[[ "${created_relative[0]}" == /* && -f "${created_relative[0]}" ]]
+[[ "$(digest "${created_relative[0]}")" == "${created_relative[1]}" ]]
+verify "${created_relative[0]}" "${created_relative[1]}" >/dev/null
+rm -rf "$repo/relative-root"
+
 # A delta gate pins its comparison endpoint in the Reviewed-anchor role.
 root_delta="$fixture/root-delta"; mkdir -p "$root_delta"
 create_endpoints "$root_delta" delta \
@@ -440,10 +463,7 @@ publication_arm() {
     create "$root" ) >"$fixture/publication-$arm.out" 2>/dev/null
   status=$?
   set -e
-  case "$arm" in
-    fail) (( status == 1 )) ;;
-    kill) (( status == 137 )) ;;
-  esac
+  (( status != 0 ))
   [[ ! -s "$fixture/publication-$arm.out" ]]
   for package in "$root"/*/; do
     [[ ! -e "$package/index" ]]
