@@ -154,8 +154,9 @@ to the retained implementation delegate, including readiness and post-gate
 corrections. Readiness corrections receive this self-check without becoming
 Corrective batches or acquiring normative-remediation qualification.
 
-For each accepted-blocker correction continuation, extend the retained
-implementation delegate's ordinary return to:
+For every accepted-blocker correction round, extend the implementation owner's
+ordinary return to the following shape, whether the existing mechanism
+continues the retained context or uses its fresh-delegate fallback:
 
 ```text
 Changed:
@@ -193,20 +194,20 @@ Apply these checks:
    and report the result. Do not extend this to every falsifiable universal
    claim.
 3. **Claimed behavior versus observed validation surface — when focused
-   validation is offered as proof.** Name the claim, the actual surface through
-   which it was observed, and the outcome; assert that the named surface can
-   establish the named claim. A helper or private seam establishes broader
-   public or contract behavior only when the governing contract makes that seam
-   authoritative. Repository testing guidance may strengthen this rule. Keep
-   the validation result in `Evidence:` rather than duplicating it here.
+   validation is offered as proof.** In `Rechecked:`, name the claim and actual
+   observed surface, then state whether that surface can or cannot establish the
+   claim. A helper or private seam establishes broader public or contract
+   behavior only when the governing contract makes that seam authoritative.
+   Repository testing guidance may strengthen this rule. Keep the validation
+   execution and result in `Evidence:`.
 
 The retained implementation delegate owns the checks. The primary enforces that
 required information is present and applicability is accounted for, without
 technically adjudicating the conclusions; existing reviewers remain the
 independent backstop.
 
-- Missing required information returns to the same retained implementation
-  delegate through ordinary continuation for completion.
+- Missing or incomplete required information returns through the existing
+  implementation-owner mechanism for completion.
 - An explicitly unresolved required check blocks commit. First revise or reshape
   the correction, narrow its claim, replace its mechanism, or try another way to
   satisfy the blocker.
@@ -220,10 +221,9 @@ This route does not pass through `references/normative-remediation.md`.
 
 Complete this self-check in the working tree before other applicable pre-commit
 mechanisms; the last commit remains the mechanically identified candidate. A
-qualifying post-gate Corrective batch also completes
-`references/normative-remediation.md` before commit. This workflow owns the
-sequence; that reference retains normative qualification, Authority-delta,
-reconciliation, semantic-challenge, and unresolved-challenge semantics.
+qualifying post-gate Corrective batch additionally completes the existing
+`references/normative-remediation.md` checkpoint before commit; that reference
+retains ownership of its contract.
 
 Keep `Rechecked:` rationale, applicability declarations, conclusions, and
 correction reasoning in primary-side working state, excluded from cumulative

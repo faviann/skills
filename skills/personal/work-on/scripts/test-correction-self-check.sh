@@ -80,21 +80,19 @@ has "$SKILL" \
   'SKILL binds every workflow to the correction-scoped self-check before advancement'
 lacks "$SKILL" 'Rechecked:' \
   'SKILL does not prescribe the default workflow return field'
-echo 'ok - the authority invariant is shape-agnostic'
 
 ## One shared contract owns the concrete correction-only return.
 has "$contract" \
   'accepted-blocker correction.*readiness and post-gate corrections' \
   'the shared contract covers both accepted-blocker correction regions'
 has "$contract" \
-  'each Accepted-blocker correction continuation.{0,180}ordinary return' \
-  'accepted-blocker correction continuations add Rechecked to the ordinary return'
+  'every accepted-blocker correction round.{0,180}implementation owner.s ordinary return.{0,180}continues the retained context.{0,120}fresh-delegate fallback' \
+  'every correction round uses Rechecked through continuation or the existing fallback'
 has "$contract" 'Changed:.*Evidence:.*Rechecked:.*Unverified:.*Risks:' \
   'the correction return has the existing channels plus Rechecked'
 has "$contract" \
   'initial implementation and bounded coherence pass keep the unchanged return above' \
   'initial implementation and coherence completion keep their existing return'
-echo 'ok - Rechecked is a correction-only return extension'
 
 ## Applicability is discovered once before dispatch and again from implementation.
 has "$contract" \
@@ -113,7 +111,6 @@ for path in "$readiness" "$remediation"; do
     '(shared )?(correction )?self-check.s pre-commit completion rule' \
     'each correction path reaches the shared pre-commit completion rule'
 done
-echo 'ok - both entry paths preserve the two applicability discovery times'
 
 ## Repository standards are correction-specific on every correction.
 has "$contract" 'Correction-specific repository standards.{0,60}every correction' \
@@ -125,7 +122,6 @@ has "$contract" 'Bare `standards: checked`-style boilerplate is insufficient' \
   'bare standards boilerplate cannot satisfy the contract'
 has "$contract" 'reads repository standards directly' \
   'the delegate reads correction-specific standards from the repository'
-echo 'ok - every correction receives the bounded standards check'
 
 ## The adversarial check retains its narrow population boundary.
 has "$contract" \
@@ -136,23 +132,19 @@ has "$contract" \
   'an applicable adversarial check exercises a plausible counterexample'
 has "$contract" 'Do not extend this to every falsifiable universal claim' \
   'the adversarial check does not widen to every universal claim'
-echo 'ok - adversarial applicability is narrow and population-boundary based'
 
 ## Validation offered as proof names both what it proves and where it observed it.
 has "$contract" \
-  'Name the claim, the actual surface through which it was observed, and the outcome' \
-  'validation-surface reasoning names the claim, observed surface, and outcome'
+  'In `Rechecked:`, name the claim and actual observed surface, then state whether that surface can or cannot establish the claim' \
+  'Rechecked records the claim, observed surface, and capability assessment'
 has "$contract" \
-  'named surface can establish the named claim' \
-  'the delegate asserts the observed surface can establish the claim'
-has "$contract" 'validation result in `Evidence:` rather than duplicating it here' \
-  'the result remains in Evidence rather than being copied into Rechecked'
-echo 'ok - validation proof is tied to a capable observed surface'
+  'validation execution and result in `Evidence:`' \
+  'validation execution and results remain in Evidence'
 
 ## Completion returns missing work and blocks unresolved corrections before closeout.
 has "$contract" \
-  'Missing required information returns to the same retained implementation delegate through ordinary continuation' \
-  'missing self-check information returns to the retained delegate'
+  'Missing or incomplete required information returns through the existing implementation-owner mechanism for completion' \
+  'missing self-check information reuses the continuation-or-fallback owner mechanism'
 has "$contract" \
   'explicitly unresolved required check blocks commit.{0,220}revise or reshape.{0,180}narrow.{0,120}replace.{0,120}another way' \
   'an unresolved check blocks commit while ordinary correction remains the first route'
@@ -162,35 +154,26 @@ has "$contract" \
 has "$contract" \
   'existing closeout rules directly.{0,300}does not pass through `references/normative-remediation.md`' \
   'correction-self-check closeout routing bypasses normative remediation'
-echo 'ok - transition behavior revises first and reaches existing closeout only when needed'
 
 ## Existing normative remediation composes after the broader self-check.
 has "$contract" \
-  'Complete this self-check in the working tree before other applicable pre-commit mechanisms.{0,180}Corrective batch also completes `references/normative-remediation.md` before commit' \
+  'Complete this self-check in the working tree before other applicable pre-commit mechanisms.{0,200}Corrective batch additionally completes the existing `references/normative-remediation.md` checkpoint before commit' \
   'qualifying post-gate corrections complete both pre-commit mechanisms in order'
 has "$contract" \
-  'reference retains normative qualification, Authority-delta, reconciliation, semantic-challenge, and unresolved-challenge semantics' \
+  'reference retains ownership of its contract' \
   'normative-remediation ownership remains in its existing reference'
-echo 'ok - correction self-checking composes with normative remediation without absorbing it'
 
 ## Rechecked reasoning stays primary-side while raw evidence uses existing slots.
 has "$contract" \
   'Keep `Rechecked:` rationale, applicability declarations, conclusions, and correction reasoning in primary-side working state, excluded from cumulative and delta reviewer packages' \
   'the shared contract positively excludes Rechecked reasoning from both package types'
 for package in "$cumulative" "$delta"; do
-  for slot in \
-    'Candidate identity' \
-    'Mechanically exact' \
-    'Full trusted contract' \
-    'Binding Standards input' \
-    'Validation-surface manifest' \
-    'Qualifying raw validation evidence'; do
-    has "$package" "$slot" "the reviewer package enumerates $slot"
-  done
+  has "$package" \
+    'Candidate identity.*Mechanically exact.*Full trusted contract.*Binding Standards input.*Validation-surface manifest.*Qualifying raw validation evidence' \
+    'the reviewer package retains its enumerated contract and evidence slots'
   lacks "$package" 'Rechecked:' \
     'the enumerated reviewer package has no Rechecked slot'
 done
-echo 'ok - reviewer packages remain blind to Rechecked conclusions'
 
 ## Self-checking remains implementation work rather than another review stage.
 has "$contract" \
@@ -198,7 +181,6 @@ has "$contract" \
   'the retained implementation delegate owns correction self-checking'
 lacks "$contract" '(fresh|independent) (self-check )?(reviewer|review axis|review stage)' \
   'the shared contract introduces no independent self-check review stage'
-echo 'ok - the retained implementation delegate owns the self-check'
 
 ## The broad new term leaves the narrower Corrective batch bytes untouched.
 expected_corrective_batch="$fixture_dir/expected-corrective-batch"
@@ -219,7 +201,6 @@ fi
 has "$GLOSSARY" \
   '\*\*Accepted-blocker correction\*\*:.*readiness corrections.*post-gate corrections.*Every \*\*Corrective batch\*\*.*narrower concept used by normative remediation' \
   'the glossary distinguishes the broad correction unit from the narrower Corrective batch'
-echo 'ok - Accepted-blocker correction is broader and Corrective batch is unchanged'
 
 if (( failures > 0 )); then
   printf '\n%s correction-self-check assertion(s) failed.\n' "$failures" >&2
