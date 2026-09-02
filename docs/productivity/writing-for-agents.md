@@ -64,7 +64,6 @@ No — finding the word that packs the most behaviour into the fewest [tokens](h
 - You can point at a leading word and watch it doing work in more than one place.
 - Nothing is stated twice, in any form. Duplication is the most reliable sign a document was never tested.
 - Reference that only one branch needs sits behind a pointer rather than in the main file.
-- A test guarding the document fails on a broken contract, not on a rewrite that still honours it.
 
 ## Where it fits
 
