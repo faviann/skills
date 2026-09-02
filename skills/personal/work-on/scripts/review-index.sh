@@ -2,12 +2,14 @@
 set -euo pipefail
 export LC_ALL=C
 
-# One Review-index package per review gate. Creation publishes an owner-only
-# temporary package whose index is written last: the index's presence at its
-# final path is the single commit point that distinguishes a complete package
-# from staged components. Every reader authenticates a private snapshot of the
-# bytes it is about to act on, so no operation hashes one object and then acts
-# on another.
+# One Review-index package per review gate. Creation materializes every
+# component into an owner-only temporary package and then places the index at
+# its final path: that placement is the publication boundary. Successful
+# creation additionally requires the full package verification to pass before
+# it returns the index path and expected SHA-256, so the existence of a package
+# proves no verification or lifecycle result on its own. Every reader
+# authenticates a private snapshot of the bytes it is about to act on, so no
+# operation hashes one object and then acts on another.
 
 readonly singleton_roles=(
   trusted-contract
@@ -45,17 +47,36 @@ check_regular() {
   [[ -f "$1" && ! -L "$1" && -r "$1" && "$(stat -c '%a' "$1" 2>/dev/null)" == 600 ]] || fail "package member $1 is missing or unsafe"
 }
 
+# The one definition of the canonical v1 serialization. Creation emits the index
+# through it, and parsing reconstructs the index through it, so the format has a
+# single source of truth.
+emit_canonical_index() {
+  local entry role locator member_digest
+  printf 'work-on-review-index/v1\n'
+  printf 'gate-kind %s\n' "$index_gate_kind"
+  printf 'comparison-role %s\n' "$index_comparison_role"
+  printf 'comparison-commit %s\n' "$index_comparison_commit"
+  printf 'comparison-tree %s\n' "$index_comparison_tree"
+  printf 'candidate-commit %s\n' "$index_candidate_commit"
+  printf 'candidate-tree %s\n' "$index_candidate_tree"
+  for entry in "${index_members[@]}"; do
+    read -r role locator member_digest <<<"$entry"
+    printf 'component %s %s %s\n' "$role" "$locator" "$member_digest"
+  done
+}
+
 # Authenticate the index and parse its shape. Both readers call this, so the
 # schema has one definition. Every check reads the authenticated snapshot,
 # never the index pathname, so the bytes that were hashed are the bytes that
 # govern.
 index_package_root=""
+index_gate_kind=""; index_comparison_role=""
 index_comparison_commit=""; index_comparison_tree=""
 index_candidate_commit=""; index_candidate_tree=""
 index_members=()
 parse_index() {
   local index_path="$1" expected_index_sha="$2"
-  local gate_kind comparison_role role locator_digest member_digest
+  local index_snapshot canonical role locator_digest member_digest
   local previous_digest="" position
   local -a index_lines=()
 
@@ -65,16 +86,17 @@ parse_index() {
   check_directory "$index_package_root"
   check_regular "$index_path"
   capture "$index_path"
-  [[ "$(digest_of "$captured_snapshot")" == "$expected_index_sha" ]] || fail 'index identity does not match the supplied SHA-256'
+  index_snapshot="$captured_snapshot"
+  [[ "$(digest_of "$index_snapshot")" == "$expected_index_sha" ]] || fail 'index identity does not match the supplied SHA-256'
 
-  mapfile -t index_lines <"$captured_snapshot"
+  mapfile -t index_lines <"$index_snapshot"
   [[ "${index_lines[0]:-}" == 'work-on-review-index/v1' ]] || fail 'index schema version is missing or unsupported'
   (( ${#index_lines[@]} >= 7 + ${#singleton_roles[@]} )) || fail 'index is missing required members'
 
   [[ "${index_lines[1]}" =~ ^gate-kind\ (cumulative|delta)$ ]] || fail 'gate kind is missing or unknown'
-  gate_kind="${BASH_REMATCH[1]}"
+  index_gate_kind="${BASH_REMATCH[1]}"
   [[ "${index_lines[2]}" =~ ^comparison-role\ (comparison-base|reviewed-anchor)$ ]] || fail 'comparison role is missing or unknown'
-  comparison_role="${BASH_REMATCH[1]}"
+  index_comparison_role="${BASH_REMATCH[1]}"
   [[ "${index_lines[3]}" =~ ^comparison-commit\ ([0-9a-f]{40,64})$ ]] || fail 'comparison commit identity is missing or malformed'
   index_comparison_commit="${BASH_REMATCH[1]}"
   [[ "${index_lines[4]}" =~ ^comparison-tree\ ([0-9a-f]{40,64})$ ]] || fail 'comparison tree identity is missing or malformed'
@@ -84,7 +106,7 @@ parse_index() {
   [[ "${index_lines[6]}" =~ ^candidate-tree\ ([0-9a-f]{40,64})$ ]] || fail 'candidate tree identity is missing or malformed'
   index_candidate_tree="${BASH_REMATCH[1]}"
 
-  case "$gate_kind:$comparison_role" in
+  case "$index_gate_kind:$index_comparison_role" in
     cumulative:comparison-base|delta:reviewed-anchor) ;;
     *) fail 'gate kind and comparison role disagree' ;;
   esac
@@ -107,6 +129,16 @@ parse_index() {
     previous_digest="$locator_digest"
     index_members+=("evidence components/evidence/$locator_digest $member_digest")
   done
+
+  # Bash cannot hold every byte a file can: mapfile truncates a line at an
+  # embedded NUL, so a schema check over the parsed strings alone would accept
+  # bytes the file never contained. Reconstructing the canonical index and
+  # comparing bytes proves the authenticated snapshot is exactly the canonical
+  # representation of the parsed v1 object, newline termination included.
+  canonical="$(umask 077 && mktemp "${TMPDIR:-/tmp}/work-on-review-index-canonical.XXXXXX")"
+  snapshots+=("$canonical")
+  emit_canonical_index >"$canonical"
+  cmp -s "$canonical" "$index_snapshot" || fail 'index is not the canonical v1 byte representation of its members'
 }
 
 # A pinned endpoint must resolve to exactly itself and to its separately
@@ -217,22 +249,22 @@ do_create() {
     mapfile -t evidence_digests < <(printf '%s\n' "${evidence_digests[@]}" | sort)
   fi
 
+  index_gate_kind="$gate_kind"
+  index_comparison_role="$comparison_role"
+  index_comparison_commit="$comparison_commit"
+  index_comparison_tree="$comparison_tree"
+  index_candidate_commit="$candidate_commit"
+  index_candidate_tree="$candidate_tree"
+  index_members=()
+  for role in "${singleton_roles[@]}"; do
+    index_members+=("$role components/$role $(digest_of "$package_root/components/$role")")
+  done
+  for evidence_digest in ${evidence_digests[@]+"${evidence_digests[@]}"}; do
+    index_members+=("evidence components/evidence/$evidence_digest $evidence_digest")
+  done
+
   staged_index="$package_root/.index"
-  {
-    printf 'work-on-review-index/v1\n'
-    printf 'gate-kind %s\n' "$gate_kind"
-    printf 'comparison-role %s\n' "$comparison_role"
-    printf 'comparison-commit %s\n' "$comparison_commit"
-    printf 'comparison-tree %s\n' "$comparison_tree"
-    printf 'candidate-commit %s\n' "$candidate_commit"
-    printf 'candidate-tree %s\n' "$candidate_tree"
-    for role in "${singleton_roles[@]}"; do
-      printf 'component %s components/%s %s\n' "$role" "$role" "$(digest_of "$package_root/components/$role")"
-    done
-    for evidence_digest in ${evidence_digests[@]+"${evidence_digests[@]}"}; do
-      printf 'component evidence components/evidence/%s %s\n' "$evidence_digest" "$evidence_digest"
-    done
-  } >"$staged_index"
+  emit_canonical_index >"$staged_index"
   chmod 600 "$staged_index"
   index_sha="$(digest_of "$staged_index")"
 

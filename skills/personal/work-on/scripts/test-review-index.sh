@@ -189,6 +189,27 @@ mutate_index() {
 mutate_index unsupported-version sed '1s|/v1$|/v2|'
 mutate_index missing-version sed '1d'
 mutate_index unknown-header sed '2i extra-key value'
+
+# Parsing must prove the authenticated snapshot is the canonical byte
+# representation. Bash normalizes bytes a file can hold: mapfile truncates a
+# line at an embedded NUL, so a schema check over the parsed strings alone
+# would accept a token the index never carried. Each malformed index below is
+# supplied with its own SHA-256, so only byte-canonical parsing can reject it.
+rewrite_index() {
+  local label="$1"; shift
+  scratch_package "$label"
+  "$@" >"$fixture/rewritten-$label"
+  cat "$fixture/rewritten-$label" >"${scratch[0]}"
+  refuse "$label" verify "${scratch[0]}" "$(digest "${scratch[0]}")"
+}
+embedded_nul() {
+  head -n 1 "${scratch[0]}"
+  printf 'gate-kind cumulative\000\n'
+  tail -n +3 "${scratch[0]}"
+}
+unterminated() { printf '%s' "$(cat "${scratch[0]}")"; }
+rewrite_index embedded-nul embedded_nul
+rewrite_index unterminated-index unterminated
 mutate_index missing-header sed '7d'
 mutate_index reordered-header awk '{l[NR]=$0} END{print l[1]; print l[3]; print l[2]; for(i=4;i<=NR;i++) print l[i]}'
 mutate_index missing-role sed '/^component standards /d'
@@ -394,9 +415,9 @@ fi
 [[ ! -s "$fixture/replaced-read" ]]
 
 
-# The index is the commit point. Failing or interrupting its publication in the
-# real creation path leaves no successful result and nothing accepted as a
-# complete package.
+# Placing the index at its final path is the publication boundary. Failing or
+# interrupting the real creation path there leaves no returned identity and
+# nothing that verifies.
 mkdir -p "$fixture/publication-bin"
 cat >"$fixture/publication-bin/mv" <<'SH'
 #!/usr/bin/env bash
@@ -430,7 +451,7 @@ publication_arm() {
       [[ -e "$leftover" ]] || continue
       if (cd "$repo" && "$review_index" verify --index "$leftover" \
           --index-sha256 "$(digest "$leftover")") >/dev/null 2>&1; then
-        printf 'review index: an unpublished %s package was accepted\n' "$arm" >&2; exit 1
+        printf 'review index: an unpublished %s index was accepted\n' "$arm" >&2; exit 1
       fi
     done
   done
