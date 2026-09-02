@@ -63,16 +63,29 @@ extract_h2_section() {
   ' "$source" >"$output"
 }
 
+extract_text_manifest() {
+  local source="$1" output="$2"
+  awk '
+    $0 == "```text" { inside = 1; next }
+    inside && $0 == "```" { exit }
+    inside { print }
+  ' "$source" >"$output"
+}
+
 contract="$fixture_dir/correction-contract"
 readiness="$fixture_dir/readiness"
 remediation="$fixture_dir/remediation"
-cumulative="$fixture_dir/cumulative-package"
-delta="$fixture_dir/delta-package"
+cumulative_section="$fixture_dir/cumulative-package-section"
+delta_section="$fixture_dir/delta-package-section"
+cumulative="$fixture_dir/cumulative-package-manifest"
+delta="$fixture_dir/delta-package-manifest"
 extract_section "$WORKFLOW" '### Accepted-blocker correction self-check' "$contract"
 extract_h2_section "$WORKFLOW" 'Primary checkpoint' "$readiness"
 extract_h2_section "$WORKFLOW" 'Adjudicate and remediate through delta review' "$remediation"
-extract_section "$STATE" '### Cumulative-review package' "$cumulative"
-extract_section "$STATE" '### Delta-review package' "$delta"
+extract_section "$STATE" '### Cumulative-review package' "$cumulative_section"
+extract_section "$STATE" '### Delta-review package' "$delta_section"
+extract_text_manifest "$cumulative_section" "$cumulative"
+extract_text_manifest "$delta_section" "$delta"
 
 ## The cross-workflow invariant stays representation-agnostic.
 has "$SKILL" \
