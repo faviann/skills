@@ -147,6 +147,90 @@ Unverified:
 Risks:
 ```
 
+### Accepted-blocker correction self-check
+
+An accepted-blocker correction is any accepted-blocker-driven correction routed
+to the retained implementation delegate, including readiness and post-gate
+corrections. Readiness corrections receive this self-check without becoming
+Corrective batches or acquiring normative-remediation qualification.
+
+For each accepted-blocker correction continuation, extend the retained
+implementation delegate's ordinary return to:
+
+```text
+Changed:
+Evidence:
+Rechecked:
+Unverified:
+Risks:
+```
+
+The initial implementation and bounded coherence pass keep the unchanged return
+above. `Rechecked:` is only a labelled correction-return channel: keep focused
+validation results in `Evidence:`, uncertainty in `Unverified:` and `Risks:`,
+and the checks below in `Rechecked:`.
+
+Applicability has two discovery times. Before dispatch, the primary derives
+and dispatches minimum obligations already knowable from the accepted blocker
+using only information it owns. After implementing, the retained delegate
+accounts for additional applicability created by its chosen mechanism;
+`not applicable — <one-line reason>` is a valid delegate declaration. The
+primary preserves it for working traceability without adjudicating its technical
+conclusion.
+
+Apply these checks:
+
+1. **Correction-specific repository standards — every correction.** The
+   delegate reads repository standards directly and reports either named
+   correction-specific governing sources plus the outcome, or that no
+   correction-specific governing repository source was identified. Bare
+   `standards: checked`-style boilerplate is insufficient. This check does not
+   receive the reviewers' frozen Standards input or replace the Standards axis.
+2. **Adversarial negative or population-boundary check — when applicable.**
+   Apply only when correctness depends on absence, rejection, a forbidden case,
+   exhaustive enumeration, or population closure. Try at least one appropriate
+   plausible false candidate, contradiction, omitted member, or forbidden case
+   and report the result. Do not extend this to every falsifiable universal
+   claim.
+3. **Claimed behavior versus observed validation surface — when focused
+   validation is offered as proof.** Name the claim, the actual surface through
+   which it was observed, and the outcome; assert that the named surface can
+   establish the named claim. A helper or private seam establishes broader
+   public or contract behavior only when the governing contract makes that seam
+   authoritative. Repository testing guidance may strengthen this rule. Keep
+   the validation result in `Evidence:` rather than duplicating it here.
+
+The retained implementation delegate owns the checks. The primary enforces that
+required information is present and applicability is accounted for, without
+technically adjudicating the conclusions; existing reviewers remain the
+independent backstop.
+
+- Missing required information returns to the same retained implementation
+  delegate through ordinary continuation for completion.
+- An explicitly unresolved required check blocks commit. First revise or reshape
+  the correction, narrow its claim, replace its mechanism, or try another way to
+  satisfy the blocker.
+- Once every required check is established, the correction may proceed to the
+  other applicable existing pre-commit obligations and then commit.
+
+Only when no advancing correction can be produced, use the existing closeout
+rules directly: reach ordinary `Progresses` with a safe, independently useful
+narrowed candidate through the existing gates, or `failed` when none exists.
+This route does not pass through `references/normative-remediation.md`.
+
+Complete this self-check in the working tree before other applicable pre-commit
+mechanisms; the last commit remains the mechanically identified candidate. A
+qualifying post-gate Corrective batch also completes
+`references/normative-remediation.md` before commit. This workflow owns the
+sequence; that reference retains normative qualification, Authority-delta,
+reconciliation, semantic-challenge, and unresolved-challenge semantics.
+
+Keep `Rechecked:` rationale, applicability declarations, conclusions, and
+correction reasoning in primary-side working state, excluded from cumulative
+and delta reviewer packages. Qualifying raw validation evidence may still flow
+through `references/validation-evidence.md` into the package slots enumerated in
+`references/review-state-machine.md`.
+
 Give the readiness sweep, both `code-review` axes, and closure sweep this brief:
 after reproducing a defect, name its mechanism and governing criterion, then
 trace only its immediate neighborhood — the same boundary's branches, call
@@ -174,11 +258,14 @@ Candidate and Validation identity already settles their assurance question,
 run affected focused checks owned by Implementation or needed to settle the
 readiness question. Before the first commit, delegate one fresh
 raw-artifact readiness sweep; adjudicate it once and batch
-all blockers back to the initial implementation delegate through the harness's
+all blockers. Apply the Accepted-blocker correction self-check's dispatch rule
+to derive and include any directive-known minimum obligations, then send the
+batch back to the initial implementation delegate through the harness's
 supported continuation mechanism, applying the implementation-owner fallback
 in `SKILL.md`'s authority invariants when continuation is unavailable. Re-check
-affected evidence, then commit normally; each later round adds a commit (no
-amend or squash).
+the returned correction through that shared self-check's pre-commit completion
+rule, then re-check affected evidence and commit normally; each later round
+adds a commit (no amend or squash).
 
 After readiness corrections are complete and the commit stabilizes the exact
 Candidate and Validation identity, execute the remaining direct evidence owned
@@ -308,7 +395,9 @@ Later remediation evaluates both entries anew from its own working context. A
 prior reset confers no exemption, suppression, one-shot status, or other special
 standing.
 
-Before dispatching the accepted blockers, apply
+Before dispatching the accepted blockers, apply the Accepted-blocker correction
+self-check's dispatch rule to derive and include any directive-known minimum
+obligations. Then apply
 `references/normative-remediation.md` to predict provisionally which units of
 the Corrective batch qualify. Where at least one does, identify every predicted
 unit and record its Authority delta to accompany the adjudicated directives at
@@ -321,8 +410,10 @@ the initial implementation delegate through the harness's supported continuation
 mechanism, applying the implementation-owner fallback in `SKILL.md`'s authority
 invariants when continuation is unavailable. For every batch dispatched here,
 the retained implementation delegate keeps its `Risks:` channel and authority
-relationship unchanged. Run affected focused checks under the same Candidate and
-Validation identity rule, applying `references/validation-evidence.md`.
+relationship unchanged. Apply the shared correction self-check's pre-commit
+completion rule to the returned correction, then run affected focused checks
+under the same Candidate and Validation identity rule, applying
+`references/validation-evidence.md`.
 
 Before committing the exact current candidate, perform qualification
 reconciliation against the actual correction through

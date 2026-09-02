@@ -18,6 +18,9 @@ Authority invariants (bind regardless of workflow):
   primary.
 - Adjudicate every review finding against the contract before delegation; never
   forward raw findings.
+- Require every accepted-blocker correction by the retained implementation
+  delegate to carry its applicable correction-scoped self-check before it
+  advances; the selected workflow owns representation and sequencing.
 - Delegate the initial implementation to a fresh subagent, retain its harness
   target or identifier, and keep it as implementation owner through
   remediation. Send accepted directives through the harness's supported
