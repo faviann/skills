@@ -212,7 +212,7 @@ independent backstop.
   the correction, narrow its claim, replace its mechanism, or try another way to
   satisfy the blocker.
 - Once every required check is established, this self-check no longer blocks
-  commit; all other applicable existing pre-commit obligations still apply.
+  commit.
 
 Only when no advancing correction can be produced, use the existing closeout
 rules directly: reach ordinary `Progresses` with a safe, independently useful
