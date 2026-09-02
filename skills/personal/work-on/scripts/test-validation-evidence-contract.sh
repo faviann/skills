@@ -226,6 +226,9 @@ governing_surfaces=(
   "$SKILL"
   "$POLICY"
   "$WORKFLOW"
+  "$skill_dir/references/default-workflow/accepted-blocker-correction-self-check.md"
+  "$skill_dir/references/default-workflow/bounded-re-adjudication.md"
+  "$skill_dir/references/default-workflow/implementation-mechanism-reset.md"
   "$CLOSEOUT"
   "$skill_dir/references/closability-gate.md"
 )

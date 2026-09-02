@@ -10,7 +10,7 @@ work_on_root="$(cd -P -- "$script_root/.." && pwd -P)"
 skills_checkout="$(cd -P -- "$work_on_root/../../.." && pwd -P)"
 
 work_on_inputs=(skills/personal/work-on/SKILL.md skills/personal/work-on/references/closability-gate.md skills/personal/work-on/references/github-closeout.md skills/personal/work-on/references/normative-remediation.md skills/personal/work-on/references/review-state-machine.md skills/personal/work-on/references/validation-evidence.md skills/personal/work-on/scripts/manifest-identity.sh)
-default_workflow_inputs=(skills/personal/work-on/references/default-workflow.md)
+default_workflow_inputs=(skills/personal/work-on/references/default-workflow.md skills/personal/work-on/references/default-workflow/accepted-blocker-correction-self-check.md skills/personal/work-on/references/default-workflow/bounded-re-adjudication.md skills/personal/work-on/references/default-workflow/implementation-mechanism-reset.md)
 target_workflow_inputs=(docs/workflow.md)
 tdd_inputs=(skills/engineering/tdd/SKILL.md skills/engineering/tdd/mocking.md skills/engineering/tdd/tests.md)
 review_inputs=(skills/engineering/code-review/SKILL.md skills/engineering/code-review/WORK-ON-REVIEW.md)

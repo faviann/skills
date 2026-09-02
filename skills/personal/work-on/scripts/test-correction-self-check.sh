@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # The correction self-check is one portable instruction contract with two thin
-# workflow entry paths. Exercise that public seam without parsing runtime
+# workflow entry paths. Exercise that public seam against the contract's own
+# module plus the spine call sites that reach it, without parsing runtime
 # Rechecked prose or freezing incidental document layout.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,6 +11,7 @@ skill_dir="$(cd "$script_dir/.." && pwd)"
 
 SKILL="$skill_dir/SKILL.md"
 WORKFLOW="$skill_dir/references/default-workflow.md"
+CONTRACT="$skill_dir/references/default-workflow/accepted-blocker-correction-self-check.md"
 STATE="$skill_dir/references/review-state-machine.md"
 GLOSSARY="$skill_dir/../../../CONTEXT.md"
 
@@ -72,14 +74,18 @@ extract_text_manifest() {
   ' "$source" >"$output"
 }
 
-contract="$fixture_dir/correction-contract"
+contract="$CONTRACT"
 readiness="$fixture_dir/readiness"
 remediation="$fixture_dir/remediation"
 cumulative_section="$fixture_dir/cumulative-package-section"
 delta_section="$fixture_dir/delta-package-section"
 cumulative="$fixture_dir/cumulative-package-manifest"
 delta="$fixture_dir/delta-package-manifest"
-extract_section "$WORKFLOW" '### Accepted-blocker correction self-check' "$contract"
+[[ -f "$contract" ]] || {
+  fail 'the correction self-check has its own authoritative module'
+  printf '\n%s correction-self-check assertion(s) failed.\n' "$failures" >&2
+  exit 1
+}
 extract_h2_section "$WORKFLOW" 'Primary checkpoint' "$readiness"
 extract_h2_section "$WORKFLOW" 'Adjudicate and remediate through delta review' "$remediation"
 extract_section "$STATE" '### Cumulative-review package' "$cumulative_section"
@@ -123,6 +129,14 @@ for path in "$readiness" "$remediation"; do
   has "$path" \
     '(shared )?(correction )?self-check.s pre-commit completion rule' \
     'each correction path reaches the shared pre-commit completion rule'
+  has "$path" \
+    '`references/default-workflow/accepted-blocker-correction-self-check.md`' \
+    'each correction call site names the module that owns the contract'
+  has "$path" \
+    "content verbatim in the dispatch rather than its path" \
+    'each correction call site hands the delegate content instead of a path'
+  lacks "$path" 'Bare `standards: checked`|adversarial negative' \
+    'no call site restates the checks the module owns'
 done
 
 ## Repository standards are correction-specific on every correction.
@@ -179,7 +193,7 @@ if ! awk '
   /shared correction self-check.s pre-commit/ { self_check = NR }
   /reconciliation against the actual correction/ { normative = NR }
   END { exit !(self_check && normative && self_check < normative) }
-' "$remediation"; then
+' "$(flatten "$remediation")"; then
   fail 'post-correction self-check completion precedes normative reconciliation in remediation'
 fi
 
