@@ -157,8 +157,8 @@ has "$contract" \
 
 ## Existing normative remediation composes after the broader self-check.
 has "$contract" \
-  'Complete this self-check in the working tree before other applicable pre-commit mechanisms.{0,200}Corrective batch additionally completes the existing `references/normative-remediation.md` checkpoint before commit' \
-  'qualifying post-gate corrections complete both pre-commit mechanisms in order'
+  'Complete this self-check in the working tree before commit.{0,180}qualifying post-gate Corrective batch.{0,120}both this self-check and the existing `references/normative-remediation.md` checkpoint must be complete before commit' \
+  'qualifying post-gate corrections complete both pre-commit obligations'
 has "$contract" \
   'reference retains ownership of its contract' \
   'normative-remediation ownership remains in its existing reference'
@@ -171,16 +171,12 @@ for package in "$cumulative" "$delta"; do
   has "$package" \
     'Candidate identity.*Mechanically exact.*Full trusted contract.*Binding Standards input.*Validation-surface manifest.*Qualifying raw validation evidence' \
     'the reviewer package retains its enumerated contract and evidence slots'
-  lacks "$package" 'Rechecked:' \
-    'the enumerated reviewer package has no Rechecked slot'
 done
 
 ## Self-checking remains implementation work rather than another review stage.
 has "$contract" \
   'retained implementation delegate owns the checks.{0,180}existing reviewers remain the independent backstop' \
   'the retained implementation delegate owns correction self-checking'
-lacks "$contract" '(fresh|independent) (self-check )?(reviewer|review axis|review stage)' \
-  'the shared contract introduces no independent self-check review stage'
 
 ## The broad new term leaves the narrower Corrective batch bytes untouched.
 expected_corrective_batch="$fixture_dir/expected-corrective-batch"

@@ -219,11 +219,11 @@ rules directly: reach ordinary `Progresses` with a safe, independently useful
 narrowed candidate through the existing gates, or `failed` when none exists.
 This route does not pass through `references/normative-remediation.md`.
 
-Complete this self-check in the working tree before other applicable pre-commit
-mechanisms; the last commit remains the mechanically identified candidate. A
-qualifying post-gate Corrective batch additionally completes the existing
-`references/normative-remediation.md` checkpoint before commit; that reference
-retains ownership of its contract.
+Complete this self-check in the working tree before commit; the last commit
+remains the mechanically identified candidate. For a qualifying post-gate
+Corrective batch, both this self-check and the existing
+`references/normative-remediation.md` checkpoint must be complete before
+commit; that reference retains ownership of its contract.
 
 Keep `Rechecked:` rationale, applicability declarations, conclusions, and
 correction reasoning in primary-side working state, excluded from cumulative
