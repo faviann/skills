@@ -78,6 +78,14 @@ _Avoid_: acceptance surface, suite obligation, discharging command
 The run-local materialization of every acceptance criterion's **Validation surface**, frozen when the **Closability gate** passes after the trusted snapshot and selected workflow are read. Its recoverable identity binds the exact trusted snapshot and pre-implementation base; the selected workflow remains an invalidation input identified by **Workflow provenance**, and the manifest remains contract state for evidence rather than a limit on implementation or review scope.
 _Avoid_: acceptance-surface manifest
 
+**Review index**:
+The immutable per-gate manifest that binds the complete frozen inputs governing one review gate when it is dispatched. Every successor gate has a distinct Review index even when it reuses unchanged material; later outputs do not change it.
+_Avoid_: governing index, chain-wide index
+
+**Review artifact reuse**:
+Reuse of verified immutable frozen review material in a different Review index. It carries no reviewer conclusion, gate progress, or entitlement to resume a review chain.
+_Avoid_: review recovery, review resume
+
 **Owning phase**:
 The workflow-derived assignment of a definitely owed validation command or direct-evidence obligation to the phase that executes it. It is authored, load-bearing, and durable through the frozen obligation set in custody and the captured governing-instruction identity.
 _Avoid_: event phase tag, phase tag
@@ -143,6 +151,8 @@ _Avoid_: model kind, model family
 - A repository-local `work-on` label makes successful PR closeouts available for **PR-local observation**
 - A `work-on` run passes one **Closability gate** before it delegates implementation; an invocation that fails it hands back as `preflight-aborted`, has no **Run identity**, and never reaches the closure gate
 - A **Validation-surface manifest** materializes the required **Validation surfaces** when the **Closability gate** passes
+- A review gate has one **Review index**; successor gates have distinct Review indexes
+- **Review artifact reuse** may supply unchanged material to a different Review index but carries no review-chain state
 - A **Convergence episode** contains one or more causally connected logical `work-on` attempts, each of which may span several sessions or review chains
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
