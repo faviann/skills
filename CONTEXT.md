@@ -83,7 +83,7 @@ The immutable per-gate manifest that binds the complete frozen inputs governing 
 _Avoid_: governing index, chain-wide index
 
 **Review artifact reuse**:
-Reuse of verified immutable frozen review material in a different Review index. It carries no reviewer conclusion, gate progress, or entitlement to resume a review chain.
+Reuse of verified immutable frozen review material in a different Review index. It carries no reviewer conclusion, gate progress, or entitlement to resume a review chain. Reviewer continuity, where the review state machine authorizes it, is independent of this: every successor gate still receives a distinct Review index, and reused frozen material neither grants nor restores continuity.
 _Avoid_: review recovery, review resume
 
 **Owning phase**:
@@ -114,8 +114,16 @@ _Avoid_: architectural reset, minimal-mechanism guard, premise reset
 The analysis grouping of one logical `work-on` attempt — its sessions, continuation, review-chain restarts, synchronization, and ordinary resume, up to a durable outcome — together with its causally connected successor attempts, so corrective repetition stays visible when the work is picked up again. It is an observation boundary, not workflow state or an outcome.
 _Avoid_: retry chain, extended lifecycle, Convergence lifecycle
 
+**Convergence reviewer**:
+The reviewer holding one axis through a correction chain's successive delta gates, continued across them through the harness's native continuation mechanism. It is either the reviewer retained from the cumulative gate whose accepted blocker began the chain, or the fresh reviewer spawned for that axis when continuation was unavailable, which then holds the axis for the remainder of the lineage. It may retain its own prior axis-local investigation; it receives no other axis's conclusion and no adjudication state, its memory governs nothing, and a clean convergence chain never authorizes closeout. Unrelated to a **Convergence episode**, which is an observation boundary rather than workflow state.
+_Avoid_: persistent reviewer, retained triad, fresh reviewer (for this)
+
+**Confirmation reviewer**:
+An axis reviewer participating in a cumulative gate that must satisfy the freshness requirement. A **Convergence reviewer** may never become one: a target that participated in an earlier gate of the current review lineage cannot satisfy a later fresh cumulative-review requirement, though a Confirmation reviewer whose accepted blocker begins a correction chain may become a Convergence reviewer within it.
+_Avoid_: final reviewer, cumulative reviewer
+
 **Independent judgment**:
-A fresh reviewer's own assessment of the candidate, contract, and evidence, made without inheriting another participant's conclusions or dispositions.
+A reviewer's own assessment of the candidate, contract, and evidence, made without inheriting another participant's conclusions or dispositions. A **Convergence reviewer** may retain its own prior axis-local investigation across explicitly continued correction gates; a **Confirmation reviewer** additionally satisfies the applicable freshness requirement.
 _Avoid_: independent review execution
 
 **Independent execution**:
@@ -153,6 +161,8 @@ _Avoid_: model kind, model family
 - A **Validation-surface manifest** materializes the required **Validation surfaces** when the **Closability gate** passes
 - A review gate has one **Review index**; successor gates have distinct Review indexes
 - **Review artifact reuse** may supply unchanged material to a different Review index but carries no review-chain state
+- A **Convergence reviewer** is scoped to one review lineage under unchanged governing inputs; continuation is evaluated per axis, so a gate may mix continued and freshly spawned reviewers
+- A **Convergence reviewer** and a freshly spawned reviewer for the same axis and gate receive identical reviewer-visible governing inputs; continuation changes who reads a gate, never what governs it
 - A **Convergence episode** contains one or more causally connected logical `work-on` attempts, each of which may span several sessions or review chains
 - A **Decision ticket** is an **Issue** (a child of a `wayfinder:map`)
 - A **Map** is an **Issue**, and charts one effort toward its **Destination**
