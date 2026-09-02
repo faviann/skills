@@ -10,7 +10,12 @@ Abort if:
 
 References this workflow explicitly invokes are binding at their call site. Read
 a conditional reference when its call site is reached rather than preloading it
-at workflow startup.
+at workflow startup. Its bytes are part of this run's frozen instruction
+identity, so after the freeze verify the explicitly named Run identity with
+`scripts/manifest-identity.sh verify --run "$RUN_IDENTITY"` before consuming
+one. A mismatch takes the same fail-closed route as any other post-delegation
+custody verification failure under Validation-surface manifest custody; do not
+repair, refresh, or substitute the reference in-run.
 
 ## 1. Orient
 
@@ -300,10 +305,11 @@ the initial implementation delegate through the harness's supported
 continuation mechanism, applying the implementation-owner fallback in
 `SKILL.md`'s authority invariants when continuation is unavailable. For every
 batch dispatched here, the retained implementation delegate keeps its `Risks:`
-channel and authority relationship unchanged, and the dispatch also carries the
-Implementation-mechanism reset qualification above and that contract's delegate
-instruction as content rather than as a path, so a delegate that reaches a
-qualifying entry acts on it where it stands. Apply the shared correction
+channel and authority relationship unchanged. That delegate may itself reach a
+qualifying entry with no authorization round trip, so read
+`references/default-workflow/implementation-mechanism-reset.md` at this dispatch
+and supply it, together with the Implementation-mechanism reset qualification
+above, as content rather than as a path. Apply the shared correction
 self-check's pre-commit completion rule to the returned correction, then run
 affected focused checks under the same Candidate and Validation identity rule,
 applying `references/validation-evidence.md`.

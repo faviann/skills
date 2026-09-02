@@ -243,6 +243,35 @@ assert_has "$gate" 'No expectation argument, workflow sidecar, singleton ledger,
 assert_has "$gate" 'Run identity carries no repository binding'
 assert_has "$workflow_doc" 'explicitly named Run identity|--run.*RUN_IDENTITY'
 assert_has "$workflow_doc" 'manifest-identity\.sh verify --run'
+
+# Conditional references are read after the freeze, so the spine requires the
+# same custody verification before consuming one, and every module it names at
+# a call site sits inside the identity that verification checks. A call site
+# added for an undeclared module would read live bytes the frozen Run never
+# covered.
+assert_has "$workflow_doc" \
+  'conditional reference when its call site is reached rather than preloading'
+assert_has "$workflow_doc" \
+  "part of this run's frozen instruction identity.*verify the explicitly named Run identity"
+assert_has "$workflow_doc" \
+  'before consuming one.*mismatch takes the same fail-closed route'
+assert_has "$workflow_doc" \
+  'do not repair, refresh, or substitute the reference in-run'
+declared_inputs=" $(sed -n 's/^default_workflow_inputs=(\(.*\))$/\1/p' "$provenance") "
+[[ "$declared_inputs" =~ [^[:space:]] ]] || {
+  echo 'default_workflow_inputs is not an explicit list' >&2; exit 1; }
+mapfile -t cited_modules < <(
+  grep -o 'references/default-workflow/[A-Za-z0-9._-]*\.md' "$workflow_doc" | sort -u)
+(( ${#cited_modules[@]} > 0 )) || {
+  echo 'the workflow cites no conditional module' >&2; exit 1; }
+for cited in "${cited_modules[@]}"; do
+  [[ -f "$skill_dir/$cited" ]] || {
+    echo "the workflow cites a missing conditional module: $cited" >&2; exit 1; }
+  [[ "$declared_inputs" == *" skills/personal/work-on/$cited "* ]] || {
+    echo "a conditionally read module is outside the frozen workflow identity: $cited" >&2
+    exit 1
+  }
+done
 assert_lacks "$workflow_doc" 'singleton ledger|workflow sidecar|post-freeze.*captur|after freeze.*captur'
 
 # Closeout's authored input and validator surface remain deliberately small;
