@@ -85,10 +85,89 @@ has "$CONTRACT" 'status and lifecycle markers.*qualify' \
   'status and lifecycle markers remain governing propositions'
 echo 'ok - qualification is object-based and independent of expected semantic delta'
 
+## Entitlement follows the correction the delegate actually produced.
+has "$CONTRACT" 'qualification before dispatch is provisional' \
+  'pre-dispatch qualification is provisional rather than final'
+has "$CONTRACT" \
+  'entitlement is determined from the actual correction, for the exact current `Candidate identity`' \
+  'entitlement is settled against the exact current correction'
+has "$CONTRACT" \
+  'qualification may inspect the correction to determine which semantic units exist' \
+  'qualification may read the correction for which units exist'
+has "$CONTRACT" \
+  'Authority delta may not use the correction to determine what those units were intended to mean' \
+  'the Authority delta may not read the correction for intended meaning'
+has "$CONTRACT" \
+  'correction from the Reviewed anchor to the exact current `Candidate identity`' \
+  'the qualification evidence spans the Reviewed anchor to the current candidate'
+has "$CONTRACT" '`Changed:` channel is a locator only.{0,120}primary owns qualification' \
+  'the delegate locates changed material without owning the verdict'
+has "$CONTRACT" \
+  'bounded surrounding or frozen governing authority.{0,200}never becomes a cumulative reread of the candidate' \
+  'bounded widening classifies changed material without cumulative review'
+echo 'ok - qualification is evaluated against the exact current correction'
+
+## Reconciliation recomputes the qualifying set rather than accumulating it.
+has "$CONTRACT" 'recomputational, not additive' \
+  'reconciliation recomputes the qualifying set'
+has "$CONTRACT" \
+  'qualifies only because of what the delegate actually changed enters it' \
+  'implementation-induced qualifying units enter the reconciled set'
+has "$CONTRACT" \
+  'provisionally predicted unit the actual correction does not change leaves it' \
+  'an unrealized predicted unit leaves the reconciled set'
+has "$CONTRACT" \
+  'removal of a provisionally predicted unit establishes only that the actual correction does not change that unit' \
+  'removal is not evidence that a blocker or directive was satisfied'
+echo 'ok - reconciliation is recomputational and removal proves nothing about resolution'
+
+## One reconciliation, bound to one exact comparison, gates every commit.
+has "$CONTRACT" \
+  'any change to `Candidate identity` after the latest qualification reconciliation makes that reconciliation stale' \
+  'a changed candidate invalidates the previous reconciliation'
+has "$CONTRACT" \
+  'every commit of the batch, `Progresses` hand-backs included' \
+  'the commit condition covers Progresses hand-backs'
+has "$CONTRACT" \
+  'reconciliation bound to the exact pair of Reviewed anchor and current `Candidate identity`' \
+  'the reconciliation binds one exact comparison'
+has "$CONTRACT" \
+  'non-empty.{0,240}Authority delta.{0,140}covers the actual qualifying set.{0,140}semantic challenge has completed' \
+  'a non-empty reconciled set needs a covering Authority delta and a completed challenge'
+has "$CONTRACT" \
+  'empty.{0,200}no semantic-reader package or semantic challenge is required' \
+  'an empty reconciled set needs no package or challenge'
+has "$CONTRACT" 'no justification for the empty set is required' \
+  'the empty verdict needs no per-correction explanation'
+lacks "$WORKFLOW" 'launch one fresh semantic reader|launch a (new|fresh) (semantic )?reader' \
+  'the workflow never creates a reader itself, so staleness cannot compose into a second one'
+has "$CONTRACT" 'one fresh (semantic )?reader per.*batch' \
+  'reader lifecycle stays owned by the reference'
+echo 'ok - one reconciliation per exact Reviewed-anchor/candidate pair gates every commit'
+
+## Intended semantics come from authority, never from the delegate.s answer.
+has "$CONTRACT" \
+  'every creation or revision of.{0,160}intended resulting meaning.{0,160}derives from the adjudicated directive and the governing authority at the Reviewed anchor, never from the correction' \
+  'intended semantics derive from directive and Reviewed-anchor authority, on creation and revision'
+has "$CONTRACT" \
+  'determinately requires no semantic change.{0,160}preservation of that unit.s Reviewed-anchor meaning is the intended semantic position' \
+  'preservation is the default only where the directive determinately requires no change'
+has "$CONTRACT" 'selects nothing where.{0,180}several materially defensible consequences' \
+  'the preservation default does not resolve genuine ambiguity by fiat'
+lacks "$CONTRACT" 'immutable|mandatory restoration|must be restored' \
+  'no immutability or mandatory-restoration rule is introduced'
+echo 'ok - intended semantics are derived from authority rather than ratified from the correction'
+
+## Provisional state stays primary-side and the reader package is unchanged.
+has "$CONTRACT" \
+  'provisional qualification state and reconciliation history.{0,300}never enter the semantic-reader package' \
+  'provisional state and reconciliation history stay primary-side working material'
+echo 'ok - blindness and the existing reader and Authority-delta concepts are preserved'
+
 ## The Authority delta is complete without claiming open-ended site discovery.
 for required in \
   'governing proposition or relationship.*location' \
-  'current governing meaning' \
+  'governing meaning at the Reviewed anchor' \
   'intended resulting meaning.*including `none`' \
   'constraints expected to survive' \
   'related governing sites considered.*how they were identified'; do
@@ -108,8 +187,17 @@ done
 echo 'ok - the Authority delta records its bounded semantic model without laundering site completeness'
 
 ## The retained implementation owner drafts; one new blind reader challenges.
-has "$CONTRACT" 'retained implementation delegate.*drafts.*Authority delta' \
-  'the retained implementation owner drafts under the Authority delta'
+has "$CONTRACT" \
+  'an Authority delta entry exists at dispatch, the retained implementation delegate drafts the correction under it' \
+  'the retained implementation owner drafts under an Authority delta that exists at dispatch'
+has "$CONTRACT" \
+  'first discovered as qualifying during qualification.{0,180}drafted before its Authority delta entry existed' \
+  'a newly discovered qualifying unit is not held to an impossible drafting precondition'
+has "$CONTRACT" \
+  'records that entry from the adjudicated directive and Reviewed-anchor authority before the unit enters the semantic challenge' \
+  'a newly discovered unit.s Authority delta entry precedes its semantic challenge'
+has "$CONTRACT" 'the `Risks:` channel and authority relationship the corrective dispatch preserves' \
+  'the reference defers the retained-delegate Risks channel to the common corrective dispatch'
 has "$CONTRACT" 'not asked to (pre-answer|perform).*entitlement' \
   'the implementation owner does not pre-answer the challenge'
 has "$CONTRACT" 'one fresh (semantic )?reader per.*batch.*every.*qualifying unit.*one invocation' \
@@ -118,15 +206,28 @@ has "$CONTRACT" 'new agent each batch|never retained across batches' \
   'reader context is never carried across batches'
 lacks "$CONTRACT" 'cross-batch (reader|semantic-reader) (state|memory|ledger|history)' \
   'M4-shaped cross-batch reader state is not introduced'
+lacks "$WORKFLOW" \
+  'apply `references/normative-remediation.md` to determine whether the Corrective batch contains at least one qualifying unit' \
+  'the pre-dispatch pass no longer settles reader entitlement'
+has "$WORKFLOW" 'before dispatching the accepted blockers.{0,200}provisional' \
+  'the pre-dispatch qualification pass is explicitly provisional'
+has "$WORKFLOW" 'identify every predicted unit and record its Authority delta' \
+  'the dispatch-time delta still covers every predicted unit'
 has "$WORKFLOW" \
-  'if the batch contains at least one qualifying unit, launch one fresh semantic reader.*handling every qualifying unit in one invocation' \
-  'reader launch is conditional on a qualifying batch and covers all its units'
-has "$WORKFLOW" \
-  'no qualifying unit.*without an Authority delta, semantic-reader package, or semantic challenge.*never widens into general remediation review' \
-  'a non-qualifying batch proceeds without an empty challenge or general review'
-has "$WORKFLOW" \
-  'references/normative-remediation.md.*qualifying unit.*Authority delta.*not ask the delegate to pre-answer the entitlement analysis' \
+  'references/normative-remediation.md.*provisional.*Authority delta.*not ask the delegate to pre-answer the entitlement analysis' \
   'the normative branch prepares only the Authority delta and entitlement boundary'
+has "$WORKFLOW" \
+  'before committing the exact current candidate, perform qualification reconciliation.{0,300}non-empty, satisfy that reference.s semantic checkpoint for every qualifying unit before commit' \
+  'the pre-commit checkpoint is invoked, and gated on the reconciled qualifying set'
+has "$WORKFLOW" \
+  'set is empty, proceed without a semantic-reader package or semantic challenge' \
+  'an empty reconciled set keeps the cheap remediation path'
+has "$WORKFLOW" 'never widens into general remediation review' \
+  'the normative branch never becomes general remediation review'
+for owned in 'recomputational' 'may not use the correction to determine'; do
+  lacks "$WORKFLOW" "$owned" \
+    'the workflow invokes the reference instead of restating its invariant'
+done
 has "$WORKFLOW" \
   'Batch all accepted blockers.*retained implementation delegate keeps its `Risks:` channel and authority relationship' \
   'the common corrective dispatch owns the retained-delegate Risks and authority invariant'
@@ -225,10 +326,13 @@ has "$CONTRACT" \
   'only after interpretation.*compare.*expected.*derived|compare.*expected.*derived.*only after interpretation' \
   'the primary compares expected and derived meaning only after interpretation'
 has "$CONTRACT" \
-  'reconcile.*material mismatch.*delegate revises.*before commit|material mismatch.*reconcile.*delegate revises.*before commit' \
+  'reconcile every material semantic mismatch.*delegate revises before\s*commit' \
   'material mismatches return to the implementation owner before commit'
 has "$CONTRACT" 'cannot state.*semantic change.*does not dispatch exact wording' \
   'exact wording cannot substitute for the primary.s understanding'
+has "$CONTRACT" \
+  'complete the slice, open a follow-up Issue and flag it at closeout, or escalate genuine maintainer wording judgment' \
+  'the existing deferral route is unchanged'
 has "$CONTRACT" 'named acceptance criterion.*false or unverifiable.*`Progresses` or `failed`' \
   'required contract work cannot be deferred to a silent follow-up'
 has "$WORKFLOW" 'unresolved challenge.*not committed.*escalation.*`Progresses`.*`failed`' \
@@ -248,8 +352,6 @@ has "$CONTRACT" 'never reuse.*review-axis agent' \
   'the semantic reader is never reused in a review lane'
 has "$CONTRACT" 'existence and output never enter.*cumulative or delta package' \
   'the semantic reader is fenced from the review chain'
-has "$WORKFLOW" 'one fresh semantic reader.*every qualifying unit.*one invocation' \
-  'the workflow preserves the fresh-reader batch fence'
 for protected in "$STATE" "$CLOSABILITY" "$EVIDENCE"; do
   lacks "$protected" 'Authority delta|Pre-candidate semantic challenge|normative-remediation' \
     'the mechanism does not enter protected authority'
@@ -263,6 +365,13 @@ has "$GLOSSARY" '^\*\*Pre-candidate semantic challenge\*\*:' \
   'the glossary defines Pre-candidate semantic challenge'
 lacks "$GLOSSARY" '^\*\*Before the normative correction is committed' \
   'the sequencing boundary is ordinary prose rather than a glossary headword'
+lacks "$GLOSSARY" '\*\*Authority delta\*\*:.{0,140}pre-dispatch' \
+  'the Authority delta is no longer defined by dispatch sequencing'
+has "$GLOSSARY" \
+  '\*\*Authority delta\*\*:.{0,400}adjudicated directive and the authority at the \*\*Reviewed anchor\*\*, never from the correction' \
+  'the Authority delta carries the derivation-source guarantee instead'
+lacks "$GLOSSARY" '\*\*Authority delta\*\*:.{0,500}independently derived' \
+  'the Authority delta avoids colliding with the Independent judgment and execution headwords'
 echo 'ok - the two mechanism names have normal glossary treatment'
 
 ## The static and behavioral instruments stay distinct from issue 102.

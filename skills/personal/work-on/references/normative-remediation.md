@@ -1,9 +1,9 @@
 # Normative remediation
 
-This reference owns the qualification, Authority delta, semantic unit, blind
-reader package, materiality test, and unresolved-challenge routing for a
-Corrective batch. It adds a pre-commit checkpoint; it owns no review gate,
-Reviewed anchor, or durable lifecycle state.
+This reference owns the qualification and its reconciliation, Authority delta,
+semantic unit, blind reader package, materiality test, and unresolved-challenge
+routing for a Corrective batch. It adds a pre-commit checkpoint; it owns no
+review gate, Reviewed anchor, or durable lifecycle state.
 
 ## Qualification
 
@@ -18,13 +18,56 @@ Descriptive and history-only material does not qualify merely because it lives
 in an authoritative file. The proposition is the unit. Status and lifecycle
 markers qualify because whether an authority still binds is governing meaning.
 
+## Qualification reconciliation
+
+Qualification before dispatch is provisional. Entitlement is determined from the
+actual correction, for the exact current `Candidate identity`, before that batch
+is committed.
+
+Qualification may inspect the correction to determine which semantic units
+exist. The Authority delta may not use the correction to determine what those
+units were intended to mean.
+
+The correction from the Reviewed anchor to the exact current `Candidate
+identity` is the evidence for what changed; within a Corrective batch no delta
+gate completes, so that comparison spans the whole batch correction rather than
+the latest revision alone. The delegate's `Changed:` channel is a locator only
+and never the basis of the verdict; the primary owns qualification. Widen into
+bounded surrounding or frozen governing authority where changed material cannot
+otherwise be classified; this never becomes a cumulative reread of the
+candidate.
+
+Reconciliation is recomputational, not additive. Recompute the qualifying set
+from the complete current correction, so a unit that qualifies only because of
+what the delegate actually changed enters it and a provisionally predicted unit
+the actual correction does not change leaves it. Removal of a provisionally
+predicted unit establishes only that the actual correction does not change that
+unit; it does not establish that the corresponding accepted blocker or
+adjudicated directive has been satisfied, which the existing accepted-blocker
+machinery continues to own.
+
+Any change to `Candidate identity` after the latest qualification reconciliation
+makes that reconciliation stale. Every commit of the batch, `Progresses`
+hand-backs included, requires a reconciliation bound to the exact pair of
+Reviewed anchor and current `Candidate identity`. Where the reconciled set is
+non-empty, commit only once the Authority delta for that same comparison covers
+the actual qualifying set and the required semantic challenge has completed.
+Where the reconciled set is empty, record that empty set against the same pair;
+no semantic-reader package or semantic challenge is required, and no
+justification for the empty set is required.
+
+Provisional qualification state and reconciliation history are primary-side run
+working-record material, on the same footing as the primary's untransmitted
+reason for a declined supplement. They are not durable state, and they never
+enter the semantic-reader package.
+
 ## Authority delta
 
-Before dispatch, the primary records one Authority delta covering every
-qualifying unit in the batch and containing, for each:
+The primary records one Authority delta covering every qualifying unit in the
+batch and containing, for each:
 
 - the governing proposition or relationship and its location;
-- its current governing meaning;
+- its governing meaning at the Reviewed anchor;
 - the intended resulting meaning, including `none`;
 - the constraints expected to survive; and
 - the related governing sites considered and how they were identified.
@@ -39,11 +82,23 @@ the primary found every governing site. A later omission caused by authority
 absent from the unit is under-slice/site-discovery evidence, not a semantic
 challenge failure.
 
-The retained implementation delegate drafts the correction under the Authority
-delta, retaining the `Risks:` channel and authority relationship the corrective
-dispatch preserves, and reports conflicts between the directive and repository
-authority. It is not asked to pre-answer the entitlement analysis; its answer is
-not a substitute for the fresh reader's interpretation.
+Every creation or revision of a unit's intended resulting meaning and expected
+surviving constraints derives from the adjudicated directive and the governing
+authority at the Reviewed anchor, never from the correction. Where the
+adjudicated directive determinately requires no semantic change to a unit,
+preservation of that unit's Reviewed-anchor meaning is the intended semantic
+position; that default selects nothing where the directive and Reviewed-anchor
+authority admit several materially defensible consequences.
+
+Where an Authority delta entry exists at dispatch, the retained implementation
+delegate drafts the correction under it, retaining the `Risks:` channel and
+authority relationship the corrective dispatch preserves, and reports conflicts
+between the directive and repository authority. It is not asked to pre-answer
+the entitlement analysis; its answer is not a substitute for the fresh reader's
+interpretation. A unit first discovered as qualifying during qualification
+reconciliation may have been drafted before its Authority delta entry existed.
+The primary records that entry from the adjudicated directive and
+Reviewed-anchor authority before the unit enters the semantic challenge.
 
 ## Semantic unit
 
@@ -144,13 +199,13 @@ the challenge passed; take the settled escalation, `Progresses`, or `failed`
 route. Supplementation never ratchets toward the full trusted contract. There is
 no numeric supplementation limit.
 
-## Reconcile before candidate commit
+## Semantic reconciliation before candidate commit
 
 The semantic challenge is a blocking pre-commit checkpoint. Only after
 interpretation completes does the primary compare its expected semantics with
-the derived semantics. Reconcile every material mismatch; where reconciliation
-requires a correction, the retained implementation delegate revises before
-commit and the qualifying unit is challenged again.
+the derived semantics. Reconcile every material semantic mismatch; where that
+reconciliation requires a correction, the retained implementation delegate
+revises before commit and the qualifying unit is challenged again.
 
 Where the primary cannot state the intended semantic change safely, it does not
 dispatch exact wording as a substitute for understanding. Complete the slice,
