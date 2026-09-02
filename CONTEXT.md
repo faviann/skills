@@ -94,6 +94,10 @@ _Avoid_: event phase tag, phase tag
 The exact **Candidate identity** from which the next remediation delta is computed after all review axes required for that candidate have completed under unchanged governing inputs. The initial cumulative gate establishes the first Reviewed anchor; subsequent completed delta gates may advance it. It does not imply that the candidate is clean, accepted, or eligible for closeout.
 _Avoid_: approved candidate, clean baseline
 
+**Accepted-blocker correction**:
+Any accepted-blocker-driven correction routed to the retained implementation delegate, including readiness corrections and post-gate corrections. Every **Corrective batch** lies in its post-gate region, while readiness corrections make this the broader concept; **Corrective batch** remains the narrower concept used by normative remediation.
+_Avoid_: remediation correction (for the broader concept), Corrective batch (for a readiness correction)
+
 **Corrective batch**:
 One automatic, accepted-blocker-driven correction after the initial cumulative gate that changes the exact candidate content identity. Blockers adjudicated and repaired together form one batch; surrounding review, validation, evidence gathering, synchronization, and state-machine restarts do not.
 _Avoid_: finding, review round, validation run, remediation attempt
