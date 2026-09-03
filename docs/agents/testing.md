@@ -14,6 +14,12 @@ A mechanical determination carries only the meaning and consequence granted by i
 
 A deterministic check protecting an agent-facing contract is also bounded by what its assertions may enforce. The last step before such a check is done is the **shadow contract** pass from [`writing-for-agents`](../../skills/productivity/writing-for-agents/SKILL.md)'s pruning section, applied to every assertion the check makes.
 
+Before adding or keeping such an assertion, establish that it protects an authoritative mechanical predicate or an externally observable effect. Being able to grep or parse semantic prose does not make that prose mechanically authoritative; leave such properties to review unless the contract explicitly makes their representation authoritative.
+
+Apply the **compliant-variation test**: would the assertion still pass after a contract-preserving change to wording, formatting, naming, or source layout? If not, loosen or remove it unless that representation is explicitly contractual.
+
+Vocabulary denylists are not substitutes for semantic or architectural rules. If a property cannot be checked without inventing machinery or a shadow specification, leave it to review.
+
 Keep one authoritative mechanical definition. Executable checks consume that authority; prose does not independently reimplement its predicate. When tests of the mechanism are warranted, exercise its supported interface and externally observable effects without creating a competing implementation of the predicate. Independent expected values and test oracles remain valid.
 
 An authoritative schema can establish `required field missing`; observing one implementation does not itself establish `speculative abstraction`.
