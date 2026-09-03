@@ -24,7 +24,7 @@ cleanup() { (( ${#snapshots[@]} == 0 )) || rm -f -- "${snapshots[@]}"; }
 trap cleanup EXIT
 
 fail() { printf 'review index: %s\n' "$1" >&2; exit 1; }
-usage() { fail 'usage: review-index.sh create --gate-kind KIND --comparison-commit OID --comparison-tree OID --candidate-commit OID --candidate-tree OID --trusted-contract FILE --review-assignment FILE --validation-evidence-policy FILE --standards FILE --validation-surface-manifest FILE [--evidence FILE]... | verify --index PATH --index-sha256 SHA256 | read --index PATH --index-sha256 SHA256 --role ROLE [--evidence-sha256 SHA256]'; }
+usage() { fail 'usage: review-index.sh create --gate-kind KIND --comparison-commit OID --comparison-tree OID --candidate-commit OID --candidate-tree OID --trusted-contract FILE --review-assignment FILE --validation-evidence-policy FILE --standards FILE --validation-surface-manifest FILE [--evidence FILE]... | verify --index PATH --index-sha256 SHA256 | read --index PATH --index-sha256 SHA256 --role ROLE [--evidence-sha256 SHA256] | changed-paths --index PATH --index-sha256 SHA256'; }
 
 digest_of() { sha256sum <"$1" | cut -d' ' -f1; }
 
@@ -325,10 +325,26 @@ do_verify() {
   verify_package "$2" "$4"
 }
 
+# The one pinned changed-path derivation. The whole package verifies first, so
+# no inventory is emitted for an index that does not authenticate. The
+# comparison is exactly the two pinned trees, with the ambient behaviors that
+# can drop or rewrite an entry disabled at the invocation: replacement objects,
+# rename inference, submodule ignoring, and relative narrowing. Its
+# NUL-separated output carries each path literally. Nothing is stored: every
+# axis derives the same complete inventory from the same pinned trees, so no
+# artifact can become a second changed-path authority.
+do_changed_paths() {
+  (( $# == 4 )) && [[ "$1" == --index && "$3" == --index-sha256 ]] || usage
+  verify_package "$2" "$4" >/dev/null
+  git --no-replace-objects diff --no-renames --ignore-submodules=none \
+    --no-relative --name-only -z "$index_comparison_tree" "$index_candidate_tree"
+}
+
 subcommand="${1:-}"; shift || true
 case "$subcommand" in
   create) do_create "$@" ;;
   verify) do_verify "$@" ;;
   read) do_read "$@" ;;
+  changed-paths) do_changed_paths "$@" ;;
   *) usage ;;
 esac

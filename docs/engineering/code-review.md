@@ -4,7 +4,7 @@
 
 The two axes are never merged and never re-ranked. The report ends with a worst issue *per axis* and refuses to name a single winner across them, because a change can pass one axis and fail the other: code that follows every convention while implementing the wrong thing passes Standards and fails Spec; code that does exactly what the [ticket](https://www.aihero.dev/ai-coding-dictionary/ticket) asked while breaking the repo's conventions does the reverse. A blended verdict lets the passing axis hide the failing one. Each reviewer currently reports in under 600 words; that limit is an interim setting pending a separate evidence-backed reassessment, not a settled optimum.
 
-An orchestrator such as `work-on` can instead pin the exact comparison and current Candidates, frozen contract, frozen Standards input, raw evidence, and review scope. In that mode those inputs replace normal fixed-point, commit-message, spec, and standards discovery. `code-review` uses them directly and performs only Standards and Spec judgment. The Standards input still includes the exact applicable repository standards and the complete Fowler baseline with its repo-overrides and judgement-call rules.
+An orchestrator such as `work-on` can instead pin one immutable Review index per review gate: its identity binds the exact comparison and Candidate identities together with the frozen contract, Standards input, manifest, policy, and evidence records that govern that gate. In that mode the index replaces normal fixed-point, commit-message, spec, and standards discovery. Each axis starts from only the frozen components its own obligation needs — Standards from the Standards input, Spec from the contract — reads the complete changed-path inventory from the pinned trees, and can widen to any other frozen component the question in front of it requires. Nothing similarly named and live substitutes for a component that will not verify. The Standards input still includes the exact applicable repository standards and the complete Fowler baseline with its repo-overrides and judgement-call rules.
 
 ## When to reach for it
 
@@ -79,13 +79,13 @@ No. It diffs `<fixed-point>...HEAD`, three-dot, which is measured from the merge
 
 **Can it review only a remediation delta?**
 
-Yes, when a workflow supplies that exact comparison and its bounded review scope as pinned inputs. Both reviewers still judge against the full contract, while normal commit-list and live-source discovery is skipped. The workflow—not `code-review`—owns the delta state and blindness rules.
+Yes, when a workflow supplies that exact comparison and its bounded review scope in the gate's Review index. Both reviewers still judge against the full contract, while normal commit-list and live-source discovery is skipped. The workflow—not `code-review`—owns the delta state and blindness rules.
 
 ## It's working if
 
 - It refuses to start on a bad ref or an empty diff, before any sub-agent is spawned.
 - The report arrives as two separate blocks under `## Standards` and `## Spec`, not one merged list.
-- In pinned mode, both axes receive the same exact comparison, Candidate, governing inputs, evidence, and scope.
+- In pinned mode, both axes receive the same Review-index identity and the same pinned comparison and Candidate identities, and each report says whether it came back `COMPLETE` or `INCOMPLETE`.
 - Every Standards finding names either a rule in one of your repo's files or one of the twelve smells, with the hunk quoted; every Spec finding quotes a line of the spec.
 - The closing summary gives a worst issue per axis and declines to pick an overall winner.
 - With no spec available, the Spec block says so instead of listing requirements it inferred from the code.

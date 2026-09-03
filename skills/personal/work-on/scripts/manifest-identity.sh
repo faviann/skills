@@ -11,7 +11,7 @@ cleanup() { [[ -z "$staging_dir" ]] || rm -rf -- "$staging_dir"; }
 trap cleanup EXIT
 
 fail() { printf 'manifest identity: %s\n' "$1" >&2; exit 1; }
-usage() { fail 'usage: manifest-identity.sh freeze --manifest FILE --snapshot FILE --base REF --workflow-identity SHA256 | read --run ID | verify --run ID'; }
+usage() { fail 'usage: manifest-identity.sh freeze --manifest FILE --snapshot FILE --base REF --workflow-identity SHA256 | read --run ID | verify --run ID | review-index-path --run ID'; }
 
 subcommand="${1:-}"; shift || true
 case "$subcommand" in
@@ -19,7 +19,7 @@ case "$subcommand" in
     (( $# == 8 )) && [[ "$1" == --manifest && "$3" == --snapshot && "$5" == --base && "$7" == --workflow-identity ]] || usage
     manifest_source="$2"; snapshot_source="$4"; base_ref="$6"; retained_workflow_identity="$8"
     ;;
-  read|verify)
+  read|verify|review-index-path)
     (( $# == 2 )) && [[ "$1" == --run ]] || usage
     run_identity="$2"
     [[ "$run_identity" =~ ^[A-Za-z0-9._-]{8,64}$ ]] || fail 'Run identity is malformed'
@@ -114,7 +114,14 @@ recorded_binding="${header[4]#manifest-binding-sha256 }"
 resolved_base="$(git rev-parse --verify "${recorded_base}^{commit}" 2>/dev/null)" || fail 'frozen pre-implementation base is unavailable'
 [[ "$resolved_base" == "$recorded_base" ]] || fail 'frozen pre-implementation base is not canonical'
 [[ "$(binding_digest "$recorded_identity" "$recorded_snapshot" "$recorded_base" "$recorded_provenance" "$manifest" 7)" == "$recorded_binding" ]] || fail 'frozen manifest is corrupt'
-if [[ "$subcommand" == verify ]]; then
+if [[ "$subcommand" == verify || "$subcommand" == review-index-path ]]; then
   "$script_root/workflow-provenance.sh" verify --run "$run_identity" >/dev/null || fail 'current governing instruction identity does not match frozen custody'
+fi
+# The Review-index script is a governing instruction input, so a Run reaches it
+# only after that identity verifies. Nothing is frozen or resolved: this names
+# the sibling of the installation whose bytes the verification just accepted.
+if [[ "$subcommand" == review-index-path ]]; then
+  printf '%s\n' "$script_root/review-index.sh"
+  exit 0
 fi
 printf '%s\n' "$recorded_base"

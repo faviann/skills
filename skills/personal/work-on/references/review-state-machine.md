@@ -31,46 +31,161 @@ Before the initial gate, materialize the complete frozen Standards input:
 Freeze the combined input and its exact identity with the other governing
 inputs. The repo overrides and every smell remains a judgement call inside this
 frozen Standards input. Reuse the exact frozen Standards input verbatim in
-every cumulative and delta package; never rediscover repository standards or
-reconstruct the baseline during the review chain.
+every cumulative and delta Review index; never rediscover repository standards
+or reconstruct the baseline during the review chain.
 
 If an interruption loses information required to prove the current review-chain
 transition, take the existing safe hand-back. A later attempt freezes fresh
 governing state and establishes a fresh cumulative baseline.
 
-### Cumulative-review package
+### Review index
 
-For every initial or final cumulative gate, populate one neutral package from
-the frozen governing state and exact current artifacts, and give that same exact
-package to Standards, Spec, and closure:
+Every gate — initial cumulative, each remediation delta, and each fresh
+cumulative confirmation — dispatches from one fresh immutable Review index
+built from that gate's exact inputs. Materialize the frozen governing state as
+owner-only untracked scratch files. Every Review-index operation for this Run
+uses the governing Review-index script, so obtain its path once per gate. Run
+this from the target repository; the path below is relative to the skill root:
+
+```bash
+review_index="$(scripts/manifest-identity.sh review-index-path \
+  --run "$RUN_IDENTITY")"
+```
+
+It validates this Run's complete custody and its current governing-instruction
+identity first, so a Run whose governing Review-index script has changed fails
+closed here rather than at a gate. Then create the index by running
+`bash "$review_index" create` from the target repository, so its Git operations
+resolve there. Supply the gate kind, the
+pinned comparison and Candidate commit and tree identities, and one file per
+frozen component: `--review-assignment` carries that gate's assignment below
+together with the selected workflow's common review brief for review gates,
+`--trusted-contract` the frozen trusted snapshot and referenced contracts,
+`--standards` the complete frozen Standards input, `--validation-evidence-policy`
+the frozen evidence policy, `--validation-surface-manifest` the frozen manifest,
+and each `--evidence` one qualifying validation-evidence record, carrying that
+evidence's existing Reusable-evidence identity and safe provenance locator
+inside the record. The index freezes those records, not the raw evidence
+payloads: raw evidence stays at its provenance locator under
+`validation-evidence.md` and is inspected there when an axis needs it.
+Creation returns the index path and its SHA-256 only once the whole package
+verifies, so an existing package proves no gate result on its own.
+
+The index is input-only. It carries no reviewer, conclusion, confirmation, or
+gate progress, and a successor gate never reuses a predecessor's index even
+when every component's bytes are unchanged.
+
+### Common dispatch
+
+Give Standards, Spec, and closure the identical dispatch — the same Review-index
+identity and the same pinned comparison and Candidate identities:
+
+```text
+- Review index: <absolute index path>
+- Review-index identity: <the index SHA-256>
+- Comparison identity: <the pinned comparison commit and tree>
+- Exact current Candidate identity: <the pinned Candidate commit and tree>
+- Review-index command: bash <the verified Review-index script path>
+- Verify before judging: <command> verify --index <path>
+  --index-sha256 <identity>
+- Read one frozen component: <command> read --index <path>
+  --index-sha256 <identity> --role ROLE [--evidence-sha256 SHA256]
+- Complete changed paths: <command> changed-paths --index <path>
+  --index-sha256 <identity>
+```
+
+Give the concrete command; no axis discovers the Run's custody or a skill
+installation itself. Every operation runs from the target repository. Add only
+that axis's starting components and its own brief. Keep the assignment blind: add no implementation context, prior reviewer conclusion, adjudication,
+disposition, or convenience summary.
+
+### Starting context and widening
+
+Every axis begins by reading the authenticated `review-assignment` and by
+obtaining the complete raw no-renames changed-path inventory from the pinned
+trees; that inventory is derived on demand and is never a stored artifact.
+Each axis then adds the frozen components its own obligation makes it
+responsible for:
+
+- Standards begins with `standards`, the complete frozen Standards input.
+- Spec begins with `trusted-contract`.
+- Closure begins with `trusted-contract`, `validation-surface-manifest`,
+  `validation-evidence-policy`, and the indexed evidence records — read to
+  obtain each record's existing identity and safe provenance locator, not to
+  dereference every raw payload up front. Inspect raw evidence at its
+  provenance locator when the closure obligation reaches it.
+
+These are starting sets, not authority boundaries. Any axis may read any other
+frozen component whenever a concrete review question requires it, through the
+same verified read. Current Candidate inspection follows the existing
+review-phase worktree contract. Historical source and every comparison come
+from the pinned identities under one invariant: read them against the
+dispatched tree identities and never against a live ref, branch, `HEAD`, or
+working tree, with replacement objects disabled, and take every path or
+path-set comparison literally (for example with `--literal-pathspecs`), with
+ambient external-diff, text-conversion, and rename-inference behavior
+disabled.
+
+Availability is not inspection: being able to widen never discharges an
+inspection obligation the axis owes.
+
+A required frozen component or comparison that will not verify or retrieve has
+no substitute. Never fall back to a similarly named live contract, Standards
+source, manifest, policy, ref, or artifact.
+
+### Axis completion
+
+Each axis report binds itself to the exact Review-index identity it was
+dispatched with and returns `COMPLETE` or `INCOMPLETE`. A `COMPLETE` report
+keeps its existing conclusion-level citations, and additionally records
+relied-on widening those citations do not already cite together with the
+concrete question it settled. An `INCOMPLETE` report identifies the unresolved
+input or query; the gate does not complete on it and no anchor advances.
+
+### Review-input failure
+
+Three failures stay distinct rather than collapsing into one route:
+
+- Invalid, missing, or identity-invalid frozen review input is a hard
+  review-input failure: the gate cannot complete, and the owning contract's
+  route for that input applies.
+- A retriable delivery, publication, or known-truncation failure may retry
+  against the same still-valid gate inputs until an index verifies.
+- External-evidence inadequacy is an evidence question under
+  `validation-evidence.md`; it never by itself corrupts an otherwise valid
+  index.
+
+### Index lifetime
+
+Each gate's index stays available through its three axes and adjudication, and
+an applicable clean cumulative index stays available until Closeout verifies
+and consumes its confirmation. Remove it best-effort afterwards. Existence
+grants no lifecycle authority: a surviving package proves no gate result, and a
+removed one restores nothing.
+
+### Cumulative Review-index dispatch
+
+For every initial or final cumulative gate, create one `cumulative` index whose
+comparison endpoint is the frozen comparison base and whose Candidate endpoint
+is the exact current Candidate, and dispatch it to Standards, Spec, and closure
+with this assignment as its `--review-assignment` component:
 
 ```text
 Cumulative review assignment: independently review the exact cumulative
-candidate against the full accepted review contract.
-- Comparison-base identity: <full exact identity>
-- Exact current Candidate identity: <full exact identity>
-- Mechanically exact cumulative diff: <git diff comparison-base^{tree} candidate^{tree}>
-- Full trusted contract: <the frozen trusted snapshot and referenced contracts>
-- Binding Standards input: <applicable repository standards source-labelled
-  paths and exact content, followed by the complete frozen Fowler smell
-  baseline with its repo-overrides and judgement-call semantics>
-- Validation-surface manifest: <the frozen complete direct-evidence population>
-- Qualifying raw validation evidence: <evidence tied to the current candidate,
-  with safe provenance locators under references/validation-evidence.md>
+candidate against the full accepted review contract, using the dispatched
+Review index as the complete frozen governing universe.
 ```
 
-Invoke `code-review` with these caller-pinned inputs for Standards and Spec;
-give closure the identical package and its closure brief. The package is
-authoritative, so no axis refetches or rediscovers a governing input. Keep the
-assignment blind: add no implementation context, prior reviewer conclusion,
-adjudication, disposition, or convenience summary.
+Invoke `code-review` with the common dispatch for Standards and Spec; give
+closure the identical dispatch and its closure brief. The index is
+authoritative, so no axis refetches or rediscovers a governing input.
 
 ## Initial cumulative gate
 
 After the first committed candidate, capture its exact Candidate identity as
 `C0`. The initial cumulative gate runs fresh Standards, Spec, and closure axes
 against the same exact Candidate identity and frozen governing inputs. Give
-each the same exact cumulative-review package for `C0`.
+each the same exact cumulative Review-index dispatch for `C0`.
 
 `C0` becomes the Reviewed anchor only after fresh Standards, Spec, and closure
 complete against the same exact candidate under unchanged governing inputs. A
@@ -93,24 +208,17 @@ produce the mechanically exact direct delta from the previous Reviewed anchor
 to the current Candidate. Use a two-endpoint tree comparison; a three-dot range
 is a merge-base comparison and is not the remediation subject.
 
-### Delta-review package
+### Delta Review-index dispatch
 
-Give every delta reviewer the same neutral package, populated from frozen state
-and current raw artifacts only:
+Create one `delta` index whose comparison endpoint is the previous Reviewed
+anchor and whose Candidate endpoint is the exact current Candidate, from the
+same frozen governing state and current raw artifacts only, with this
+assignment as its `--review-assignment` component:
 
 ```text
 Delta review assignment: independently review the exact candidate delta against
-the full accepted review contract.
-- Previous Reviewed-anchor identity: <full exact identity>
-- Exact current Candidate identity: <full exact identity>
-- Mechanically exact delta: <git diff previous-anchor^{tree} current-candidate^{tree}>
-- Full trusted contract: <the frozen trusted snapshot and referenced contracts>
-- Binding Standards input: <applicable repository standards source-labelled
-  paths and exact content, followed by the complete frozen Fowler smell
-  baseline with its repo-overrides and judgement-call semantics>
-- Validation-surface manifest: <the frozen complete direct-evidence population>
-- Qualifying raw validation evidence: <evidence tied to the current candidate,
-  with safe provenance locators under references/validation-evidence.md>
+the full accepted review contract, using the dispatched Review index as the
+complete frozen governing universe.
 - Review scope: Begin at the exact correction delta. Inspect unchanged context
   only for a recorded concrete contract question, changed-mechanism question,
   reproduced finding or seed, or #62 same-mechanism neighborhood investigation.
@@ -120,19 +228,19 @@ the full accepted review contract.
   cumulative candidate.
 ```
 
-The package is the review input. Separately enforce its blindness: describe the
-assignment neutrally, and expose no remediation rationale, prior finding or
-report text, accepted directive, adjudication, disposition, or adjudication
-ledger. Add no convenience summary of why the correction exists.
+The dispatched index is the review input. Separately enforce its blindness:
+describe the assignment neutrally, and expose no remediation rationale, prior
+finding or report text, accepted directive, adjudication, disposition, or
+adjudication ledger. Add no convenience summary of why the correction exists.
 
 ### Delta gate
 
 Start fresh Standards, Spec, and closure delta axes together against the same
 exact current candidate and unchanged governing inputs. Invoke `code-review`
-with these caller-pinned inputs for Standards and Spec; give the closure axis
-that identical package and its closure brief.
+with the common dispatch for Standards and Spec; give the closure axis that
+identical dispatch and its closure brief.
 
-Apply the package's Review scope exactly. It makes the correction delta the
+Apply the assignment's Review scope exactly. It makes the correction delta the
 initial review search surface while keeping concrete unchanged-context access
 and #62's same-mechanism investigation and stop boundaries reachable.
 
@@ -147,8 +255,8 @@ apply the correction before reviewing the next exact anchor-to-Candidate delta.
 
 After a clean delta gate, give the exact current candidate a new fresh blind
 cumulative Standards, Spec, and closure confirmation against the full accepted
-review contract. Use fresh reviewers and a newly populated cumulative-review
-package for the exact current candidate; expose none of the delta reports or
+review contract. Use fresh reviewers and a newly created cumulative
+Review index for the exact current candidate; expose none of the delta reports or
 their adjudication.
 
 If adjudication leaves that cumulative confirmation clean and its candidate and
@@ -175,8 +283,10 @@ never absorb the omission by rebuilding governing state or restarting this
 review state machine.
 
 New qualifying raw evidence for the exact unchanged candidate does not itself
-invalidate a review or confirmation. Apply `validation-evidence.md`: assurance
-sufficiency determines whether execution is required, and a workflow-stage
+invalidate a review or confirmation, and never mutates or replaces an already
+dispatched index; it stays separately identified under `validation-evidence.md`
+until the next applicable gate creates its own index. Apply
+`validation-evidence.md`: assurance sufficiency determines whether execution is required, and a workflow-stage
 transition is never itself a reason to rerun validation. Failing,
 contradictory, stale, incomplete, identity-invalid, or otherwise inadequate
 evidence remains blocking and is adjudicated before another execution.

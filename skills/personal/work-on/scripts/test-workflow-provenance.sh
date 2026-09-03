@@ -106,6 +106,7 @@ for case_spec in \
   'skills/personal/work-on/references/validation-evidence.md:work-on' \
   'skills/personal/work-on/references/review-state-machine.md:work-on' \
   'skills/personal/work-on/references/normative-remediation.md:work-on' \
+  'skills/personal/work-on/scripts/review-index.sh:work-on' \
   'skills/engineering/code-review/WORK-ON-REVIEW.md:review'; do
   path="${case_spec%:*}"
   printf 'changed authority input\n' >>"$skills/$path"
@@ -122,6 +123,15 @@ for case_spec in \
   fi
   grep -Fq 'current governing instruction identity does not match frozen custody' \
     "$fixture/manifest-authority.err"
+  if [[ "$path" == skills/personal/work-on/scripts/review-index.sh ]]; then
+    # The Review-index command is reached only through that same verification,
+    # so it is unavailable while its governing script no longer matches.
+    if (cd "$target" && "$freeze_command" review-index-path --run "$committed_run") \
+        >"$fixture/review-index-path.out" 2>/dev/null; then
+      echo 'review-index-path returned a command for changed governing instructions' >&2
+      exit 1
+    fi
+  fi
   if [[ "$path" == skills/personal/work-on/references/normative-remediation.md ]]; then
     (cd "$target" && "$command" capture \
       --output "$fixture/normative-authority.json")

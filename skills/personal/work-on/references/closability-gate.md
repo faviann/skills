@@ -222,9 +222,10 @@ verify or render. A failure before delegation takes complete recomputation. No
 expectation argument, workflow sidecar, singleton ledger, delete-on-freeze
 bridge, repository binding, or mutable current-run pointer participates.
 
-The selected workflow supplies the manifest to the implementation delegate and
-to the readiness, Standards, Spec, and closure contexts, and keeps it available
-to the primary for adjudication. It is contract input, not a prior review
+The selected workflow supplies the manifest directly to the implementation
+delegate and the readiness context, freezes it into each review gate's Review
+index under `references/review-state-machine.md`, and keeps it available to the
+primary for adjudication. It is contract input, not a prior review
 conclusion: reviewers stay independent about whether the evidence satisfies a
 criterion, and may report that the manifest conflicts with the trusted contract.
 

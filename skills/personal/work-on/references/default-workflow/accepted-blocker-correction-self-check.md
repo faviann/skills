@@ -78,7 +78,8 @@ must be complete before commit, and that reference retains ownership of its
 contract.
 
 Keep `Rechecked:` rationale, applicability declarations, conclusions, and
-correction reasoning in primary-side working state, excluded from cumulative
-and delta reviewer packages. Qualifying raw validation evidence may still flow
-through `references/validation-evidence.md` into the package slots enumerated in
-`references/review-state-machine.md`.
+correction reasoning in primary-side working state, excluded from every
+review-gate input. Qualifying validation evidence may still flow through
+`references/validation-evidence.md` into the evidence records each gate's Review
+index carries under `references/review-state-machine.md`, with the raw evidence
+itself reachable at its safe provenance locator.

@@ -115,6 +115,14 @@ interrupt_freeze snapshot .trusted-snapshot.json after incomplete
 interrupt_freeze manifest-before .md before incomplete
 interrupt_freeze manifest-after .md after committed
 
+# The Review-index command a Run uses is reached only after its governing
+# identity verifies. Complete custody yields the governing script's path;
+# custody that does not validate yields nothing. Provenance dependence itself is
+# proven where governing inputs are mutated, in test-workflow-provenance.sh.
+review_index_command="$(cd "$repo" && "$identity" review-index-path --run "$run1")"
+[[ "$review_index_command" == "$script_dir/review-index.sh" ]]
+reject_interrupted "$identity" review-index-path --run "$renamed_run"
+
 # Final-manifest presence is the authority marker; a provenance-only
 # interrupted publication is rejected by custody and rendering readers.
 partial=opaque-partial
@@ -197,7 +205,6 @@ for rule in \
   'Do not refetch current trusted GitHub comments' \
   'newly arrived trusted comment does not join this frozen snapshot' \
   'Only an explicit trusted-maintainer contract change' \
-  'readiness, Standards, Spec, and closure contexts' \
   'bounds evidence, not scope' \
   'may inspect anything their own contracts already permit' \
   'reviewers may report defects outside it' \
