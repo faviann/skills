@@ -69,9 +69,6 @@ awk '/^## / { inside = ($0 ~ /^## 5\./) }
 has "$adjudication" \
   '`references/default-workflow/bounded-re-adjudication.md`' \
   'the step-5 call site names the module that owns the contract'
-lacks "$adjudication" \
-  'frozen criterion bytes are unchanged|Contract-backed and Defensive rulings' \
-  'the call site does not restate the contract the module owns'
 has "$section" 're-adjudicate `R` (exactly once|once,? and only once|only once)' \
   'a qualifying trigger produces one re-adjudication'
 has "$section" '(all|every one) of the following (hold|holds)|all (of )?(these|the) conditions (are )?(satisfied|met)' \

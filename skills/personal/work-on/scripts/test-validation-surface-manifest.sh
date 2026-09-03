@@ -245,31 +245,13 @@ assert_has "$workflow_doc" 'explicitly named Run identity|--run.*RUN_IDENTITY'
 assert_has "$workflow_doc" 'manifest-identity\.sh verify --run'
 
 # Conditional references are read after the freeze, so the spine requires the
-# same custody verification before consuming one, and every module it names at
-# a call site sits inside the identity that verification checks. A call site
-# added for an undeclared module would read live bytes the frozen Run never
-# covered.
+# same custody verification before consuming one. test-workflow-provenance.sh
+# owns which modules are inside that identity.
 assert_has "$workflow_doc" \
   'conditional reference.{0,80}call site is reached.{0,40}rather than preload'
 assert_has "$workflow_doc" \
   'frozen instruction identity.{0,200}verify.{0,60}Run identity.{0,80}before consuming'
 assert_has "$workflow_doc" 'mismatch.{0,120}fail-closed'
-declared_inputs=" $(tr '\n' ' ' <"$provenance" |
-  sed -n 's/.*default_workflow_inputs=(\([^)]*\)).*/\1/p' | tr -s ' ') "
-[[ "$declared_inputs" =~ [^[:space:]] ]] || {
-  echo 'default_workflow_inputs is not an explicit list' >&2; exit 1; }
-mapfile -t cited_modules < <(
-  grep -o 'references/default-workflow/[A-Za-z0-9._-]*\.md' "$workflow_doc" | sort -u)
-(( ${#cited_modules[@]} > 0 )) || {
-  echo 'the workflow cites no conditional module' >&2; exit 1; }
-for cited in "${cited_modules[@]}"; do
-  [[ -f "$skill_dir/$cited" ]] || {
-    echo "the workflow cites a missing conditional module: $cited" >&2; exit 1; }
-  [[ "$declared_inputs" == *" skills/personal/work-on/$cited "* ]] || {
-    echo "a conditionally read module is outside the frozen workflow identity: $cited" >&2
-    exit 1
-  }
-done
 assert_lacks "$workflow_doc" 'singleton ledger|workflow sidecar|post-freeze.*captur|after freeze.*captur'
 
 # Closeout's authored input and validator surface remain deliberately small;

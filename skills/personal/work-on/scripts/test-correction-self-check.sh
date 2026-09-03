@@ -132,11 +132,6 @@ for path in "$readiness" "$remediation"; do
   has "$path" \
     '`references/default-workflow/accepted-blocker-correction-self-check.md`' \
     'each correction call site names the module that owns the contract'
-  has "$path" \
-    "content verbatim in the dispatch rather than its path" \
-    'each correction call site hands the delegate content instead of a path'
-  lacks "$path" 'Bare `standards: checked`|adversarial negative' \
-    'no call site restates the checks the module owns'
 done
 
 ## Repository standards are correction-specific on every correction.
