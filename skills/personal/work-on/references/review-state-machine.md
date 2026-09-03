@@ -166,10 +166,11 @@ removed one restores nothing.
 
 ### Cumulative Review-index dispatch
 
-For every initial or final cumulative gate, create one `cumulative` index whose
-comparison endpoint is the frozen comparison base and whose Candidate endpoint
-is the exact current Candidate, and dispatch it to Standards, Spec, and closure
-with this assignment as its `--review-assignment` component:
+For the initial cumulative gate and every fresh cumulative confirmation after
+remediation, create one `cumulative` index whose comparison endpoint is the
+frozen comparison base and whose Candidate endpoint is the exact current
+Candidate, and dispatch it to Standards, Spec, and closure with this assignment
+as its `--review-assignment` component:
 
 ```text
 Cumulative review assignment: independently review the exact cumulative

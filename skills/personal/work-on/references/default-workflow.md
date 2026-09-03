@@ -160,9 +160,10 @@ Risks:
 
 ### Same-mechanism neighborhood brief
 
-Give the readiness sweep this brief directly, and carry it into every initial
-and final cumulative review gate as part of that gate's Review-index assignment
-under `references/review-state-machine.md`:
+Give the readiness sweep this brief directly, and carry it into the initial
+cumulative gate and every fresh cumulative confirmation after remediation as
+part of that gate's Review-index assignment under
+`references/review-state-machine.md`:
 after reproducing a defect, name its mechanism and governing criterion, then
 trace only its immediate neighborhood — the same boundary's branches, call
 sites, and input shapes; diagnostics from the same untrusted source; or states
