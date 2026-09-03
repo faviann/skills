@@ -50,10 +50,12 @@ different versions are never pooled.
 
 ### Canonical byte recipe
 
-Run the following from the repository root. The recipe uses the declared file
-order, canonical repository-relative names, byte counts, and NUL framing. The
-only hash operation is the shown `sha256sum` over the resulting canonical byte
-stream.
+`scripts/eval-canonical-identity.sh` is the one executable definition of this
+identity. It takes `LABEL CANONICAL_NAME PATH` triples and prints the SHA-256 of
+a canonical byte stream that frames each component as its label, its canonical
+repository-relative name, its byte count, and its exact bytes, every field
+NUL-terminated, in the declared order. Do not reimplement that framing here or
+anywhere else; invoke the script. Run the following from the repository root.
 
 ```bash
 set -euo pipefail
@@ -62,23 +64,6 @@ eval_file=.agents/evals/work-on-normative-remediation.md
 base=9c32a54175af4a8e76aebc6a450ea55ed67ceda0
 identity_dir="$(mktemp -d)"
 trap 'rm -rf "$identity_dir"' EXIT
-
-canonical_hash() {
-  local stream="$1"
-  shift
-  : >"$stream"
-  while (( "$#" )); do
-    local label="$1" canonical_name="$2" source="$3" bytes
-    shift 3
-    bytes="$(LC_ALL=C wc -c <"$source" | tr -d '[:space:]')"
-    {
-      printf '%s\0%s\0%s\0' "$label" "$canonical_name" "$bytes"
-      cat "$source"
-      printf '\0'
-    } >>"$stream"
-  done
-  sha256sum "$stream" | awk '{print $1}'
-}
 
 extract_section() {
   local heading="$1" output="$2"
@@ -95,20 +80,17 @@ git archive "$base" -- \
   skills/personal/work-on/references/default-workflow.md \
   | tar -x -C "$identity_dir/prechange"
 
-printf 'live-primary %s\n' "$(canonical_hash \
-  "$identity_dir/live-primary.bytes" \
+printf 'live-primary %s\n' "$(scripts/eval-canonical-identity.sh \
   instruction skills/personal/work-on/SKILL.md \
     skills/personal/work-on/SKILL.md \
   instruction skills/personal/work-on/references/default-workflow.md \
     skills/personal/work-on/references/default-workflow.md \
   instruction skills/personal/work-on/references/normative-remediation.md \
     skills/personal/work-on/references/normative-remediation.md)"
-printf 'live-reader %s\n' "$(canonical_hash \
-  "$identity_dir/live-reader.bytes" \
+printf 'live-reader %s\n' "$(scripts/eval-canonical-identity.sh \
   instruction skills/personal/work-on/references/normative-remediation.md \
     skills/personal/work-on/references/normative-remediation.md)"
-printf 'prechange-reader %s\n' "$(canonical_hash \
-  "$identity_dir/prechange-reader.bytes" \
+printf 'prechange-reader %s\n' "$(scripts/eval-canonical-identity.sh \
   instruction skills/personal/work-on/SKILL.md \
     "$identity_dir/prechange/skills/personal/work-on/SKILL.md" \
   instruction skills/personal/work-on/references/default-workflow.md \
@@ -160,8 +142,8 @@ for index in "${!cases[@]}"; do
   if [[ "$case_id" != "$package_id" ]]; then
     components+=(counterfactual "$case_id" "$identity_dir/$case_id-case")
   fi
-  printf '%s %s\n' "$case_id" "$(canonical_hash \
-    "$identity_dir/$case_id.bytes" "${components[@]}")"
+  printf '%s %s\n' "$case_id" \
+    "$(scripts/eval-canonical-identity.sh "${components[@]}")"
 done
 ```
 

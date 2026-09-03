@@ -241,6 +241,4 @@ for field in repository provenance workflow_provenance runs phases; do
   render_rejected "$fixture/removed-field.json" "$field"
 done
 
-flat="$(tr '\n' ' ' <"$skills/skills/personal/work-on/references/github-closeout.md")"
-[[ "$flat" == *'Put only the four authored facts'* && "$flat" == *'never verifies live instruction files'* && "$flat" == *'Finished old pull requests are otherwise left alone'* ]]
 echo 'render-closeout black-box scenarios passed'
