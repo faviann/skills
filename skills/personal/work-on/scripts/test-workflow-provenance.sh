@@ -164,6 +164,8 @@ expected_default_workflow_modules=(
   skills/personal/work-on/references/default-workflow/implementation-mechanism-reset.md
 )
 default_identity_before="$(cd "$target" && "$command" identify-workflow)"
+target_clean_workflow="$(jq -r '.workflow' "$fixture/target-clean.json")"
+target_clean_work_on="$(jq -r '.["work-on"]' "$fixture/target-clean.json")"
 for module in "${expected_default_workflow_modules[@]}"; do
   [[ -f "$skills/$module" ]] || {
     echo "expected default-workflow module is missing: $module" >&2; exit 1; }
@@ -188,6 +190,21 @@ for module in "${expected_default_workflow_modules[@]}"; do
   [[ "$(cd "$target_workflow_repo" && "$command" identify-workflow)" \
     == "$target_identity" ]] || {
     echo "mutating $module changed a docs/workflow.md selection" >&2; exit 1; }
+  # identify-workflow exposes only the workflow component, so also capture the
+  # custom-workflow run's full provenance: a default-only module wrongly added
+  # to work_on_inputs would move its work-on digest while leaving workflow alone.
+  (cd "$target_workflow_repo" && "$command" capture \
+    --output "$fixture/target-module.json")
+  [[ "$(jq -r '.workflow' "$fixture/target-module.json")" \
+    == "$target_clean_workflow" ]] || {
+    echo "mutating $module changed the docs/workflow.md workflow digest" >&2
+    exit 1
+  }
+  [[ "$(jq -r '.["work-on"]' "$fixture/target-module.json")" \
+    == "$target_clean_work_on" ]] || {
+    echo "mutating $module changed the docs/workflow.md work-on digest" >&2
+    exit 1
+  }
   git -C "$skills" restore "$module"
 done
 [[ "$(cd "$target" && "$command" identify-workflow)" == "$default_identity_before" ]]
