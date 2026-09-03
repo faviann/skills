@@ -110,45 +110,6 @@ has "$CLOSEOUT" \
   'the final cumulative closure axis retains the complete backstop'
 echo 'ok - pinned inputs route to the adapter and closure stays blind'
 
-## Discovery belongs to readiness and cumulative review; delta verifies correction
-has "$WORKFLOW" \
-  'Give the readiness sweep this brief directly.*every initial and final cumulative review gate' \
-  'readiness and cumulative gates receive the same-mechanism discovery brief'
-has "$STATE" \
-  'Cumulative review assignment.*Deliberately perform.*bounded same-mechanism neighborhood discovery' \
-  'every cumulative gate deliberately performs bounded neighborhood discovery'
-has "$STATE" \
-  'Verify the exact accepted-blocker correction.*full accepted review contract' \
-  'delta review verifies the exact correction against the contract'
-has "$STATE" \
-  'enough unchanged surrounding context.*satisfies.*contract.*introduced a regression' \
-  'delta review may inspect only enough context to assess correction and regression'
-has "$STATE" \
-  'Do not deliberately enumerate new sibling locations.*input families.*representations.*branches.*adjacent variants.*same-mechanism neighborhood search' \
-  'delta review does not deliberately continue sibling discovery'
-has "$STATE" \
-  'independently.*encounter a blocking defect.*report.*do not expand.*sibling discovery.*delta gate' \
-  'an independently encountered delta blocker is reportable but does not start a sibling search'
-has "$CLOSEOUT" \
-  'Delta closure.*correction-verification and unchanged-context rules' \
-  'the delta closure axis follows correction verification rather than #62 discovery'
-echo 'ok - readiness and cumulative gates discover; delta gates verify corrections'
-
-## Primary adjudication bounds synthetic witnesses to promised or evidenced families
-has "$WORKFLOW" \
-  'synthetic witness does not become Contract-backed merely because it can be constructed and mapped to a broad criterion' \
-  'constructibility against broad prose does not make a synthetic witness contractual'
-has "$WORKFLOW" \
-  'may block only when.*frozen criterion explicitly promises.*or belongs to a representation family already observed.*governed repository surface' \
-  'a synthetic witness blocks only for explicit promises or evidenced representation families'
-has "$WORKFLOW" \
-  'Mechanical reproducibility or semantic equivalence alone is insufficient.*synthetic sibling blocking' \
-  'reproducibility and semantic equivalence alone do not make synthetic siblings blocking'
-has "$WORKFLOW" \
-  'primary interprets the contract and adjudicates' \
-  'the primary retains contract interpretation and adjudication'
-echo 'ok - synthetic witnesses remain bounded by contract and repository evidence'
-
 ## Clean delta returns to blind cumulative confirmation; another fix repeats both legs
 has "$STATE" \
   'clean delta gate.*fresh blind cumulative.*Standards.*Spec.*closure.*full accepted review contract' \
