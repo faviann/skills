@@ -243,6 +243,15 @@ assert_has "$gate" 'No expectation argument, workflow sidecar, singleton ledger,
 assert_has "$gate" 'Run identity carries no repository binding'
 assert_has "$workflow_doc" 'explicitly named Run identity|--run.*RUN_IDENTITY'
 assert_has "$workflow_doc" 'manifest-identity\.sh verify --run'
+
+# Conditional references are read after the freeze, so the spine requires the
+# same custody verification before consuming one. test-workflow-provenance.sh
+# owns which modules are inside that identity.
+assert_has "$workflow_doc" \
+  'conditional reference.{0,80}call site is reached.{0,40}rather than preload'
+assert_has "$workflow_doc" \
+  'frozen instruction identity.{0,200}verify.{0,60}Run identity.{0,80}before consuming'
+assert_has "$workflow_doc" 'mismatch.{0,120}fail-closed'
 assert_lacks "$workflow_doc" 'singleton ledger|workflow sidecar|post-freeze.*captur|after freeze.*captur'
 
 # Closeout's authored input and validator surface remain deliberately small;

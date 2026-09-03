@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Bounded re-adjudication is one inline workflow contract with an authority
+# Bounded re-adjudication is one conditional workflow contract owned by its own
+# module, triggered from the adjudicate-and-remediate step, with an authority
 # clarification in SKILL.md. Exercise the seams a wrong implementation would
 # break: eligibility, attribution, the blind package, the one-shot property,
 # the supersede routing, the immutability fence, and the static surface.
@@ -14,6 +15,7 @@ skill_dir="$(cd "$script_dir/.." && pwd)"
 
 SKILL="$skill_dir/SKILL.md"
 WORKFLOW="$skill_dir/references/default-workflow.md"
+MODULE="$skill_dir/references/default-workflow/bounded-re-adjudication.md"
 
 failures=0
 fixture_dir="$(mktemp -d)"
@@ -47,26 +49,26 @@ lacks() {
   fi
 }
 
-heading="$(grep -m1 '^### Bounded re-adjudication' "$WORKFLOW" || true)"
-section="$fixture_dir/readjudication-section.md"
-if [[ -n "$heading" ]]; then
-  awk -v heading="$heading" '
-    $0 == heading { inside = 1 }
-    inside && $0 != heading && /^#{1,3} / { exit }
-    inside { print }
-  ' "$WORKFLOW" >"$section"
-fi
-if [[ ! -s "$section" ]]; then
-  fail 'the default workflow carries the bounded re-adjudication section inline'
+# The detailed contract has one authoritative home; the adjudicate-and-remediate
+# step owns the note it needs to become eligible and the trigger that reaches it.
+section="$MODULE"
+adjudication="$fixture_dir/adjudication-step.md"
+awk '/^## / { inside = ($0 ~ /^## 5\./) } inside { print }' \
+  "$WORKFLOW" >"$adjudication"
+if [[ ! -s "$section" || ! -s "$adjudication" ]]; then
+  fail 'bounded re-adjudication has an authoritative module reached from step 5'
   printf '\n%s bounded-re-adjudication assertion(s) failed.\n' "$failures" >&2
   exit 1
 fi
 
-## The mechanism lives beside adjudication, and only Ambiguous rulings qualify.
+## The trigger lives beside adjudication, and only Ambiguous rulings qualify.
 awk '/^## / { inside = ($0 ~ /^## 5\./) }
   inside && /^### Bounded re-adjudication/ { found = 1 }
   END { exit !found }' "$WORKFLOW" ||
-  fail 'bounded re-adjudication sits inside the adjudicate-and-remediate step'
+  fail 'bounded re-adjudication is triggered from the adjudicate-and-remediate step'
+has "$adjudication" \
+  '`references/default-workflow/bounded-re-adjudication.md`' \
+  'the step-5 call site names the module that owns the contract'
 has "$section" 're-adjudicate `R` (exactly once|once,? and only once|only once)' \
   'a qualifying trigger produces one re-adjudication'
 has "$section" '(all|every one) of the following (hold|holds)|all (of )?(these|the) conditions (are )?(satisfied|met)' \
@@ -80,21 +82,22 @@ has "$section" '(`D` produced the current remediation candidate|current remediat
   'the triggering directive produced the current remediation candidate'
 has "$section" 'accepted blocker at that gate (is attributable to|traces to) the mechanism introduced for `D`' \
   'the trigger requires a blocker attributable to the Ambiguous directive'
-has "$section" '(immediately following delta gate|delta gate that immediately follows)' \
-  'the run-local note is scoped to the immediately following delta gate'
 has "$section" 'does not trace to `D`.s mechanism (takes|proceeds through|is handled by) ordinary remediation' \
   'an unattributable blocker at the same gate does not trigger the mechanism'
 echo 'ok - eligibility is limited to Ambiguous rulings whose own mechanism reproduced a blocker'
 
-## The association is transient working state, not a lineage system.
-has "$section" 'carry a run-local note[^.]*`D` descends from `R`' \
+## The association is transient working state created at the adjudication site.
+has "$adjudication" 'carry a run-local note[^.]*`D` descends from `R`' \
   'the association records only that the directive descends from the ruling'
+has "$adjudication" \
+  '(immediately following delta gate|delta gate that immediately follows)' \
+  'the run-local note is scoped to the immediately following delta gate'
 for forbidden in 'lineage store' 'registry' 'lifecycle' 'event protocol' \
   'telemetry' 'persistent correlation state'; do
-  has "$section" "(keep|introduce|add) no[^.;]*$forbidden" \
+  has "$adjudication" "(keep|introduce|add) no[^.;]*$forbidden" \
     "the association introduces no $forbidden"
 done
-has "$section" '(drop|discard) it once that gate is adjudicated' \
+has "$adjudication" '(drop|discard) it once that gate is adjudicated' \
   'the association is bounded to the immediate delta window'
 echo 'ok - the directive-to-ruling association is transient run-local state'
 

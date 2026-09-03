@@ -11,6 +11,13 @@ skill_dir="$(cd "$script_dir/.." && pwd)"
 SKILL="$skill_dir/SKILL.md"
 WORKFLOW="$skill_dir/references/default-workflow.md"
 CONTRACT="$skill_dir/references/normative-remediation.md"
+# Conditional contracts the default workflow invokes are governing members too,
+# so the guards below follow them into their own modules.
+WORKFLOW_MODULES=(
+  "$skill_dir/references/default-workflow/accepted-blocker-correction-self-check.md"
+  "$skill_dir/references/default-workflow/bounded-re-adjudication.md"
+  "$skill_dir/references/default-workflow/implementation-mechanism-reset.md"
+)
 STATE="$skill_dir/references/review-state-machine.md"
 CLOSABILITY="$skill_dir/references/closability-gate.md"
 EVIDENCE="$skill_dir/references/validation-evidence.md"
@@ -139,8 +146,10 @@ has "$CONTRACT" \
   'an empty reconciled set needs no package or challenge'
 has "$CONTRACT" 'no justification for the empty set is required' \
   'the empty verdict needs no per-correction explanation'
-lacks "$WORKFLOW" 'launch one fresh semantic reader|launch a (new|fresh) (semantic )?reader' \
-  'the workflow never creates a reader itself, so staleness cannot compose into a second one'
+for source in "$WORKFLOW" "${WORKFLOW_MODULES[@]}"; do
+  lacks "$source" 'launch one fresh semantic reader|launch a (new|fresh) (semantic )?reader' \
+    'the workflow never creates a reader itself, so staleness cannot compose into a second one'
+done
 has "$CONTRACT" 'one fresh (semantic )?reader per.*batch' \
   'reader lifecycle stays owned by the reference'
 echo 'ok - one reconciliation per exact Reviewed-anchor/candidate pair gates every commit'
@@ -180,7 +189,7 @@ lacks "$CONTRACT" 'semantic reader.*(prove|establish|verify|ensure).*authority-s
 has "$CONTRACT" 'fresh reader is not responsible for proving.*every (governing )?site|site discovery.*primary' \
   'site discovery remains the primary.s responsibility'
 site_completeness_pattern='(semantic )?reader.{0,160}(must|shall|required to|is responsible for).{0,160}(all|every|complete(ness)?).{0,160}(authority|governing).{0,80}(site|source)|(must|shall|required to).{0,160}(prove|establish|verify|ensure).{0,160}(authority|governing).{0,80}(site|source).{0,80}(complete(ness)?|all|every)'
-for source in "$SKILL" "$WORKFLOW" "$CONTRACT" "$EVAL"; do
+for source in "$SKILL" "$WORKFLOW" "${WORKFLOW_MODULES[@]}" "$CONTRACT" "$EVAL"; do
   lacks "$source" "$site_completeness_pattern" \
     'no frozen member makes authority-site completeness the reader.s obligation'
 done
@@ -209,7 +218,8 @@ lacks "$CONTRACT" 'cross-batch (reader|semantic-reader) (state|memory|ledger|his
 lacks "$WORKFLOW" \
   'apply `references/normative-remediation.md` to determine whether the Corrective batch contains at least one qualifying unit' \
   'the pre-dispatch pass no longer settles reader entitlement'
-has "$WORKFLOW" 'before dispatching the accepted blockers.{0,200}provisional' \
+has "$WORKFLOW" \
+  'before dispatching the accepted blockers.{0,400}`references/normative-remediation.md` to predict provisionally' \
   'the pre-dispatch qualification pass is explicitly provisional'
 has "$WORKFLOW" 'identify every predicted unit and record its Authority delta' \
   'the dispatch-time delta still covers every predicted unit'
@@ -232,7 +242,7 @@ has "$WORKFLOW" \
   'Batch all accepted blockers.*retained implementation delegate keeps its `Risks:` channel and authority relationship' \
   'the common corrective dispatch owns the retained-delegate Risks and authority invariant'
 cross_batch_state_pattern='(must|shall|required to).{0,120}(retain|reuse|persist|carry|share).{0,120}(semantic )?reader.{0,80}(across|between).{0,40}batch|cross-batch.{0,80}(semantic[- ]reader|reader).{0,80}(state|memory|ledger|history)'
-for source in "$SKILL" "$WORKFLOW" "$CONTRACT" "$EVAL"; do
+for source in "$SKILL" "$WORKFLOW" "${WORKFLOW_MODULES[@]}" "$CONTRACT" "$EVAL"; do
   lacks "$source" "$cross_batch_state_pattern" \
     'no frozen member introduces cross-batch semantic-reader state'
 done

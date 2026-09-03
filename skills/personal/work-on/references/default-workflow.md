@@ -8,6 +8,15 @@ Abort if:
 - the issue does not have the `ready-for-agent` label
 - scope, acceptance criteria, readiness, or validation seam are unclear
 
+References this workflow explicitly invokes are binding at their call site. Read
+a conditional reference when its call site is reached rather than preloading it
+at workflow startup. Its bytes are part of this run's frozen instruction
+identity, so after the freeze verify the explicitly named Run identity with
+`scripts/manifest-identity.sh verify --run "$RUN_IDENTITY"` before consuming
+one. A mismatch takes the same fail-closed route as any other post-delegation
+custody verification failure under Validation-surface manifest custody; do not
+repair, refresh, or substitute the reference in-run.
+
 ## 1. Orient
 
 Record the base SHA (`git rev-parse HEAD`) before any edit. Review uses the
@@ -147,90 +156,7 @@ Unverified:
 Risks:
 ```
 
-### Accepted-blocker correction self-check
-
-An accepted-blocker correction is any accepted-blocker-driven correction routed
-to the retained implementation delegate, including readiness and post-gate
-corrections. Readiness corrections receive this self-check without becoming
-Corrective batches or acquiring normative-remediation qualification.
-
-For every accepted-blocker correction round, extend the implementation owner's
-ordinary return to the following shape, whether the existing mechanism
-continues the retained context or uses its fresh-delegate fallback:
-
-```text
-Changed:
-Evidence:
-Rechecked:
-Unverified:
-Risks:
-```
-
-The initial implementation and bounded coherence pass keep the unchanged return
-above. `Rechecked:` is only a labelled correction-return channel: keep focused
-validation results in `Evidence:`, uncertainty in `Unverified:` and `Risks:`,
-and the checks below in `Rechecked:`.
-
-Applicability has two discovery times. Before dispatch, the primary derives
-and dispatches minimum obligations already knowable from the accepted blocker
-using only information it owns. After implementing, the retained delegate
-accounts for additional applicability created by its chosen mechanism;
-`not applicable — <one-line reason>` is a valid delegate declaration. The
-primary preserves it for working traceability without adjudicating its technical
-conclusion.
-
-Apply these checks:
-
-1. **Correction-specific repository standards — every correction.** The
-   delegate reads repository standards directly and reports either named
-   correction-specific governing sources plus the outcome, or that no
-   correction-specific governing repository source was identified. Bare
-   `standards: checked`-style boilerplate is insufficient. This check does not
-   receive the reviewers' frozen Standards input or replace the Standards axis.
-2. **Adversarial negative or population-boundary check — when applicable.**
-   Apply only when correctness depends on absence, rejection, a forbidden case,
-   exhaustive enumeration, or population closure. Try at least one appropriate
-   plausible false candidate, contradiction, omitted member, or forbidden case
-   and report the result. Do not extend this to every falsifiable universal
-   claim.
-3. **Claimed behavior versus observed validation surface — when focused
-   validation is offered as proof.** In `Rechecked:`, name the claim and actual
-   observed surface, then state whether that surface can or cannot establish the
-   claim. A helper or private seam establishes broader public or contract
-   behavior only when the governing contract makes that seam authoritative.
-   Repository testing guidance may strengthen this rule. Keep the validation
-   execution and result in `Evidence:`.
-
-The retained implementation delegate owns the checks. The primary enforces that
-required information is present and applicability is accounted for, without
-technically adjudicating the conclusions; existing reviewers remain the
-independent backstop.
-
-- Missing or incomplete required information returns through the existing
-  implementation-owner mechanism for completion.
-- An explicitly unresolved required check blocks commit. First revise or reshape
-  the correction, narrow its claim, replace its mechanism, or try another way to
-  satisfy the blocker.
-- Once every required check is established, this self-check no longer blocks
-  commit.
-
-Only when no advancing correction can be produced, use the existing closeout
-rules directly: reach ordinary `Progresses` with a safe, independently useful
-narrowed candidate through the existing gates, or `failed` when none exists.
-This route does not pass through `references/normative-remediation.md`.
-
-Complete this self-check in the working tree before commit; the last commit
-remains the mechanically identified candidate. For a qualifying post-gate
-Corrective batch, complete this self-check before applying the existing
-`references/normative-remediation.md` checkpoint to the actual correction; both
-must be complete before commit, and that reference retains ownership of its
-contract.
-
-Keep `Rechecked:` rationale, applicability declarations, conclusions, and
-correction reasoning in primary-side working state, excluded from cumulative
-and delta reviewer packages. Qualifying raw validation evidence may still flow
-through `references/validation-evidence.md` into the package slots enumerated in
-`references/review-state-machine.md`.
+### Same-mechanism neighborhood brief
 
 Give the readiness sweep, both `code-review` axes, and closure sweep this brief:
 after reproducing a defect, name its mechanism and governing criterion, then
@@ -259,14 +185,17 @@ Candidate and Validation identity already settles their assurance question,
 run affected focused checks owned by Implementation or needed to settle the
 readiness question. Before the first commit, delegate one fresh
 raw-artifact readiness sweep; adjudicate it once and batch
-all blockers. Apply the Accepted-blocker correction self-check's dispatch rule
-to derive and include any directive-known minimum obligations, then send the
-batch back to the initial implementation delegate through the harness's
-supported continuation mechanism, applying the implementation-owner fallback
-in `SKILL.md`'s authority invariants when continuation is unavailable. Re-check
-the returned correction through that shared self-check's pre-commit completion
-rule, then re-check affected evidence and commit normally; each later round
-adds a commit (no amend or squash).
+all blockers. Apply the Accepted-blocker correction self-check's dispatch rule,
+owned by
+`references/default-workflow/accepted-blocker-correction-self-check.md` and
+read there now, to derive and include any directive-known minimum obligations,
+supplying that contract's content verbatim in the dispatch rather than its
+path, then send the batch back to the initial implementation delegate through
+the harness's supported continuation mechanism, applying the
+implementation-owner fallback in `SKILL.md`'s authority invariants when
+continuation is unavailable. Re-check the returned correction through that
+shared self-check's pre-commit completion rule, then re-check affected evidence
+and commit normally; each later round adds a commit (no amend or squash).
 
 After readiness corrections are complete and the commit stabilizes the exact
 Candidate and Validation identity, execute the remaining direct evidence owned
@@ -321,6 +250,13 @@ Log one rationale line per decision in an untracked ledger at
 dismiss re-raised findings by prior rationale unless the reviewer brings new
 evidence. Reviewers never see the ledger.
 
+Sticky adjudication has one bounded exception. When an **Ambiguous** ruling `R`
+forwards a directive `D`, carry a run-local note that `D` descends from `R` and
+name the frozen criterion `R` interpreted. That note is transient working state
+for the immediately following delta gate only: keep no lineage store, registry,
+lifecycle, event protocol, telemetry, or persistent correlation state for it,
+and drop it once that gate is adjudicated.
+
 ### Implementation-mechanism reset
 
 Remediation sometimes preserves machinery an earlier implementation approach
@@ -344,77 +280,39 @@ ordinary fixture correction, and an unrelated defect in the same subsystem
 continue through ordinary remediation. Repeated blockers, complexity,
 implementation size, and review count establish neither entry.
 
-Either the primary or the retained implementation delegate may detect a support
-loop. Use only ordinary working context: the accepted directive and obligation,
-the blocker with its existing mechanism-to-criterion trace, and the current or
-proposed remediation.
-
-A qualifying detection is never advisory commentary. On primary detection,
-the existing retained-delegate dispatch carries the following instruction
-verbatim with the adjudicated directives before the next support layer is added.
-On delegate detection, the delegate applies it where it stands, with no
-authorization round trip, and a delegate who reaches qualifying incompatibility
-while planning remediation revises immediately.
-
-> Reconsider only the implementation premise exposed by this blocker; do not
-> reinterpret the accepted obligation. Can the same obligation still be
-> satisfied and directly evidenced without adding the proposed second-order
-> support, if any — including by changing or replacing the current mechanism or
-> substituting a different solution approach?
->
-> On a support-loop entry, Uphold or revise. If Uphold, state briefly why the
-> exposed premise remains warranted despite requiring the additional support. If
-> revise, there is no preference for preserving the current approach: revising
-> includes abandoning that approach entirely and substituting another solution
-> approach under the unchanged accepted obligation, changing authority,
-> information, representation, responsibility, or proof strategy as the
-> substitution requires.
->
-> Where accepted incompatibility has established the premise as insufficient,
-> unchanged reliance on that premise is unavailable.
-
-Either way, before remediation continues the retained implementation delegate
-states its resulting disposition in ordinary working reasoning. That disposition
-creates no reset marker, ledger entry, flag, acknowledgement object, counter, or
-other recorded proof artifact. The retained implementation delegate owns the
-disposition and the implementation shape. The primary enforces only the
-accepted contract and, through the existing candidate flow, that a
-demonstrated-insufficient premise was not carried forward unchanged; it approves
-no architecture and repeats no reconsideration.
-
-Uphold returns to ordinary remediation on that brief rationale. Both
-dispositions keep the accepted blocker until it is resolved, then run affected
-focused validation, commit normally, and take the existing delta gate
-followed by fresh cumulative confirmation. Tests or proof machinery whose only
-relevant subject was a superseded approach may be deleted, replaced, or
-adjusted while suitable direct evidence for the unchanged obligation survives;
-"directly evidenced" concerns evidentiary support for that obligation and
-permits legitimate integration tests, supported abstractions, and ordinary
-helpers.
-
-Later remediation evaluates both entries anew from its own working context. A
-prior reset confers no exemption, suppression, one-shot status, or other special
-standing.
+When either entry qualifies, apply
+`references/default-workflow/implementation-mechanism-reset.md`, read there and
+binding at this point in remediation. It owns which side may act on a qualifying
+detection, the bounded instruction carried to the retained implementation
+delegate, the Uphold/revise dispositions, and the prohibition on any recorded
+reset artifact. Both dispositions return control to ordinary remediation here
+with the accepted blocker still open.
 
 Before dispatching the accepted blockers, apply the Accepted-blocker correction
-self-check's dispatch rule to derive and include any directive-known minimum
-obligations. Then apply
-`references/normative-remediation.md` to predict provisionally which units of
-the Corrective batch qualify. Where at least one does, identify every predicted
-unit and record its Authority delta to accompany the adjudicated directives at
-dispatch; do not ask the delegate to pre-answer the entitlement analysis. That
-prediction never settles entitlement, and this branch never widens into general
-remediation review.
+self-check's dispatch rule, owned by
+`references/default-workflow/accepted-blocker-correction-self-check.md` and read
+there now, to derive and include any directive-known minimum obligations,
+supplying that contract's content verbatim in the dispatch rather than its path.
+Then apply `references/normative-remediation.md` to predict provisionally which
+units of the Corrective batch qualify. Where at least one does, identify every
+predicted unit and record its Authority delta to accompany the adjudicated
+directives at dispatch; do not ask the delegate to pre-answer the entitlement
+analysis. That prediction never settles entitlement, and this branch never
+widens into general remediation review.
 
 Batch all accepted blockers from one gate, with any Authority deltas, back to
-the initial implementation delegate through the harness's supported continuation
-mechanism, applying the implementation-owner fallback in `SKILL.md`'s authority
-invariants when continuation is unavailable. For every batch dispatched here,
-the retained implementation delegate keeps its `Risks:` channel and authority
-relationship unchanged. Apply the shared correction self-check's pre-commit
-completion rule to the returned correction, then run affected focused checks
-under the same Candidate and Validation identity rule, applying
-`references/validation-evidence.md`.
+the initial implementation delegate through the harness's supported
+continuation mechanism, applying the implementation-owner fallback in
+`SKILL.md`'s authority invariants when continuation is unavailable. For every
+batch dispatched here, the retained implementation delegate keeps its `Risks:`
+channel and authority relationship unchanged. That delegate may itself reach a
+qualifying entry with no authorization round trip, so read
+`references/default-workflow/implementation-mechanism-reset.md` at this dispatch
+and supply it, together with the Implementation-mechanism reset qualification
+above, as content rather than as a path. Apply the shared correction
+self-check's pre-commit completion rule to the returned correction, then run
+affected focused checks under the same Candidate and Validation identity rule,
+applying `references/validation-evidence.md`.
 
 Before committing the exact current candidate, perform qualification
 reconciliation against the actual correction through
@@ -437,66 +335,13 @@ population; reuse every unchanged qualifying member under
 
 ### Bounded re-adjudication of an Ambiguous ruling
 
-Sticky adjudication has one bounded exception. When an **Ambiguous** ruling `R`
-forwards a directive `D`, carry a run-local note that `D` descends from `R` and
-name the frozen criterion `R` interpreted. That note is transient working state
-for the immediately following delta gate only: keep no lineage store, registry,
-lifecycle, event protocol, telemetry, or persistent correlation state for it,
-and drop it once that gate is adjudicated.
-
-Re-adjudicate `R` exactly once when all of the following hold at that gate:
-
-- `R` was classified **Ambiguous**; Contract-backed and Defensive rulings are
-  ineligible;
-- `D` produced the current remediation candidate;
-- an accepted blocker at that gate is attributable to the mechanism introduced
-  for `D`, traced the same way any blocking finding is traced to a criterion;
-- the frozen criterion bytes are unchanged; and
-- that criterion's Validation-surface membership is unchanged.
-
-An accepted blocker at the same gate that does not trace to `D`'s mechanism
-takes ordinary remediation. Anything requiring changed criterion text, an
-obligation those bytes do not already carry, or changed Validation-surface
-membership takes the existing trusted-maintainer or immutable-manifest hand-back
-route instead and is never re-adjudicated here.
-
-Before ordinary remediation continues, launch one fresh blind reader. Reuse the
-isolation pattern of `references/normative-remediation.md` without invoking or
-extending that mechanism. The reader is non-reviewing: never reuse it as a
-review-axis agent in this chain. Supply only the exact frozen criterion text,
-the bounded raw governing context needed to interpret it, and the raw
-triggering observation and its boundary. Withhold the prior ruling, any
-previously rejected alternative, the adjudication ledger, prior reviewer
-conclusions and dispositions, and the current implementation except a bounded
-raw fact needed to understand the triggering boundary. Ask it to derive the
-governing consequence at the observed boundary and, where several materially
-defensible readings exist, to enumerate them with the concrete obligation each
-creates; it must not prefer a reading because that reading is cheaper and must
-not propose an implementation. The reader derives meaning only; the primary
-retains adjudication authority. One fresh invocation may handle several
-eligible criterion units from the same gate independently.
-
-Then adjudicate:
-
-- **Uphold** — the prior interpretation stands. Continue ordinary remediation
-  and do not re-adjudicate `R` again in this run. The limit is one
-  re-adjudication per Ambiguous ruling, not one per run.
-- **Supersede** — the reproduced observation and its evidence remain valid, but
-  the primary replaces its earlier interpretation with another materially
-  defensible reading of the same unchanged bytes. Remove mechanism no criterion
-  requires rather than hardening it, keep any blocker portion that still applies
-  to surviving candidate content, and freshly adjudicate under
-  `references/validation-evidence.md` whether existing raw validation evidence
-  proves the newly adjudicated obligation: reuse evidence only where it directly
-  proves that obligation, rerun where sufficiency requires it, and carry no
-  earlier `tested` disposition across the reversal. The correction then takes
-  the ordinary correction → delta gate → fresh blind cumulative confirmation
-  path.
-
-Re-adjudication changes no frozen review-chain governing input, and the ledger
-stays out of every reviewer package. State in ordinary working reasoning which
-ruling was re-adjudicated, what the reader returned, whether the ruling was
-upheld or superseded, and the resulting evidence-sufficiency decision.
+Where a run-local `R` → `D` note is still live at that gate and an accepted
+blocker there is attributable to the mechanism introduced for `D`, apply
+`references/default-workflow/bounded-re-adjudication.md`, read there and binding
+before ordinary remediation continues. It owns the full eligibility test, the
+fresh blind non-reviewing reader, and the Uphold and Supersede outcomes. Uphold
+returns to ordinary remediation; Supersede returns through the ordinary
+correction, delta gate, and fresh blind cumulative confirmation path.
 
 ## 6. Closeout
 

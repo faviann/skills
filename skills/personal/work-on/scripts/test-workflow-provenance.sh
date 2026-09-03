@@ -154,6 +154,62 @@ git -C "$target_workflow_repo" add .; git -C "$target_workflow_repo" commit -qm 
 (cd "$target_workflow_repo" && "$command" capture --output "$fixture/target-clean.json")
 [[ "$(jq -r '.workflow' "$fixture/target-clean.json")" =~ ^[0-9a-f]{12}$ ]]
 
+# Extracted default-workflow modules are part of the default workflow's frozen
+# instruction identity. This list is hardcoded independently of the production
+# array on purpose: asking provenance for its own inputs would hide the exact
+# bug worth catching, a module created but never declared.
+expected_default_workflow_modules=(
+  skills/personal/work-on/references/default-workflow/accepted-blocker-correction-self-check.md
+  skills/personal/work-on/references/default-workflow/bounded-re-adjudication.md
+  skills/personal/work-on/references/default-workflow/implementation-mechanism-reset.md
+)
+default_identity_before="$(cd "$target" && "$command" identify-workflow)"
+target_clean_workflow="$(jq -r '.workflow' "$fixture/target-clean.json")"
+target_clean_work_on="$(jq -r '.["work-on"]' "$fixture/target-clean.json")"
+for module in "${expected_default_workflow_modules[@]}"; do
+  [[ -f "$skills/$module" ]] || {
+    echo "expected default-workflow module is missing: $module" >&2; exit 1; }
+  printf 'mutated module\n' >>"$skills/$module"
+  mutated_identity="$(cd "$target" && "$command" identify-workflow)"
+  [[ "$mutated_identity" != "$default_identity_before" ]] || {
+    echo "mutating $module left the default workflow identity unchanged" >&2
+    exit 1
+  }
+  if (cd "$target" && "$command" verify --run "$committed_run") \
+      >"$fixture/module.out" 2>"$fixture/module.err"; then
+    echo "verify accepted a mid-run change to $module" >&2; exit 1
+  fi
+  grep -Fq 'governing instructions changed since contract freeze' \
+    "$fixture/module.err"
+  if (cd "$target" && "$freeze_command" verify --run "$committed_run") \
+      >"$fixture/module-custody.out" 2>"$fixture/module-custody.err"; then
+    echo "frozen custody accepted a mid-run change to $module" >&2; exit 1
+  fi
+  grep -Fq 'current governing instruction identity does not match frozen custody' \
+    "$fixture/module-custody.err"
+  [[ "$(cd "$target_workflow_repo" && "$command" identify-workflow)" \
+    == "$target_identity" ]] || {
+    echo "mutating $module changed a docs/workflow.md selection" >&2; exit 1; }
+  # identify-workflow exposes only the workflow component, so also capture the
+  # custom-workflow run's full provenance: a default-only module wrongly added
+  # to work_on_inputs would move its work-on digest while leaving workflow alone.
+  (cd "$target_workflow_repo" && "$command" capture \
+    --output "$fixture/target-module.json")
+  [[ "$(jq -r '.workflow' "$fixture/target-module.json")" \
+    == "$target_clean_workflow" ]] || {
+    echo "mutating $module changed the docs/workflow.md workflow digest" >&2
+    exit 1
+  }
+  [[ "$(jq -r '.["work-on"]' "$fixture/target-module.json")" \
+    == "$target_clean_work_on" ]] || {
+    echo "mutating $module changed the docs/workflow.md work-on digest" >&2
+    exit 1
+  }
+  git -C "$skills" restore "$module"
+done
+[[ "$(cd "$target" && "$command" identify-workflow)" == "$default_identity_before" ]]
+[[ "$(cd "$target" && "$command" verify --run "$committed_run")" == "$committed" ]]
+
 # Invalid selected workflow objects fail rather than silently falling back.
 invalid="$fixture/invalid"; git init -q -b main "$invalid"; mkdir "$invalid/docs"
 mkdir "$invalid/docs/workflow.md"
