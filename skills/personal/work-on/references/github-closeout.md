@@ -50,7 +50,8 @@ Review-index dispatch and its incremental closure brief. Begin at the exact
 correction and judge only its effects on contract coverage, production paths,
 validation seams, Validation-surface members, evidence identity or sufficiency,
 scope, and unrequired machinery. Follow the assignment's concrete
-unchanged-context and #62 rules when those effects require it.
+correction-verification and unchanged-context rules when those effects require
+it.
 
 Return the closure findings and affected criterion/mechanism rows attributable
 to that scope. This delta closure is incremental: it does not reconstruct the
