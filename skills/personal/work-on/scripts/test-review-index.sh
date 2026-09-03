@@ -508,4 +508,111 @@ refuse unknown-subcommand "$review_index" enumerate
 refuse verify-without-identity "$review_index" verify --index "$readable_index"
 refuse read-without-role "$review_index" read --index "$readable_index" --index-sha256 "$readable_sha"
 
+# The changed-path inventory is derived from the pinned trees on demand rather
+# than stored, so every axis obtains the same complete raw no-renames view.
+# The expected set is written out independently of Git's own reporting.
+inventory="$repo/inventory"; mkdir -p "$inventory"
+printf 'keep\n' >"$inventory/keep.txt"
+printf 'moved content\n' >"$inventory/rename-me.txt"
+printf 'doomed\n' >"$inventory/delete-me.txt"
+git -C "$repo" add inventory; git -C "$repo" commit -qm inventory-base
+inventory_base_commit="$(git -C "$repo" rev-parse HEAD)"
+inventory_base_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+printf 'keep changed\n' >"$inventory/keep.txt"
+git -C "$repo" mv inventory/rename-me.txt inventory/renamed-to.txt
+git -C "$repo" rm -q inventory/delete-me.txt
+printf 'odd\n' >"$inventory/odd \"name\" ünï.txt"
+git -C "$repo" add inventory; git -C "$repo" commit -qm inventory-head
+inventory_head_commit="$(git -C "$repo" rev-parse HEAD)"
+inventory_head_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+
+printf '%s\0' \
+  'inventory/delete-me.txt' \
+  'inventory/keep.txt' \
+  'inventory/odd "name" ünï.txt' \
+  'inventory/rename-me.txt' \
+  'inventory/renamed-to.txt' >"$fixture/expected-changed-paths"
+
+root_inventory="$fixture/root-inventory"; mkdir -p "$root_inventory"
+create_endpoints "$root_inventory" cumulative \
+  "$inventory_base_commit" "$inventory_base_tree" \
+  "$inventory_head_commit" "$inventory_head_tree" >"$fixture/create-inventory.out"
+mapfile -t created_inventory <"$fixture/create-inventory.out"
+inventory_index="${created_inventory[0]}"; inventory_index_sha="${created_inventory[1]}"
+
+changed_paths() {
+  (cd "$repo" && "$review_index" changed-paths \
+    --index "$inventory_index" --index-sha256 "$inventory_index_sha")
+}
+# The contract is a complete inventory, not a path order, so every comparison
+# below is a NUL-safe set.
+same_paths() { cmp -s <(sort -z <"$1") <(sort -z <"$2"); }
+changed_paths >"$fixture/changed-paths"
+same_paths "$fixture/expected-changed-paths" "$fixture/changed-paths"
+
+# Rename inference stays disabled at the invocation rather than by inheriting a
+# default: the renamed file appears under both its old and its new path even
+# where the repository configures rename and copy detection explicitly.
+git -C "$repo" config diff.renames copies
+changed_paths >"$fixture/changed-paths-renames-configured"
+same_paths "$fixture/expected-changed-paths" "$fixture/changed-paths-renames-configured"
+git -C "$repo" config --unset diff.renames
+
+# Relative narrowing cannot drop paths outside the caller's subdirectory or
+# re-root the names it does emit.
+git -C "$repo" config diff.relative true
+(cd "$repo/inventory" && "$review_index" changed-paths \
+  --index "$inventory_index" --index-sha256 "$inventory_index_sha") \
+  >"$fixture/changed-paths-relative"
+same_paths "$fixture/expected-changed-paths" "$fixture/changed-paths-relative"
+git -C "$repo" config --unset diff.relative
+
+# A changed gitlink is part of the inventory: ambient submodule-ignore
+# configuration cannot hide a submodule the pinned trees disagree about.
+submodule="$fixture/submodule"; git init -q -b main "$submodule"
+git -C "$submodule" config user.name Test; git -C "$submodule" config user.email test@example.invalid
+printf 'one\n' >"$submodule/f"; git -C "$submodule" add .; git -C "$submodule" commit -qm one
+submodule_one="$(git -C "$submodule" rev-parse HEAD)"
+printf 'two\n' >"$submodule/f"; git -C "$submodule" add .; git -C "$submodule" commit -qm two
+
+git -C "$repo" -c protocol.file.allow=always submodule add -q "$submodule" vendored
+git -C "$repo" add -A; git -C "$repo" commit -qm gitlink-base
+gitlink_base_commit="$(git -C "$repo" rev-parse HEAD)"
+gitlink_base_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+git -C "$repo/vendored" checkout -q "$submodule_one"
+git -C "$repo" add -A; git -C "$repo" commit -qm gitlink-changed
+gitlink_head_commit="$(git -C "$repo" rev-parse HEAD)"
+gitlink_head_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+
+root_gitlink="$fixture/root-gitlink"; mkdir -p "$root_gitlink"
+create_endpoints "$root_gitlink" cumulative \
+  "$gitlink_base_commit" "$gitlink_base_tree" \
+  "$gitlink_head_commit" "$gitlink_head_tree" >"$fixture/create-gitlink.out"
+mapfile -t created_gitlink <"$fixture/create-gitlink.out"
+printf '%s\0' vendored >"$fixture/expected-gitlink-paths"
+git -C "$repo" config diff.ignoreSubmodules all
+(cd "$repo" && "$review_index" changed-paths --index "${created_gitlink[0]}" \
+  --index-sha256 "${created_gitlink[1]}") >"$fixture/changed-paths-gitlink"
+same_paths "$fixture/expected-gitlink-paths" "$fixture/changed-paths-gitlink"
+git -C "$repo" config --unset diff.ignoreSubmodules
+
+# A replace ref rebinding a pinned tree cannot change the comparison.
+git -C "$repo" replace -f "$inventory_head_tree" "$inventory_base_tree" >/dev/null
+[[ -z "$(git -C "$repo" diff --name-only "$inventory_base_tree" "$inventory_head_tree")" ]]
+changed_paths >"$fixture/changed-paths-replaced"
+same_paths "$fixture/expected-changed-paths" "$fixture/changed-paths-replaced"
+git -C "$repo" replace -d "$inventory_head_tree" >/dev/null
+
+# The whole package authenticates before any path is derived, so a wrong
+# identity or a tampered component emits no inventory at all. Each refusal runs
+# inside the pinned repository, where the endpoints resolve and a derivation
+# that skipped authentication would succeed.
+in_repo() { (cd "$repo" && "$@"); }
+refuse changed-paths-wrong-identity in_repo "$review_index" changed-paths \
+  --index "$inventory_index" --index-sha256 "$zero_digest"
+scratch_package changed-paths-tampered
+printf 'rewritten Standards input\n' >"$(scratch_pkg)/components/standards"
+refuse changed-paths-tampered in_repo "$review_index" changed-paths \
+  --index "${scratch[0]}" --index-sha256 "${scratch[1]}"
+
 printf 'review index: all assertions passed\n'

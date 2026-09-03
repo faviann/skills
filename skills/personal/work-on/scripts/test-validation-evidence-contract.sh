@@ -121,8 +121,7 @@ requires_contract "$SKILL" \
   'references/validation-evidence.md.*implementation.*readiness.*Standards.*Spec.*closure.*primary'
 requires_contract "$WORKFLOW" \
   'the public delegate and reviewer briefs receive qualifying evidence and policy' \
-  'Validation evidence:.*qualifying raw evidence.*validation-evidence.md' \
-  'readiness.*Standards.*Spec.*closure.*qualifying raw validation evidence.*validation-evidence.md'
+  'Validation evidence:.*qualifying raw evidence.*validation-evidence.md'
 requires_contract "$CLOSEOUT" \
   'the closure gate adjudicates evidence under the reuse policy' \
   'validation-evidence.md.*reuse.*Independent execution'

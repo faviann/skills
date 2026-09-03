@@ -12,7 +12,6 @@ skill_dir="$(cd "$script_dir/.." && pwd)"
 SKILL="$skill_dir/SKILL.md"
 WORKFLOW="$skill_dir/references/default-workflow.md"
 CONTRACT="$skill_dir/references/default-workflow/accepted-blocker-correction-self-check.md"
-STATE="$skill_dir/references/review-state-machine.md"
 GLOSSARY="$skill_dir/../../../CONTEXT.md"
 
 failures=0
@@ -47,15 +46,6 @@ lacks() {
   fi
 }
 
-extract_section() {
-  local source="$1" heading="$2" output="$3"
-  awk -v heading="$heading" '
-    $0 == heading { inside = 1 }
-    inside && $0 != heading && /^#{1,3} / { exit }
-    inside { print }
-  ' "$source" >"$output"
-}
-
 extract_h2_section() {
   local source="$1" title="$2" output="$3"
   awk -v title="$title" '
@@ -65,22 +55,9 @@ extract_h2_section() {
   ' "$source" >"$output"
 }
 
-extract_text_manifest() {
-  local source="$1" output="$2"
-  awk '
-    $0 == "```text" { inside = 1; next }
-    inside && $0 == "```" { exit }
-    inside { print }
-  ' "$source" >"$output"
-}
-
 contract="$CONTRACT"
 readiness="$fixture_dir/readiness"
 remediation="$fixture_dir/remediation"
-cumulative_section="$fixture_dir/cumulative-package-section"
-delta_section="$fixture_dir/delta-package-section"
-cumulative="$fixture_dir/cumulative-package-manifest"
-delta="$fixture_dir/delta-package-manifest"
 [[ -f "$contract" ]] || {
   fail 'the correction self-check has its own authoritative module'
   printf '\n%s correction-self-check assertion(s) failed.\n' "$failures" >&2
@@ -88,10 +65,6 @@ delta="$fixture_dir/delta-package-manifest"
 }
 extract_h2_section "$WORKFLOW" 'Primary checkpoint' "$readiness"
 extract_h2_section "$WORKFLOW" 'Adjudicate and remediate through delta review' "$remediation"
-extract_section "$STATE" '### Cumulative-review package' "$cumulative_section"
-extract_section "$STATE" '### Delta-review package' "$delta_section"
-extract_text_manifest "$cumulative_section" "$cumulative"
-extract_text_manifest "$delta_section" "$delta"
 
 ## The cross-workflow invariant stays representation-agnostic.
 has "$SKILL" \
@@ -191,19 +164,6 @@ if ! awk '
 ' "$(flatten "$remediation")"; then
   fail 'post-correction self-check completion precedes normative reconciliation in remediation'
 fi
-
-## Rechecked reasoning stays primary-side and outside package manifests.
-has "$contract" \
-  'Keep `Rechecked:` rationale, applicability declarations, conclusions, and correction reasoning in primary-side working state, excluded from cumulative and delta reviewer packages' \
-  'the shared contract positively excludes Rechecked reasoning from both package types'
-for package in "$cumulative" "$delta"; do
-  if ! grep -q '[^[:space:]]' "$package"; then
-    fail 'the extracted reviewer package manifest is non-empty'
-  fi
-  lacks "$package" \
-    '(^|[[:space:]])-[[:space:]]+([*][*]|`)?Rechecked:([*][*]|`)?([[:space:]]|$)' \
-    'the reviewer package does not enumerate Rechecked as a field'
-done
 
 ## Self-checking remains implementation work rather than another review stage.
 has "$contract" \

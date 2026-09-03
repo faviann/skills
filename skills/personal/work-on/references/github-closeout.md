@@ -11,9 +11,10 @@ raw artifacts only. Neither kind receives the ledger or anyone's conclusions.
 ### Cumulative closure
 
 An initial or final cumulative closure axis receives the selected workflow's
-identical neutral cumulative-review package. Independently inspect the full
-contract, production paths, cumulative subject, and evidence, then build this
-complete table:
+identical neutral cumulative Review-index dispatch, and begins from the closure
+starting components and completion contract that dispatch defines. Independently
+inspect the full contract, production paths, cumulative subject, and evidence,
+then build this complete table:
 
 | Acceptance criterion | Production path | Exact artifact/mode/seam | Evidence | Status |
 |---|---|---|---|---|
@@ -44,12 +45,12 @@ backstop after remediation.
 
 ### Delta closure
 
-The delta closure axis receives the selected workflow's identical neutral pinned
-review package and its incremental closure brief. Begin at the exact correction
-and judge only its effects on contract coverage, production paths, validation
-seams, Validation-surface members, evidence identity or sufficiency, scope, and
-unrequired machinery. Follow the package's concrete unchanged-context and #62
-rules when those effects require it.
+The delta closure axis receives the selected workflow's identical neutral
+Review-index dispatch and its incremental closure brief. Begin at the exact
+correction and judge only its effects on contract coverage, production paths,
+validation seams, Validation-surface members, evidence identity or sufficiency,
+scope, and unrequired machinery. Follow the assignment's concrete
+unchanged-context and #62 rules when those effects require it.
 
 Return the closure findings and affected criterion/mechanism rows attributable
 to that scope. This delta closure is incremental: it does not reconstruct the
@@ -60,9 +61,11 @@ the backstop.
 
 ## Closeout confirmation
 
-Closeout consumes exactly one applicable clean cumulative confirmation: either
-the clean initial cumulative gate while its candidate and governing inputs stay
-unchanged, or the post-remediation fresh blind cumulative confirmation. Do not
+Closeout consumes exactly one applicable clean cumulative confirmation, whose
+three axes all returned `COMPLETE` against the same Review-index identity:
+either the clean initial cumulative gate while its candidate and governing
+inputs stay unchanged, or the post-remediation fresh blind cumulative
+confirmation. Do not
 delegate a second identical closure sweep merely because Closeout begins. Reuse
 the confirmation only while its base, exact Candidate identity, trusted
 snapshot, binding standards, accepted full review contract,

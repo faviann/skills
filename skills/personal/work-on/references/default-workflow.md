@@ -64,8 +64,9 @@ identity matches the captured one. A newly arrived
 trusted comment does not join this frozen snapshot or invalidate it merely by
 existing. Only an explicit trusted-maintainer contract change takes the
 invalidation path below. Only after verification read the same snapshot and
-manifest back, supply them verbatim to the implementation delegate and to the
-readiness, Standards, Spec, and closure contexts, and keep them available for
+manifest back, supply them verbatim to the implementation delegate and the
+readiness context, freeze them into each review gate's Review index under
+`references/review-state-machine.md`, and keep them available for
 adjudication.
 
 Before delegation, missing, malformed, corrupt, replaced, or mismatched custody
@@ -158,7 +159,9 @@ Risks:
 
 ### Same-mechanism neighborhood brief
 
-Give the readiness sweep, both `code-review` axes, and closure sweep this brief:
+Give the readiness sweep this brief directly, and carry it into every review
+gate as part of that gate's Review-index assignment under
+`references/review-state-machine.md`:
 after reproducing a defect, name its mechanism and governing criterion, then
 trace only its immediate neighborhood — the same boundary's branches, call
 sites, and input shapes; diagnostics from the same untrusted source; or states
@@ -171,12 +174,15 @@ siblings. Group the seed with minimally reproduced siblings, each with its own
 location, criterion, and impact; report the seed alone when none reproduce.
 State the stop boundary and stop before another criterion, subsystem, external
 boundary, or speculative defense. Report reproduced instances only; the
-primary retains adjudication and repair. Supply the frozen Validation-surface
-manifest with this brief: it names the evidence each criterion owes, and never
-limits what the sweep may inspect or report. Supply readiness, Standards, Spec,
-and closure with qualifying raw validation evidence and
-`references/validation-evidence.md`; never supply prior reviewer conclusions,
-adjudications, or dispositions.
+primary retains adjudication and repair. The frozen Validation-surface
+manifest accompanies this brief: it names the evidence each criterion owes, and
+never limits what the sweep may inspect or report. Supply readiness with that
+manifest, qualifying raw validation evidence, and
+`references/validation-evidence.md` directly. Each review gate freezes the
+manifest, the policy, and the qualifying evidence records into its Review
+index; raw evidence stays at its safe provenance locator, where an axis
+inspects it when its obligation requires. Never supply prior reviewer
+conclusions, adjudications, or dispositions.
 
 ## 3. Primary checkpoint
 

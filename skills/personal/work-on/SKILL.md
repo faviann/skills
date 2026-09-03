@@ -62,7 +62,8 @@ Authority invariants (bind regardless of workflow):
   freeze is the single authority point that mints the Run identity and captures
   the complete governing-instruction identity into the same owner-only custody,
   before implementation delegation; supply the manifest to every
-  implementation and review delegate and keep it available for adjudication. It
+  implementation delegate, make it reachable by every review delegate, and keep
+  it available for adjudication. It
   bounds the direct-evidence obligation only — never authorized implementation,
   ordinary review, defect reporting, or same-mechanism investigation — and after
   delegation it is immutable. `references/closability-gate.md` owns its creation
