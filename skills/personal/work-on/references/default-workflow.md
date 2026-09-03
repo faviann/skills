@@ -80,7 +80,8 @@ It bounds evidence, not scope. Implementation may touch any other artifact this
 issue authorizes; readiness, both `code-review` axes, and the closure sweep may
 inspect anything their own contracts already permit; reviewers may report
 defects outside it; and the same-mechanism neighborhood brief below stays fully
-available. A sibling reproduced outside the manifest does not enlarge it.
+available during readiness and cumulative review. A sibling reproduced outside
+the manifest does not enlarge it.
 
 After delegation the manifest is immutable. A reproduced sibling, an adjacent
 improvement, or a desirable defense outside it is a follow-up, never a new
@@ -159,9 +160,9 @@ Risks:
 
 ### Same-mechanism neighborhood brief
 
-Give the readiness sweep this brief directly, and carry it into every review
-gate as part of that gate's Review-index assignment under
-`references/review-state-machine.md`:
+Give the readiness sweep this brief directly, and carry it into every initial
+and final cumulative review gate as part of that gate's Review-index assignment
+under `references/review-state-machine.md`:
 after reproducing a defect, name its mechanism and governing criterion, then
 trace only its immediate neighborhood — the same boundary's branches, call
 sites, and input shapes; diagnostics from the same untrusted source; or states
@@ -241,7 +242,13 @@ the closure gate's human/escalation path instead of inventing one.
 
 Never forward raw findings. For each blocking finding, first trace the
 mechanism it concerns to an acceptance criterion; mechanism no criterion
-requires is removed, not repaired. Then classify:
+requires is removed, not repaired. A synthetic witness does not become
+Contract-backed merely because it can be constructed and mapped to a broad
+criterion. It may block only when it demonstrates behavior the frozen criterion
+explicitly promises or belongs to a representation family already observed in
+the governed repository surface. Mechanical reproducibility or semantic
+equivalence alone is insufficient to make a synthetic sibling blocking. The
+primary interprets the contract and adjudicates. Then classify:
 
 - **Contract-backed** — forward a precise directive naming the criterion.
 - **Defensive** (guards what no criterion requires) — reject unless it names

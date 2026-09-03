@@ -12,9 +12,10 @@ Before the initial cumulative gate, freeze one review chain's comparison base,
 trusted contract snapshot, complete Standards input, accepted full review
 contract, and finite Validation-surface manifest. The accepted full review
 contract is the complete Standards, Spec, and closure assignment, including the
-same-mechanism brief and validation-evidence policy. Retain exact identities for
-those inputs and verify them before every review transition. They govern one
-chain; an old Reviewed anchor never crosses to a different governing state.
+validation-evidence policy and the same-mechanism brief whose deliberate
+discovery applies to readiness and cumulative gates. Retain exact identities
+for those inputs and verify them before every review transition. They govern
+one chain; an old Reviewed anchor never crosses to a different governing state.
 
 ### Frozen Standards input
 
@@ -59,7 +60,7 @@ closed here rather than at a gate. Then create the index by running
 resolve there. Supply the gate kind, the
 pinned comparison and Candidate commit and tree identities, and one file per
 frozen component: `--review-assignment` carries that gate's assignment below
-together with the selected workflow's common review brief for review gates,
+together with the selected workflow's applicable common review brief,
 `--trusted-contract` the frozen trusted snapshot and referenced contracts,
 `--standards` the complete frozen Standards input, `--validation-evidence-policy`
 the frozen evidence policy, `--validation-surface-manifest` the frozen manifest,
@@ -173,7 +174,8 @@ with this assignment as its `--review-assignment` component:
 ```text
 Cumulative review assignment: independently review the exact cumulative
 candidate against the full accepted review contract, using the dispatched
-Review index as the complete frozen governing universe.
+Review index as the complete frozen governing universe. Deliberately perform
+the bounded same-mechanism neighborhood discovery in the common review brief.
 ```
 
 Invoke `code-review` with the common dispatch for Standards and Spec; give
@@ -219,13 +221,15 @@ assignment as its `--review-assignment` component:
 Delta review assignment: independently review the exact candidate delta against
 the full accepted review contract, using the dispatched Review index as the
 complete frozen governing universe.
-- Review scope: Begin at the exact correction delta. Inspect unchanged context
-  only for a recorded concrete contract question, changed-mechanism question,
-  reproduced finding or seed, or #62 same-mechanism neighborhood investigation.
-  For #62, stay inside the same mechanism, governing criterion, and public flow;
-  stop before another criterion, subsystem, external boundary, or speculative
-  defense. Do not routinely reconstruct, repackage, or reread the full
-  cumulative candidate.
+- Review scope: Verify the exact accepted-blocker correction represented by the
+  delta against the full accepted review contract. Inspect only enough unchanged
+  surrounding context to determine whether the correction satisfies that
+  contract or introduced a regression. Do not deliberately enumerate new
+  sibling locations, input families, representations, branches, or adjacent
+  variants as another same-mechanism neighborhood search. If you independently
+  encounter a blocking defect, report it normally, but do not expand it into
+  sibling discovery in this delta gate. Deliberate neighborhood discovery
+  belongs to cumulative review.
 ```
 
 The dispatched index is the review input. Separately enforce its blindness:
@@ -241,8 +245,8 @@ with the common dispatch for Standards and Spec; give the closure axis that
 identical dispatch and its closure brief.
 
 Apply the assignment's Review scope exactly. It makes the correction delta the
-initial review search surface while keeping concrete unchanged-context access
-and #62's same-mechanism investigation and stop boundaries reachable.
+correction-verification surface while keeping only the unchanged-context access
+needed to determine contract satisfaction or regression.
 
 Advance the Reviewed anchor only after all three required delta axes complete
 against the same exact candidate under unchanged governing inputs. Advance it

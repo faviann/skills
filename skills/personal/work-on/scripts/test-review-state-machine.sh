@@ -110,21 +110,6 @@ has "$CLOSEOUT" \
   'the final cumulative closure axis retains the complete backstop'
 echo 'ok - pinned inputs route to the adapter and closure stays blind'
 
-## Delta is the initial surface; concrete reasons bound context expansion
-has "$STATE" \
-  'correction delta.*initial review search surface' \
-  'delta review starts at the correction rather than reconstructing the candidate'
-has "$STATE" \
-  'unchanged context.*concrete.*contract question.*changed-mechanism question.*reproduced finding.*#62' \
-  'unchanged context requires one recorded concrete reason'
-has "$STATE" \
-  '#62.*same-mechanism.*same.*criterion.*public flow.*stop.*another criterion.*subsystem.*external boundary.*speculative' \
-  '#62 remains reachable with its bounded stop rules'
-has "$STATE" \
-  'not routin.*(reconstruct|repackage|reread).*full cumulative candidate' \
-  'context expansion cannot become a routine cumulative reread'
-echo 'ok - delta scope preserves bounded unchanged-context and #62 investigation'
-
 ## Clean delta returns to blind cumulative confirmation; another fix repeats both legs
 has "$STATE" \
   'clean delta gate.*fresh blind cumulative.*Standards.*Spec.*closure.*full accepted review contract' \
