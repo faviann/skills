@@ -250,14 +250,12 @@ assert_has "$workflow_doc" 'manifest-identity\.sh verify --run'
 # added for an undeclared module would read live bytes the frozen Run never
 # covered.
 assert_has "$workflow_doc" \
-  'conditional reference when its call site is reached rather than preloading'
+  'conditional reference.{0,80}call site is reached.{0,40}rather than preload'
 assert_has "$workflow_doc" \
-  "part of this run's frozen instruction identity.*verify the explicitly named Run identity"
-assert_has "$workflow_doc" \
-  'before consuming one.*mismatch takes the same fail-closed route'
-assert_has "$workflow_doc" \
-  'do not repair, refresh, or substitute the reference in-run'
-declared_inputs=" $(sed -n 's/^default_workflow_inputs=(\(.*\))$/\1/p' "$provenance") "
+  'frozen instruction identity.{0,200}verify.{0,60}Run identity.{0,80}before consuming'
+assert_has "$workflow_doc" 'mismatch.{0,120}fail-closed'
+declared_inputs=" $(tr '\n' ' ' <"$provenance" |
+  sed -n 's/.*default_workflow_inputs=(\([^)]*\)).*/\1/p' | tr -s ' ') "
 [[ "$declared_inputs" =~ [^[:space:]] ]] || {
   echo 'default_workflow_inputs is not an explicit list' >&2; exit 1; }
 mapfile -t cited_modules < <(

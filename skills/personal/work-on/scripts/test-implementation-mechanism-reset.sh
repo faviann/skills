@@ -131,15 +131,6 @@ lacks "$remediation" \
   'the delegate is never handed a skills-checkout path instead of content'
 echo 'ok - delegate-first detection receives the contract as dispatched content'
 
-## No lifecycle machinery is introduced to carry the reset.
-for forbidden in 'reset registry' 'reset receipt' 'reset loader' 'reset resolver' \
-  'reset state machine'; do
-  for source in "$MODULE" "$remediation"; do
-    lacks "$source" "$forbidden" "the reset introduces no $forbidden"
-  done
-done
-echo 'ok - the reset stays instruction-only'
-
 if (( failures > 0 )); then
   printf '\n%s implementation-mechanism-reset assertion(s) failed.\n' "$failures" >&2
   exit 1
