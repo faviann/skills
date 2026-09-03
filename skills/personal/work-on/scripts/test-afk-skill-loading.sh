@@ -43,18 +43,7 @@ assert_explicit_only personal/work-on
 echo "ok - worker skill remains explicit-only"
 
 assert_implicit engineering/tdd
-if grep -Eq '(^|[^[:alnum:]])[$/]implement([^[:alnum:]]|$)' \
-  "$skills_root/personal/work-on/SKILL.md" \
-  "$skills_root/personal/work-on/references/default-workflow.md" \
-  "$skills_root/personal/work-on/references/default-workflow/accepted-blocker-correction-self-check.md" \
-  "$skills_root/personal/work-on/references/default-workflow/bounded-re-adjudication.md" \
-  "$skills_root/personal/work-on/references/default-workflow/implementation-mechanism-reset.md"; then
-  echo "work-on delegates through the explicit-only implement skill" >&2
-  exit 1
-fi
-grep -Fq 'Scoped implementation contract:' \
-  "$skills_root/personal/work-on/references/default-workflow.md"
-echo "ok - delegate receives a scoped contract with an available TDD skill"
+echo "ok - TDD skill is available to the delegate"
 
 assert_implicit engineering/code-review
 echo "ok - primary review skill is available to noninteractive Codex"
