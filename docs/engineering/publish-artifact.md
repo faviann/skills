@@ -34,6 +34,8 @@ Published files sit beneath readable repository and producer groups, then a UTC 
 
 Prepare only the files you intend to publish. The publisher does not filter a broad directory, combine roots, or transform content. It refuses source symlinks, special filesystem entries, traversal, control characters, and invalid UTF-8 names. Ordinary names, including spaces and Unicode, are encoded per URL path segment. Keep the completed source unchanged until publication returns.
 
+Preparation space and publication space must not overlap. The source and publishing root cannot resolve to the same location or contain one another, including through a configured root symlink. Overlap returns `invalid-call` before writing, so repeated publication cannot pull earlier generations into a later copy.
+
 ## Common questions
 
 **What happens on a machine where I have not configured publishing?**
