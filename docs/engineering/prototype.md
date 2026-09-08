@@ -21,6 +21,20 @@ The question picks the branch, and the branches produce very different artifacts
 
 Both keep state in memory, start with no thinking required, and show you the full state after every step. The moment you find yourself hardening one — adding a test, wiring the real database, generalising for a case you might want later — you have stopped prototyping.
 
+## Opening a logic prototype remotely
+
+A finished logic prototype can be handed back as a direct HTTP URL through [publish-artifact](https://aihero.dev/skills-publish-artifact). Publication needs a host-configured web directory and URL mapping; the prototype remains one self-contained HTML file.
+
+| Delivery setup or result | What you receive |
+| --- | --- |
+| Publisher available and publication succeeds | The direct HTTP URL for a delivery copy. |
+| Publisher returns `unconfigured` | The usual file to open or send. |
+| Publisher unavailable and `FAVIANN_SKILLS_ARTIFACT_CONFIG` unset | The usual file to open or send, including with a standalone skill installation. |
+| `FAVIANN_SKILLS_ARTIFACT_CONFIG` explicitly set, even empty, but publisher unavailable | A delivery failure and the canonical worktree file path for recovery. |
+| Dependency, configuration, or publication failure | A delivery failure and the canonical worktree file path for recovery; local access does not count as successful publication. |
+
+The completed worktree file remains canonical: publishing copies it without moving or replacing it. Revisions and throwaway-branch capture still use that source. UI prototypes keep their existing route and development-server delivery.
+
 ## The prototype is a primary source
 
 A finished prototype leaves two things, and they go to different places.

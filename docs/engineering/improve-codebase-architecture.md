@@ -29,7 +29,9 @@ Where it is confusable with siblings:
 
 None to run it. It reads `CONTEXT.md` and any ADRs in `docs/adr/` if they exist, and speaks in your domain's own nouns when they do — a candidate reads as "deepen the Order intake module," not "refactor the FooBarHandler."
 
-It writes in two places. The report goes to `<tmpdir>/architecture-review-<timestamp>.html`, outside the repo. During the grilling loop it will add or sharpen terms in `CONTEXT.md`, creating that file if it does not exist, and offer to record a rejected candidate as an ADR so a future run does not re-suggest it.
+The report goes to `<tmpdir>/architecture-review-<timestamp>.html`, outside the repo. During the grilling loop it will add or sharpen terms in `CONTEXT.md`, creating that file if it does not exist, and offer to record a rejected candidate as an ADR so a future run does not re-suggest it.
+
+Remote delivery additionally needs [publish-artifact](https://aihero.dev/skills-publish-artifact), its Linux publication dependencies, and a host-configured filesystem-to-HTTP mapping. The host supplies the web server and access control. The report is completed in temporary storage first, then the publisher copies it into that mapping; the source remains available for recovery.
 
 ## Depth, and the report that hunts for it
 
@@ -50,6 +52,17 @@ The report ends with a **Top recommendation** — the one it would tackle first 
 Picking a candidate starts a [grilling](https://aihero.dev/skills-grilling) session over it: constraints, what sits behind the seam, which tests survive, what the deepened interface should look like. The output of that session is a decision, not a diff. From there the normal flow applies — take the decision into [to-spec](https://aihero.dev/skills-to-spec), then [to-tickets](https://aihero.dev/skills-to-tickets), then [implement](https://aihero.dev/skills-implement).
 
 ## Common questions
+
+**Can I open the report when the agent runs on another machine?**
+
+Yes, with the shared publisher and host mapping configured. Delivery follows these cases:
+
+| Situation | What you receive |
+| --- | --- |
+| Publication succeeds | A direct HTTP(S) URL, with no browser opened on the agent's host. |
+| Publisher returns `unconfigured`, or is unavailable and `FAVIANN_SKILLS_ARTIFACT_CONFIG` is unset | The usual local opener attempt and absolute temporary file path. |
+| `FAVIANN_SKILLS_ARTIFACT_CONFIG` is explicitly set but the publisher is unavailable | A delivery failure and the recoverable temporary source path. |
+| Publisher dependency, configuration, or publication fails | A delivery failure and the recoverable temporary source path; local fallback is not reported as success. |
 
 **It grilled me for an hour about one idea instead of showing me options. Can I turn that off?**
 
@@ -91,7 +104,7 @@ There is no good answer shipped with the skill. The recurring request is for a `
 
 - The candidates name your domain's concepts, not invented class names — "the Order intake module," not "the FooBarHandler."
 - The candidates cluster in files you have edited recently, not in dormant corners of the repo.
-- No code changed during the run. The only new file is the HTML report in your temp directory.
+- No code changed during the run. The HTML report remains in your temp directory, including after publication.
 - It stops after the report and asks which candidate you want, rather than continuing on its own.
 - Each card explains the payoff as locality or leverage, and says which tests get simpler — not just "this is cleaner."
 - Rejecting a candidate for a durable reason gets you an offer to record an ADR, so the next run does not re-suggest it.
