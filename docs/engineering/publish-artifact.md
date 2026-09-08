@@ -32,7 +32,7 @@ Published files sit beneath readable repository and producer groups, then a UTC 
 - A file source publishes that file and returns its direct URL.
 - A directory source publishes every regular file and directory beneath it, preserving relative paths, hidden entries, and empty directories. Identify one contained regular file as primary; if your request leaves that choice ambiguous, the agent asks you to name it.
 
-Prepare only the files you intend to publish. The publisher does not filter a broad directory, combine roots, or transform content. It refuses source symlinks, special filesystem entries, traversal, control characters, and invalid UTF-8 names. Ordinary names, including spaces and Unicode, are encoded per URL path segment. Keep the completed source unchanged until publication returns.
+Prepare only the files you intend to publish. The publisher does not filter a broad directory, combine roots, or transform content. Symlinked ancestors outside the source are allowed. It refuses symlinks at the source itself or within its tree, special filesystem entries, traversal, control characters, and invalid UTF-8 names. Ordinary names, including spaces and Unicode, are encoded per URL path segment. Keep the completed source unchanged until publication returns.
 
 Preparation space and publication space must not overlap. The source and publishing root cannot resolve to the same location or contain one another, including through a configured root symlink. Overlap returns `invalid-call` before writing, so repeated publication cannot pull earlier generations into a later copy.
 
