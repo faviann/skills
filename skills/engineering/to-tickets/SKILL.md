@@ -80,7 +80,7 @@ Do NOT close or modify any parent issue.
 - [ ] Acceptance criterion 1
 - [ ] Acceptance criterion 2
 
-**Out of scope:** prohibitions this ticket carries down from the parent. These are scope fences for the reviewer, not acceptance criteria: they assert that code does not exist, which has no honest test seam, so do not build machinery to prove them. Omit if the ticket carries none.
+**Out of scope:** prohibitions this ticket carries down from the parent. Scope fences for the reviewer, not acceptance criteria: they assert code does not exist, so do not build anything to prove them. Omit if the ticket carries none.
 
 </local-ticket-template>
 
@@ -101,7 +101,7 @@ The end-to-end behaviour this ticket makes work, from the user's perspective, no
 
 ## Out of scope
 
-These are scope fences for the reviewer, not acceptance criteria. They assert that code does not exist, which has no honest test seam, so do not build machinery to prove them.
+Scope fences for the reviewer, not acceptance criteria: they assert code does not exist, so do not build anything to prove them.
 
 - A prohibition this ticket carries down from the parent, or omit this section.
 
@@ -111,6 +111,6 @@ These are scope fences for the reviewer, not acceptance criteria. They assert th
 
 </issue-template>
 
-In either form, a prohibition the ticket carries down from the parent belongs in **Out of scope**, never in acceptance criteria. A fence asserts some code does not exist, so no input could make it fail; as a criterion it can only ever be ticked on faith.
+In either form, a prohibition the ticket carries down from the parent belongs in **Out of scope**, never in acceptance criteria.
 
 In either form, avoid specific file paths or code snippets: they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo, just the important bits.
