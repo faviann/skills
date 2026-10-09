@@ -2,7 +2,7 @@
 
 `to-tickets` takes a plan, a [spec](https://www.aihero.dev/ai-coding-dictionary/spec), or the conversation you are in, and breaks it into a set of **[tickets](https://www.aihero.dev/ai-coding-dictionary/ticket)** on your issue tracker. Each ticket declares its **blocking edges**: the other tickets that have to finish before it can start.
 
-Every ticket is a **tracer bullet**: a narrow but complete path through every layer of the change (schema, API, UI, tests) that can be demoed on its own the moment it lands. That is the constraint that makes it behave differently from the obvious way to split work, which is to cut one layer at a time and integrate at the end. It also sizes each ticket to fit in a single fresh [context window](https://www.aihero.dev/ai-coding-dictionary/context-window), because the thing that will pick the ticket up is a [session](https://www.aihero.dev/ai-coding-dictionary/session) that has never seen your spec.
+Every ticket is a **tracer bullet**: a narrow but complete path through every layer of the change (schema, API, UI, tests) that can be demoed on its own the moment it lands. That is the constraint that makes it behave differently from the obvious way to split work, which is to cut one layer at a time and integrate at the end. It also sizes each ticket to fit in a single fresh [context window](https://www.aihero.dev/ai-coding-dictionary/context-window), because the thing that will pick the ticket up is a [session](https://www.aihero.dev/ai-coding-dictionary/session) that has never seen your spec, and to close as one pull request a human can review in one sitting.
 
 ## When to reach for it
 
@@ -28,6 +28,8 @@ A **horizontal** slice ships one layer of the change. Nothing works until every 
 
 This is the rule people break most often, and the consequences are well documented. One team ran a 26-ticket stack sliced by layer (corpus, producer, aggregator, selector) and got roughly twenty agent runs per closed ticket, about three quarters of them rework. Their own post-mortem traced every failure class back to the horizontal slicing rather than to the implementations.
 
+Two budgets bound how big a slice gets, and both have to hold: it has to fit in a single fresh context window, and it has to close as one reviewable pull request. The first is a capacity limit on the agent building it; the second is a limit on the human reviewing it. A ticket can pass the first and fail the second: it fits in context comfortably, then lands as a pull request nobody can review in one sitting. That is why the review budget is named separately.
+
 Two things happen before anything is published. `to-tickets` looks for prefactoring (the principle "make the change easy, then make the easy change") and orders that work first. Then it presents the breakdown as a numbered list and quizzes you on it: is the granularity right, are the blocking edges real, should anything merge or split. Nothing reaches the tracker until you approve, and that quiz is the place to push back.
 
 ## Blocking edges
@@ -40,6 +42,12 @@ The edges are the point of the artifact. They read two ways depending on the tra
 | A real tracker (GitHub, Linear) | Native blocking links, or sub-issues where the tracker has them | Any ticket whose blockers are done is on the **frontier** and can be grabbed |
 
 The edges live in the ticket either way. The medium only decides whether anything can act on them in parallel. `to-tickets` produces the artifact; running it (one session at a time, or a fleet) is your job, not the skill's.
+
+## Fences go in Out of scope, not acceptance criteria
+
+A spec usually carries prohibitions as well as requirements: "capture adds no message broker", "no mutable `latest` tag". When a ticket inherits one, it goes in the ticket's **Out of scope** section, never in its acceptance criteria.
+
+A fence asserts some code *doesn't* exist, so there is no input that could make it fail. As a criterion it can only ever be ticked on faith, and it invites someone to build machinery proving a negative. Both templates carry an Out of scope section for exactly this, with the standing note that these are fences for the reviewer and nothing should be built to prove them.
 
 ## The wide-refactor exception
 
@@ -85,6 +93,7 @@ The skill stops at the artifact, and there is no auto-dispatch mode. Dispatch is
 - The list comes back to you numbered, with a "Blocked by" line on each, before anything is published.
 - The ticket at the top has no blockers and can be started immediately.
 - Nothing in a ticket body is a file path or a line number, except a snippet a prototype produced.
+- No acceptance criterion is a prohibition; fences inherited from the parent sit under Out of scope.
 - Each ticket reads like something a fresh session could finish without you in the room.
 - Prefactoring, where it found any, is at the front of the order rather than mixed into feature tickets.
 
